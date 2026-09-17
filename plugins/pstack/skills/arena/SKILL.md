@@ -5,6 +5,8 @@ description: "Spawn N parallel candidates at the same task, pick a base, graft t
 
 # Arena
 
+On OpenCode V2, use [OpenCode model routing](../poteto-mode/references/opencode-tools.md) for the `arena runners` and `arena cross-judge pool` roles. Pass the specialist task to each returned named agent instead of using a generic subagent.
+
 On Codex, read the [platform mapping](../poteto-mode/references/codex-tools.md), including its per-skill notes, before following this skill.
 
 Fan out N parallel attempts at the same task. Read every candidate end to end. Pick the strongest as the base. Graft the best ideas from the others into it. Verify the synthesized result.

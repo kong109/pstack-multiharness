@@ -2,6 +2,12 @@
 
 This port applies the Cursor → Claude Code substitutions in skill bodies. Earlier drafts left them flagged; this revision resolves them. A later pass added a Codex build that shares the same skills; see [Codex port](#codex-port) below.
 
+## Unreleased - OpenCode V2 role-to-model routing
+
+The OpenCode adapter installs named subagent profiles from the user's role sheet, including reasoning variants. The shared routing guide is linked from poteto-mode, setup-pstack, arena, architect, how, why, swarm, interrogate, and reflect. These are runtime-specific dispatch corrections, not changes to the upstream workflows or model defaults.
+
+The installer preserves unrelated configuration, refuses unmanaged-file collisions, and detects stale mappings before role lookup. Panels preserve order and duplicate entries. Explicit assignments cannot silently fall back to a generic agent. A live smoke task through the Muse branch's native subagent tool recorded `muse-code/muse-spark-1.3#max` in its child session metadata.
+
 ## 0.9.28 - discovery keywords on both plugin manifests
 
 The two plugin manifests carried seven keywords, all of which name the project or its own vocabulary: `pstack`, `poteto-mode`, `workflow`, `principles`, `agent-style`, `subagents`, `unslop`. A reader who searches any of them already knows the plugin exists. Nine terms describing what the skills do and where they run join them: `claude-code`, `skills`, `tdd`, `code-review`, `parallel-agents`, `codex`, `opencode`, `gemini-cli`, `prime-agent`. The four non-Claude runtimes are each named where the previous list named none. Metadata only: no skill text, tool behavior, or upstream pin changes. The pin remains at `e8d856f`.

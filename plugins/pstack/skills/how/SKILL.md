@@ -5,6 +5,8 @@ description: "Use for \"how does X work\", code walkthroughs before changing som
 
 # How
 
+On OpenCode V2, use [OpenCode model routing](../poteto-mode/references/opencode-tools.md) for `how explorer` and `how explainer`. Preserve the role-specific prompts when launching the returned named agents.
+
 On Codex, read the [platform mapping](../poteto-mode/references/codex-tools.md), including its per-skill notes, before following this skill.
 
 Explore the codebase to answer "how does X work?" questions. Produce architectural explanations at the level of a senior engineer onboarding onto a subsystem, enough to build a working mental model, not so much that it reads like annotated source code.

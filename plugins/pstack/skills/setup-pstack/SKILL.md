@@ -1,9 +1,11 @@
 ---
 name: setup-pstack
-description: Configure which models pstack uses per role. Detects your available Claude models and writes a per-role override file that the user can include from their CLAUDE.md. Use for /setup-pstack, "configure pstack models", or changing pstack's model choices.
+description: Configure which models pstack uses per role. Writes a per-role override sheet and installs model-specific subagents for OpenCode V2. Use for /setup-pstack, "configure pstack models", or changing pstack's model choices.
 ---
 
 # Setup pstack
+
+On OpenCode V2, follow [OpenCode model routing](../poteto-mode/references/opencode-tools.md). Detect models and reasoning variants from the running OpenCode catalog, preserve the user's role sheet, and install named agent profiles with the bundled helper after any mapping change. Confirm a live child session's recorded model and variant before claiming routing works. The Claude-specific include and per-call model instructions below do not apply to OpenCode.
 
 On Codex, read the [platform mapping](../poteto-mode/references/codex-tools.md), including its per-skill notes, before following this skill.
 

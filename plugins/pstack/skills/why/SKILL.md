@@ -5,6 +5,8 @@ description: "Use for 'why does X work this way', 'why we picked Y', design rati
 
 # Why
 
+On OpenCode V2, use [OpenCode model routing](../poteto-mode/references/opencode-tools.md) for `why investigators` and `why synthesizer`. Preserve the investigation prompts when launching the returned named agents.
+
 On Codex, read the [platform mapping](../poteto-mode/references/codex-tools.md), including its per-skill notes, before following this skill.
 
 Investigate the motivation and intent behind code.

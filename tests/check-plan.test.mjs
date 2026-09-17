@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const mode = join(import.meta.dir, "../plugins/pstack/skills/poteto-mode");
-const playbook = readFileSync(join(mode, "playbooks/multi-phase-plan.md"), "utf8");
+const playbook = readFileSync(join(mode, "playbooks/multi-phase-plan.md"), "utf8").replaceAll("\r\n", "\n");
 const template = playbook.match(/^````markdown\n([\s\S]*?)^````$/m);
 if (!template) throw new Error("Multi-phase playbook has no plan skeleton");
 const skeleton = template[1];

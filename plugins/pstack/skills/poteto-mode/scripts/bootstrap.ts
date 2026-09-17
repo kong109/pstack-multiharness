@@ -13,10 +13,9 @@ if (typeof Bun === "undefined") {
 
 const scriptsDirectory = import.meta.dir;
 const nodeModulesDirectory = join(scriptsDirectory, "node_modules");
-const commanderPackagePath = join(
-  nodeModulesDirectory,
-  "commander",
-  "package.json"
+const requiredPackages = ["commander", "cross-spawn"];
+const dependenciesPresent = () => requiredPackages.every((name) =>
+  existsSync(join(nodeModulesDirectory, name, "package.json"))
 );
 const installKeyPath = join(
   nodeModulesDirectory,
@@ -34,7 +33,7 @@ function currentInstallKey(): string {
 export function ensureDependenciesInstalled(): void {
   const installKey = currentInstallKey();
   if (
-    existsSync(commanderPackagePath) &&
+    dependenciesPresent() &&
     existsSync(installKeyPath) &&
     readFileSync(installKeyPath, "utf8").trim() === installKey
   ) {
@@ -52,11 +51,20 @@ export function ensureDependenciesInstalled(): void {
       `bun install --frozen-lockfile exited with status ${result.exitCode}`
     );
   }
-  if (!existsSync(commanderPackagePath)) {
+  if (!dependenciesPresent()) {
     throw new Error(
-      "bun install --frozen-lockfile completed without installing commander"
+      "bun install --frozen-lockfile completed without installing required packages"
     );
   }
 
   writeFileSync(installKeyPath, `${installKey}\n`);
+
+  // Bun can cache a missing node_modules directory before the install runs.
+  // Restart once after installation so imports use a fresh resolver cache.
+  const restarted = Bun.spawnSync([process.execPath, ...process.argv.slice(1)], {
+    stdin: "inherit",
+    stdout: "inherit",
+    stderr: "inherit",
+  });
+  process.exit(restarted.exitCode);
 }

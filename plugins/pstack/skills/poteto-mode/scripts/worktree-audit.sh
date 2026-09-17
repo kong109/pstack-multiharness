@@ -5,7 +5,8 @@
 # deletes anything; deletion stays a human-gated step in the playbook.
 #
 # Usage: worktree-audit.sh [repo-path] [transcripts-path]
-set -u
+set -uo pipefail
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 repo="${1:-$(git rev-parse --show-toplevel 2>/dev/null)}"
 [ -z "$repo" ] && { echo "not in a git repo; pass a repo path" >&2; exit 1; }
@@ -24,23 +25,7 @@ fi
 # porcelain record terminates each worktree; the first emitted record is the
 # primary worktree and is skipped by the consumer below.
 parse_worktrees() {
-    local field="" wt="" state="ok"
-    while IFS= read -r -d '' field; do
-        if [ -z "$field" ]; then
-            if [ -n "$wt" ]; then
-                printf '%s\0%s\0' "$wt" "$state"
-            fi
-            wt=""
-            state="ok"
-        elif [ "${field#worktree }" != "$field" ]; then
-            wt="${field#worktree }"
-        elif [ "${field#prunable}" != "$field" ]; then
-            state="prunable"
-        fi
-    done < <(git worktree list --porcelain -z)
-    if [ -n "$wt" ]; then
-        printf '%s\0%s\0' "$wt" "$state"
-    fi
+    node "$script_dir/worktree-records.mjs"
 }
 
 # Decide from explicit facts. Unknown facts can never establish safe.

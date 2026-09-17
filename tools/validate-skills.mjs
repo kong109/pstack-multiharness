@@ -7,6 +7,8 @@ import { pathToFileURL } from "node:url";
 // The one directory walker for every tool in tools/. `node_modules` under
 // poteto-mode/scripts is gitignored but present on any machine that ran the
 // vendored tooling's install, and its READMEs are not ours to validate.
+export const displayPath = (path) => path.split(sep).join("/");
+
 export const SKIPPED_DIRS = new Set([".git", "node_modules"]);
 
 // Sorted, so reports and scans read the same on every filesystem.
@@ -74,7 +76,7 @@ function prosePathProblems(text, file, root) {
     const candidates = [resolve(dirname(file), token), resolve(pluginRoot, token)];
     const outside = candidates.find((path) => existsSync(path) && !pathIsInside(root, path));
     if (outside) {
-      problems.push(`${relative(root, file)} -> ${token} (${relative(pluginRoot, outside)} is not installed with the skills tree)`);
+      problems.push(`${displayPath(relative(root, file))} -> ${token} (${displayPath(relative(pluginRoot, outside))} is not installed with the skills tree)`);
     }
   }
   return problems;
@@ -107,17 +109,17 @@ export function validateSkillsTree(skillsDir) {
       try {
         path = decodeURIComponent(encodedPath);
       } catch {
-        problems.push(`${relative(root, file)} -> ${target} (invalid URI encoding)`);
+        problems.push(`${displayPath(relative(root, file))} -> ${target} (invalid URI encoding)`);
         continue;
       }
 
       const resolved = resolve(dirname(file), path);
       if (scheme === "file" || isAbsolute(path) || !pathIsInside(root, resolved)) {
-        problems.push(`${relative(root, file)} -> ${target} (escapes skills tree)`);
+        problems.push(`${displayPath(relative(root, file))} -> ${target} (escapes skills tree)`);
       } else if (!existsSync(resolved)) {
-        problems.push(`${relative(root, file)} -> ${target} (missing)`);
+        problems.push(`${displayPath(relative(root, file))} -> ${target} (missing)`);
       } else if (!pathIsInside(realRoot, realpathSync(resolved))) {
-        problems.push(`${relative(root, file)} -> ${target} (escapes skills tree through symlink)`);
+        problems.push(`${displayPath(relative(root, file))} -> ${target} (escapes skills tree through symlink)`);
       }
     }
   }

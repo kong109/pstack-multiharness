@@ -33,7 +33,7 @@ import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { deriveSkill } from "./generate.mjs";
-import { walk } from "./validate-skills.mjs";
+import { displayPath, walk } from "./validate-skills.mjs";
 
 const repo = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -136,7 +136,7 @@ export function syncComponent({
     scan(rel, next);
   };
 
-  const carried = (dir) => walk(dir).map((file) => relative(dir, file)).filter((rel) => !isExcluded(rel, exclude));
+  const carried = (dir) => walk(dir).map((file) => displayPath(relative(dir, file))).filter((rel) => !isExcluded(rel, exclude));
   const carriedNew = carried(newDir);
   report.excluded = walk(newDir).length - carriedNew.length;
 

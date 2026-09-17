@@ -10,7 +10,7 @@ import {
 } from "node:fs/promises";
 import { realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import {
   NotFoundError,
   UserError,
@@ -115,39 +115,34 @@ async function withFakeGt<T>({
   const gt = join(bin, "gt");
   await writeFile(
     gt,
-    `#!/usr/bin/env bash
-set -euo pipefail
-if [ "$(pwd -P)" != "${realpathSync(join(directory, "repo"))}" ]; then
-  printf 'gt ran outside the fixture repo: %s\\n' "$(pwd -P)" >&2
-  exit 2
-fi
-case "$*" in
-  "--no-interactive log short --stack --reverse")
-    cat "${outputPath}"
-    ;;
-  "--no-interactive info stack/merged")
-    printf 'stack/merged\\nPR #10 (Merged) merged change\\n'
-    ;;
-  "--no-interactive info stack/closed")
-    printf 'stack/closed\\nPR #13 (Closed) closed change\\n'
-    ;;
-  "--no-interactive info stack/open")
-    printf 'stack/open\\nPR #11 (Needs approvals) open change\\n'
-    ;;
-  "--no-interactive info stack/paren")
-    printf 'stack/paren\\nPR #14 (Needs approvals (2)) tricky change\\n'
-    ;;
-  *)
-    printf 'unexpected gt arguments: %s\\n' "$*" >&2
-    exit 2
-    ;;
-esac
+    `#!/usr/bin/env bun
+import { readFileSync, realpathSync } from 'node:fs';
+if (realpathSync(process.cwd()) !== ${JSON.stringify(realpathSync(join(directory, "repo")))}) {
+  throw new Error('gt ran outside the fixture repo');
+}
+const args = process.argv.slice(2).join(' ');
+if (args === '--no-interactive log short --stack --reverse') {
+  process.stdout.write(readFileSync(${JSON.stringify(outputPath)}, 'utf8'));
+} else {
+  const replies = {
+    'stack/merged': 'PR #10 (Merged) merged change',
+    'stack/closed': 'PR #13 (Closed) closed change',
+    'stack/open': 'PR #11 (Needs approvals) open change',
+    'stack/paren': 'PR #14 (Needs approvals (2)) tricky change',
+  };
+  const branch = process.argv[4];
+  if (!args.startsWith('--no-interactive info ') || !replies[branch]) throw new Error('unexpected gt arguments: ' + args);
+  console.log(branch + '\\n' + replies[branch]);
+}
 `,
   );
   await chmod(gt, 0o755);
+  if (process.platform === "win32") {
+    await writeFile(join(bin, "gt.cmd"), `@"${process.execPath}" "${gt}" %*\r\n`);
+  }
 
   const originalPath = process.env.PATH;
-  process.env.PATH = `${bin}:${originalPath ?? ""}`;
+  process.env.PATH = `${bin}${delimiter}${originalPath ?? ""}`;
   try {
     return await operation(outputPath);
   } finally {
@@ -410,7 +405,7 @@ describe("Store", () => {
 
   it("replaces a stale lock whose holder pid is dead", async () => {
     const { directory } = await initializedStore();
-    const exited = Bun.spawn(["true"]);
+    const exited = Bun.spawn([process.execPath, "-e", "process.exit(0)"]);
     await exited.exited;
     await writeFile(join(directory, ".orch.lock"), `${exited.pid}\n`);
 

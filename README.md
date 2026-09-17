@@ -40,6 +40,10 @@ The plugin's `SessionStart` hook loads a short instruction on startup, `/clear`,
 
 To disable automatic routing, delete `hooks/hooks.json` from the installed plugin at `~/.claude/plugins/cache/pstack-claude/pstack/<version>/`. A plugin update restores that file.
 
+### Windows, Linux, and macOS
+
+The helpers support all three systems. Use Node for `.mjs`, Bun for the bundled TypeScript tools, and Bash for `.sh`. On Windows, run shell helpers with Git Bash from Git for Windows, or keep the entire workflow inside WSL. Git Bash supplies the standard Unix utilities; the audit also needs Node, GitHub CLI, jq, and ripgrep on its PATH. See [operating-system guidance](plugins/pstack/skills/poteto-mode/references/operating-systems.md).
+
 ### Shared skills for Codex, Prime Agent, opencode, and Gemini CLI
 
 The repository's shared installation uses `~/.agents/skills/`. Clone the repository and link each skill:
@@ -53,7 +57,7 @@ for s in plugins/pstack/skills/*/; do
 done
 ```
 
-This links 54 skill directories. 31 are public workflows; the 23 `principle-*` directories provide guidance that `poteto-mode` reads. Keep all of them installed, even if your runtime shows the principles in its skill picker.
+This links 55 skill directories. 32 are public workflows; the 23 `principle-*` directories provide guidance that `poteto-mode` reads. Keep all of them installed, even if your runtime shows the principles in its skill picker.
 
 The commands leave existing destinations intact. If a name already exists, inspect it before replacing it. Keep the clone in place while its links are installed. To update linked skills, pull changes in that clone. To uninstall a linked skill, remove its link at `~/.agents/skills/<name>`; that removes it from every runtime using the shared directory.
 
@@ -105,7 +109,7 @@ These verification notes describe prior checks, not a guarantee that every workf
 
 ## Configure models and dependencies
 
-Use `setup-pstack` to choose models for each role. Defaults live in [models.json](plugins/pstack/models.json). The Claude Code override sheet is `~/.claude/pstack-models.md`; on Codex it is `~/.codex/pstack-models.md`, whose contents belong in `~/.codex/AGENTS.md`. Use distinct available models for panels that compare independent designs or reviews.
+Use `setup-pstack` to choose models and effort for each role. Entries support `model@effort`; `effort: model = value` supplies a model-wide default. Inline effort wins, and `model@default` clears it. The [dispatch resolver](plugins/pstack/skills/poteto-mode/references/model-dispatch.md) reads both fields before worker launch. Explicit effort must use a supported runtime control; worker-brief text is not sufficient. Defaults live in [models.json](plugins/pstack/models.json). Project configuration lives in `.pstack/models.md` and takes precedence over the user sheet. User sheets are `~/.claude/pstack-models.md` on Claude Code, `~/.codex/pstack-models.md` on Codex, and `~/.agents/pstack/models.md` on other runtimes unless a legacy path is explicitly configured. Setup adds a pointer in the corresponding instructions file. Use `pstack-preset` to save mappings at user scope in `~/.agents/pstack/presets/` or project scope in `.pstack/presets/`. Setup lists both scopes and copies the selected preset into either config scope. Presets include effort and remain independent of applied copies. Use distinct available models for panels that compare independent designs or reviews.
 
 Install dependencies for the workflows you plan to use:
 
@@ -114,7 +118,7 @@ Install dependencies for the workflows you plan to use:
 | GitHub CLI, `gh` | PR monitoring and shipping. Authenticate with `gh auth login`. |
 | Bun | The bundled `watch-pr` and `orch` scripts. Their bootstrap installs script dependencies on first run. |
 | Graphite CLI, `gt` | The Orchestrate playbook and the `orch` stack frontier. Shipping and autopilot playbooks use plain `gh` or Origin's CLI when available. |
-| `jq` and `rg` | Complete PR and transcript columns in `worktree-audit.sh`. Missing tools produce warnings and blank columns. |
+| Node, `jq` and `rg` | Complete PR and transcript columns in `worktree-audit.sh`. Missing tools produce warnings and blank columns. |
 | `plugin-dev` | Claude Code skill-authoring routes used by `automate-me`, `reflect`, and `poteto-mode`. |
 
 To install the Claude Code skill-authoring companion:
@@ -154,7 +158,8 @@ The table uses short skill names. Claude Code exposes them as `/pstack:<name>`; 
 | `/show-me-your-work` | log decisions to a reviewable tsv decision trail |
 | `/blast-radius` | find what a change could break beyond the diff and prove safety by running code |
 | `/recall` | catch up on recent working context from chat history, live state, and the shared record |
-| `/setup-pstack` | configure pstack per-role model choices |
+| `/setup-pstack` | configure role models and effort at project or user scope, optionally from a preset |
+| `/pstack-preset` | save the current role mapping as a named project or user preset |
 | `/unslop` | clean up writing by removing AI tells |
 | `/no-comments` | strip comments before review, fix the accepted findings, encode claimed constraints |
 | `/create-verification-skill` | generate a project-local verification skill and feature map |

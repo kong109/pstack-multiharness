@@ -1,0 +1,59 @@
+#!/usr/bin/env node
+import { readFileSync, realpathSync } from "node:fs";
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
+
+const token = /^[a-zA-Z0-9_./:-]+$/;
+
+export function resolveRole(text, role, defaults) {
+  const roles = new Map();
+  const efforts = new Map();
+  for (const source of text.split(/\r?\n/)) {
+    const line = source.trim();
+    if (!line || line.startsWith("#") || line.startsWith("```")) continue;
+    if (line.startsWith("effort:")) {
+      const match = line.match(/^effort:\s*(\S+)\s*=\s*(\S+)$/);
+      if (!match || !token.test(match[1]) || !token.test(match[2])) {
+        throw new Error(`Invalid effort override: ${line}`);
+      }
+      if (efforts.has(match[1])) throw new Error(`Duplicate effort override: ${match[1]}`);
+      efforts.set(match[1], match[2]);
+      continue;
+    }
+    const separator = line.indexOf(":");
+    if (separator < 0) continue;
+    const key = line.slice(0, separator).trim();
+    if (key !== role) continue;
+    if (roles.has(key)) throw new Error(`Duplicate role: ${key}`);
+    roles.set(key, line.slice(separator + 1).trim());
+  }
+  const value = roles.get(role) ?? defaults;
+  if (!value) throw new Error(`No mapping or defaults for role: ${role}`);
+  return value.split(",").map((entry) => {
+    const parts = entry.trim().split("@");
+    const [model, explicitEffort] = parts;
+    if (parts.length > 2 || !token.test(model) ||
+        (explicitEffort !== undefined && !token.test(explicitEffort))) {
+      throw new Error(`Invalid model entry: ${entry}`);
+    }
+    const effort = explicitEffort ?? efforts.get(model) ?? "default";
+    return {
+      model: model === "auto" || model === "inherit-parent" ? null : model,
+      effort: effort === "default" ? null : effort,
+    };
+  });
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
+  try {
+    const [file, role, defaults, ...extra] = process.argv.slice(2);
+    if (!file || !role || extra.length) {
+      throw new Error('Usage: resolve-models.mjs <override-file|-> "role" ["default-models"]');
+    }
+    const text = file === "-" ? "" : readFileSync(file, "utf8");
+    console.log(JSON.stringify(resolveRole(text, role, defaults), null, 2));
+  } catch (error) {
+    console.error(error.message);
+    process.exitCode = 1;
+  }
+}

@@ -2,6 +2,18 @@
 
 This port applies the Cursor → Claude Code substitutions in skill bodies. Earlier drafts left them flagged; this revision resolves them. A later pass added a Codex build that shares the same skills; see [Codex port](#codex-port) below.
 
+## 0.9.33 - Windows and Unix script compatibility
+
+Normalize diagnostic paths and Markdown line endings, retain LF shell scripts, and run fixture tools through portable interpreters. Graphite dispatch supports Windows command shims through cross-spawn; the PR watcher handles subprocess cleanup at its deadline. Bootstrap checks both runtime dependencies before loading orchestration and restarts after installation to clear Bun's cached missing-module lookups. Worktree enumeration supports older Git and propagates discovery failures. The decision logger uses Node with a Bash compatibility entry point, preserving multiline input on Windows. Skills describe Git Bash, host temporary paths, and OS-specific commands. CI runs generator and script suites on Windows, Linux, and macOS. These are local portability changes.
+
+## 0.9.32 - project and user role presets
+
+Added `pstack-preset` to save validated model and effort snapshots at user or project scope. Setup offers presets from both scopes and applies an independent copy to a project or user configuration. Project sheets take precedence over user sheets. Existing user mapping paths remain supported. The portable preset helper preserves panel entries and effort, validates names, and requires explicit replacement for existing files. This is a local portability change.
+
+## 0.9.31 - resolve effort alongside role models
+
+The portable model resolver reads existing role sheets and model-wide `effort:` lines, plus per-role `model@effort` entries. Inline effort takes precedence and `@default` clears a model-wide override. Setup preserves effort settings, and model-consuming skills require resolution before dispatch. Runtime controls must apply explicit effort; prompt wording is no longer an accepted fallback. This is a local portability change.
+
 ## 0.9.30 - move the Fable roles to Fable 5.1
 
 `plugins/pstack/models.json` names `claude-fable-5-1` where it named `claude-fable-5`: the panel, the available-model list (label `Fable 5.1`), and the four single-model roles `bug-fix`, `perf-issue`, `hillclimb`, and `strongest judgment`. The generator restamped the `## Models` sections of `poteto-mode`, `arena`, `architect`, and `interrogate`, the interrogate reviewer table, and setup-pstack's override sheet and available-model line. The README panel row states the new default. Fable 5 leaves the available-model list. The pin remains at `e8d856f`.

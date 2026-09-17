@@ -1,23 +1,20 @@
 #!/usr/bin/env bun
 
 import { ensureDependenciesInstalled } from "../bootstrap.ts";
-import {
-  NotFoundError,
-  UsageError,
-  openStore,
-  parseVerdict,
-  type Counts,
-  type Frontier,
-  type InboxPointer,
-  type OpenGate,
-  type StandingLine,
-  type StatusReport,
-  type Store,
-  type Unit,
-  type Verdict,
+import type {
+  Counts,
+  Frontier,
+  InboxPointer,
+  OpenGate,
+  StandingLine,
+  StatusReport,
+  Store,
+  Unit,
+  Verdict,
 } from "./store.ts";
 
 ensureDependenciesInstalled();
+const { NotFoundError, UsageError, openStore, parseVerdict } = await import("./store.ts");
 const {
   Command: CommanderCommand,
   CommanderError,

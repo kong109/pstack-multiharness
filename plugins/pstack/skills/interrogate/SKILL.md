@@ -34,6 +34,8 @@ Write one clear paragraph. If you're unsure about the intent, ask the user befor
 
 ## Step 3, Spawn Reviewers
 
+Before launching, follow [model and effort resolution](../poteto-mode/references/model-dispatch.md). Use each resolved pair, including inline effort and model-wide defaults.
+
 Launch all reviewers in a single message using the `Agent` tool. Use the `interrogate reviewers` list from `~/.claude/pstack-models.md` when present, one reviewer per entry, extending or shrinking the Reviewer A/B/C/D labels below to the configured entry count; otherwise use the table defaults.
 
 | Subagent | Default model |

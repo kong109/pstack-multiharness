@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import spawn from "cross-spawn";
 import { DeadlineExceeded, type WatchDeadline } from "./deadline.ts";
 import type * as T from "./types.ts";
 import { nonEmpty, parsePrNumber } from "./types.ts";
@@ -54,6 +54,11 @@ function run(
     const child = spawn(argv[0], argv.slice(1), {
       stdio: ["ignore", "pipe", "pipe"],
     });
+    if (!child.stdout || !child.stderr) {
+      child.kill();
+      reject(new Error("Command output pipes were not created"));
+      return;
+    }
     let stdout = "";
     let stderr = "";
     let expired = false;
@@ -63,7 +68,11 @@ function run(
       if (!Number.isFinite(seconds)) return;
       if (seconds === 0) {
         expired = true;
-        child.kill("SIGKILL");
+        if (process.platform === "win32" && /(?:^|[\\/])cmd(?:\.exe)?$/i.test(child.spawnfile) && child.pid !== undefined) {
+          spawn.sync("taskkill", ["/pid", String(child.pid), "/T", "/F"], { windowsHide: true });
+        } else {
+          child.kill("SIGKILL");
+        }
       } else {
         timer = setTimeout(
           scheduleDeadline,
@@ -486,7 +495,7 @@ function graphqlArgs(
     "api",
     "graphql",
     "-f",
-    `query=${query}`,
+    `query=${query.replace(/\r?\n/g, " ")}`,
     "-f",
     `owner=${context.owner}`,
     "-f",

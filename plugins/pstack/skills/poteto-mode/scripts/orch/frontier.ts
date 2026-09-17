@@ -1,10 +1,19 @@
-import { execFileSync } from "node:child_process";
+import spawn from "cross-spawn";
+import type { SpawnSyncOptionsWithStringEncoding } from "node:child_process";
+
 import {
   UserError,
   type Frontier,
   type FrontierPr,
   type FrontierPrState,
 } from "./types.ts";
+
+function runCommandSync(command: string, args: string[], options: SpawnSyncOptionsWithStringEncoding): string {
+  const result = spawn.sync(command, args, options);
+  if (result.error) throw result.error;
+  if (result.status !== 0) throw new Error(`${command} exited ${result.status}: ${result.stderr}`);
+  return result.stdout;
+}
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -197,7 +206,7 @@ function graphitePullRequest({
 }): GtPullRequest {
   let raw: string;
   try {
-    raw = execFileSync("gt", ["--no-interactive", "info", branch], {
+    raw = runCommandSync("gt", ["--no-interactive", "info", branch], {
       cwd: repo,
       encoding: "utf8",
       env: { ...process.env, NO_COLOR: "1" },
@@ -228,7 +237,7 @@ function graphitePullRequest({
 function graphiteFrontier(repo: string): readonly GtFrontierEntry[] {
   let raw: string;
   try {
-    raw = execFileSync(
+    raw = runCommandSync(
       "gt",
       ["--no-interactive", "log", "short", "--stack", "--reverse"],
       {
@@ -256,7 +265,7 @@ function graphiteFrontier(repo: string): readonly GtFrontierEntry[] {
 function branchSha({ branch, repo }: { branch: string; repo: string }): string {
   let raw: string;
   try {
-    raw = execFileSync("git", ["rev-parse", branch], {
+    raw = runCommandSync("git", ["rev-parse", branch], {
       cwd: repo,
       encoding: "utf8",
       env: process.env,

@@ -113,7 +113,7 @@ describe("shared Agent Skills tree", () => {
         mkdirSync(join(root, name));
         writeFileSync(join(root, name, "SKILL.md"), "# x\n");
       }
-      expect(walk(root).map((p) => p.slice(root.length + 1))).toEqual([
+      expect(walk(root).map((p) => p.slice(root.length + 1).replaceAll("\\", "/"))).toEqual([
         "alpha/SKILL.md",
         "mid/SKILL.md",
         "zeta/SKILL.md",
@@ -299,7 +299,7 @@ describe("shared Agent Skills tree", () => {
       }
       mkdirSync(dirname(agentsOutput), { recursive: true });
       mkdirSync(outside);
-      symlinkSync(outside, agentsOutput, "dir");
+      symlinkSync(outside, agentsOutput, process.platform === "win32" ? "junction" : "dir");
 
       expect(() => syncPortableAssets(fixtureRepo, fixtureSkills, { log() {} })).toThrow(
         "poteto-mode/references/agents resolves outside the skills tree through a symlink",
@@ -317,7 +317,7 @@ describe("shared Agent Skills tree", () => {
 
     try {
       for (const { name } of agentSkills(skillsDir)) {
-        symlinkSync(join(skillsDir, name), join(installed, name), "dir");
+        symlinkSync(join(skillsDir, name), join(installed, name), process.platform === "win32" ? "junction" : "dir");
       }
 
       const poteto = join(installed, "poteto-mode");

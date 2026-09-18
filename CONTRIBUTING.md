@@ -74,7 +74,7 @@ uvx zizmor@1.29.0 --persona pedantic --min-severity low --collect all -- .
 
 ## Dependency updates
 
-Dependabot keeps the pinned action SHAs current. The vendored scripts' one runtime dependency (`commander`) follows upstream's pin and moves with `tools/sync.mjs`; `osv-scanner` scans `bun.lock` weekly, so a CVE still surfaces. If you bump it by hand, run `bun install` and commit the resulting `bun.lock` in the same change.
+Dependabot keeps the pinned action SHAs current. The vendored scripts' runtime dependencies (`commander` and `cross-spawn`) follows upstream's pin and moves with `tools/sync.mjs`; `osv-scanner` scans `bun.lock` weekly, so a CVE still surfaces. If you bump it by hand, run `bun install` and commit the resulting `bun.lock` in the same change.
 
 ## Releasing
 

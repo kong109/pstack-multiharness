@@ -1,9 +1,13 @@
-import { afterEach, test } from 'bun:test';
+import { afterEach, test as bunTest } from 'bun:test';
 import assert from 'node:assert/strict';
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { bashExecutable, gitExecutable, shellPath } from './platform.mjs';
+
+// Git Bash starts several processes per audit; allow for Windows CI startup costs.
+const test = (name, run) => bunTest(name, run, 20_000);
 
 const auditScript = join(
   process.cwd(),
@@ -14,7 +18,9 @@ afterEach(() => {
   for (const root of fixtures.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
-const git = (...args) => execFileSync('/usr/bin/git', args, {
+const realGitPath = gitExecutable;
+const bash = bashExecutable;
+const git = (...args) => execFileSync(realGitPath, args, {
   encoding: 'utf8',
   stdio: ['ignore', 'pipe', 'pipe'],
 }).trim();
@@ -28,7 +34,7 @@ fi
 if [ "$1" = fetch ]; then
   exit "\${AUDIT_FAIL_FETCH:-0}"
 fi
-exec /usr/bin/git "$@"
+exec '${realGitPath.replaceAll("\\", "/").replaceAll("'", "'\\''")}' "$@"
 `;
   const gh = `#!/bin/sh
 if [ "$AUDIT_FAIL_GH" = 1 ]; then exit 1; fi
@@ -50,7 +56,7 @@ fi
 if [ -n "$AUDIT_RG_MATCH" ]; then exit 0; fi
 exit 1
 `;
-  execFileSync('/bin/mkdir', ['-p', bin]);
+  mkdirSync(bin, { recursive: true });
   writeFileSync(join(bin, 'git'), realGit);
   writeFileSync(join(bin, 'gh'), gh);
   writeFileSync(join(bin, 'jq'), jq);
@@ -88,11 +94,11 @@ function commit(worktree, message, filename = `${message.replaceAll(' ', '-')}.t
 }
 
 function runAudit(fixture, prs = [], extraEnv = {}) {
-  const result = execFileSync('/bin/bash', [auditScript, fixture.repo, fixture.transcripts], {
+  const result = execFileSync(bash, ["-c", 'export PATH="$AUDIT_BIN:$PATH"; exec bash "$@"', "--", auditScript, fixture.repo, fixture.transcripts], {
     encoding: 'utf8',
     env: {
       ...process.env,
-      PATH: `${fixture.bin}:${process.env.PATH}`,
+      AUDIT_BIN: shellPath(fixture.bin),
       AUDIT_GH_RESPONSE: JSON.stringify(prs),
       AUDIT_RG_MATCH: '',
       AUDIT_FAIL_STATUS_PATH: '',
@@ -100,6 +106,7 @@ function runAudit(fixture, prs = [], extraEnv = {}) {
       AUDIT_FAIL_GH: '0',
       AUDIT_FAIL_RG: '0',
       ...extraEnv,
+      AUDIT_FAIL_STATUS_PATH: (extraEnv.AUDIT_FAIL_STATUS_PATH ?? "").replaceAll("\\", "/"),
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -111,7 +118,7 @@ function rows(output) {
 }
 
 function rowFor(output, worktree) {
-  const row = rows(output).find((fields) => fields.at(-1) === worktree);
+  const row = rows(output).find((fields) => fields.at(-1).replaceAll("\\", "/") === worktree.replaceAll("\\", "/"));
   assert.ok(row, `missing row for ${worktree}\n${output}`);
   return row;
 }
@@ -130,7 +137,7 @@ test('preserves spaced worktree paths and rejects closed PRs as safe evidence', 
   const spacedRow = rowFor(output, spaced);
   assert.equal(candidateRow[5], '#99/CLOSED');
   assert.equal(candidateRow[7], 'review');
-  assert.equal(spacedRow[8], spaced);
+  assert.equal(spacedRow[8], spaced.replaceAll("\\", "/"));
   assert.notEqual(candidateRow[8], spacedRow[8]);
 });
 

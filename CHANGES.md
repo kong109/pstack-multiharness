@@ -6,7 +6,31 @@ This port applies the Cursor → Claude Code substitutions in skill bodies. Earl
 
 The OpenCode adapter installs named subagent profiles from the user's role sheet, including reasoning variants. The shared routing guide is linked from poteto-mode, setup-pstack, arena, architect, how, why, swarm, interrogate, and reflect. These are runtime-specific dispatch corrections, not changes to the upstream workflows or model defaults.
 
-The installer preserves unrelated configuration, refuses unmanaged-file collisions, and detects stale mappings before role lookup. Panels preserve order and duplicate entries. Explicit assignments cannot silently fall back to a generic agent. A live smoke task through the Muse branch's native subagent tool recorded `muse-code/muse-spark-1.3#max` in its child session metadata.
+The installer preserves unrelated configuration, refuses unmanaged-file collisions, and detects stale mappings before role lookup. Panels preserve order and duplicate entries. The adapter shares the model/effort resolver, honors inline and model-wide effort ahead of legacy variant rows, and rejects inherited-model effort it cannot apply. Preset snapshots convert legacy variant rows to portable effort defaults so saving and applying a Muse mapping retains its reasoning settings. Explicit assignments cannot silently fall back to a generic agent. A live smoke task through the Muse branch's native subagent tool recorded `muse-code/muse-spark-1.3#max` in its child session metadata.
+
+## 0.9.33 - Windows and Unix script compatibility
+
+Normalize diagnostic paths and Markdown line endings, retain LF shell scripts, and run fixture tools through portable interpreters. Graphite dispatch supports Windows command shims through cross-spawn; the PR watcher handles subprocess cleanup at its deadline. Bootstrap checks both runtime dependencies before loading orchestration and restarts after installation to clear Bun's cached missing-module lookups. Worktree enumeration supports older Git and propagates discovery failures. The decision logger uses Node with a Bash compatibility entry point, preserving multiline input on Windows. Skills describe Git Bash, host temporary paths, and OS-specific commands. CI runs generator and script suites on Windows, Linux, and macOS. These are local portability changes.
+
+## 0.9.32 - project and user role presets
+
+Added `pstack-preset` to save validated model and effort snapshots at user or project scope. Setup offers presets from both scopes and applies an independent copy to a project or user configuration. Project sheets take precedence over user sheets. Existing user mapping paths remain supported. The portable preset helper preserves panel entries and effort, validates names, and requires explicit replacement for existing files. This is a local portability change.
+
+## 0.9.31 - resolve effort alongside role models
+
+The portable model resolver reads existing role sheets and model-wide `effort:` lines, plus per-role `model@effort` entries. Inline effort takes precedence and `@default` clears a model-wide override. Setup preserves effort settings, and model-consuming skills require resolution before dispatch. Runtime controls must apply explicit effort; prompt wording is no longer an accepted fallback. This is a local portability change.
+
+## 0.9.30 - move the Fable roles to Fable 5.1
+
+`plugins/pstack/models.json` names `claude-fable-5-1` where it named `claude-fable-5`: the panel, the available-model list (label `Fable 5.1`), and the four single-model roles `bug-fix`, `perf-issue`, `hillclimb`, and `strongest judgment`. The generator restamped the `## Models` sections of `poteto-mode`, `arena`, `architect`, and `interrogate`, the interrogate reviewer table, and setup-pstack's override sheet and available-model line. The README panel row states the new default. Fable 5 leaves the available-model list. The pin remains at `e8d856f`.
+
+## 0.9.29 - the verify driver and the todolist resolve on Claude Code
+
+Two reports from @Graham3324 (#71, #72), with the isolating experiments that fixed the wording.
+
+The playbooks previously directed UI verification to bundled `/verify`, which only the user can invoke. Driver selection now lives in `poteto-mode` Non-negotiables, and playbooks link there. The sync substitution translates `control skill` to `driver skill`; diagnostics point to the same policy. `create-verification-skill` writes `.claude/skills/verify/`, and maintenance accepts that directory and older `verify-*` skills. A root project skill replaces bundled `/verify` on [Claude Code 2.1.200 or later](https://code.claude.com/docs/en/skills#run-and-verify-your-app).
+
+The todolist policy uses the session's task-tracking tools or an uncommitted `todo.md` checklist that retains skipped steps. Claude Code's [documented task-tool opt-in](https://code.claude.com/docs/en/tools-reference#task-tool-availability), `CLAUDE_CODE_ENABLE_TODO_TOOLS=1`, can be scoped through a project's `.claude/settings.local.json`. Defaults depend on the model. Issue-linked rule pins and a scan of current skill prose protect both fixes during later syncs. The pin remains at `e8d856f`.
 
 ## 0.9.28 - discovery keywords on both plugin manifests
 
@@ -324,7 +348,7 @@ Upstream pstack jumped from `0.1.0` → `0.9.2` between syncs. 30+ commits, incl
 | Cursor `/create-skill` (built-in) | `plugin-dev:skill-development` skill | Claude Code's authoring guidance for SKILL.md. |
 | `cursor-team-kit` `/deslop` | This plugin's `deslop` skill | Ported in (only team-kit skill imported). |
 | `cursor-team-kit` `control-cli` | `run` skill (Claude Code built-in) | Drives CLIs/TUIs. |
-| `cursor-team-kit` `control-ui` | `verify` skill (Claude Code built-in, VS Code extension) | Drives UIs (browser/Electron). |
+| `cursor-team-kit` `control-ui` | The [driver policy](plugins/pstack/skills/poteto-mode/SKILL.md#non-negotiables) | Selects the app driver (0.9.29). |
 | `~/.cursor/projects/*/` transcripts | `~/.claude/projects/<encoded-cwd>/*.jsonl` | `<encoded-cwd>` is the workspace's working directory with `/` → `-`. |
 | Cursor `agent-transcripts/` dir | `~/.claude/projects/<encoded-cwd>/` | Same as above. |
 | `.cursor/skills/`, `~/.cursor/skills/`, `~/.cursor/plugins/` | `.claude/skills/`, `~/.claude/skills/`, `~/.claude/plugins/` | Path-only translation. |

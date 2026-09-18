@@ -9,7 +9,11 @@ description: poteto's agent style for concise, detailed responses, deliberate su
 
 On OpenCode V2, read [OpenCode model routing](references/opencode-tools.md) before delegating. Resolve the calling skill's role through the user's model sheet and launch the returned named agent. This overrides the Claude-specific `subagent_type` and per-call `model` instructions below. Never treat a missing per-call model parameter as proof that OpenCode cannot select a subagent model.
 
-These skills use Claude Code tool names (the `Skill` tool, the `Agent` tool, `AskUserQuestion`) and Claude model slugs (`claude-*`). On Claude Code they work as written. On Codex, read [`references/codex-tools.md`](references/codex-tools.md) for the Codex equivalent of a Claude tool, model, or built-in skill (`run`, `verify`, `plugin-dev:skill-development`). Other runtimes can discover the same Agent Skills tree, but they must use their own tool, model, and configuration equivalents. `codex-tools.md` is not a cross-runtime map.
+Follow [operating-system guidance](references/operating-systems.md) for shell commands, temporary paths, and bundled helpers.
+
+These skills use Claude Code tool names (the `Skill` tool, the `Agent` tool, `AskUserQuestion`) and Claude model slugs (`claude-*`). On Claude Code they work as written. On Codex, read [`references/codex-tools.md`](references/codex-tools.md) for the Codex equivalent of a Claude tool, model, or skill named by these workflows. Other runtimes can discover the same Agent Skills tree, but they must use their own tool, model, and configuration equivalents. `codex-tools.md` is not a cross-runtime map.
+
+Use the session's task-tracking tools for the todolist. On Claude Code these are `TaskCreate` and `TaskUpdate`, or `TodoWrite` when configured. Availability depends on the model; `CLAUDE_CODE_ENABLE_TODO_TOOLS=1` enables them through the environment or a project's `.claude/settings.local.json` `env` block. See the [task-tool documentation](https://code.claude.com/docs/en/tools-reference#task-tool-availability). If no task-tracking tool is available, keep an uncommitted `todo.md` Markdown checklist in the work dir, next to the decision trail, with the playbook steps verbatim and each `skip: <reason>` line.
 
 ## Non-negotiables
 
@@ -28,7 +32,7 @@ Remaining triggers:
 - Docs, RFCs, readmes, PR descriptions, commit messages → the **technical-writing** skill (`/technical-writing`) for structure and sentence discipline, on top of **unslop**.
 - Before commit → the **deslop** skill (`/deslop`).
 - Before review → the **no-comments** skill (`/no-comments`).
-- Shipping UI / IDE / CLI → the driver skill (`run` for CLIs/TUIs, `verify` for UIs). Both ship as Claude Code built-ins. For bug fixes, reproduce first on the same surface yourself; hand to the user only under the narrow Bug fix step 1 exception.
+- Shipping UI / IDE / CLI → the driver skill. `run` ships with Claude Code and the model can invoke it for CLIs, TUIs, servers, and browser or Electron apps. The bundled `verify` runs only when the user types `/verify`, so for UIs use the project `verify` skill at `.claude/skills/verify/` (generate it with `/create-verification-skill`) and fall back to `run` when the repo has none. For bug fixes, reproduce first on the same surface yourself; hand to the user only under the narrow Bug fix step 1 exception.
 - Any PR-status request → the **Babysit** playbook (`playbooks/babysit.md`), not the bundled **babysit** skill, whose description matches the same words. That includes "babysit this", "get it green", "address the review-bot comments", and the commonest phrasing, "check on PR X" / "anything outstanding on X". Never triggered by merely opening a PR. Declare its mode before polling; the playbook's step 1 owns the request-to-mode mapping. Reaching for `drive` inside a phase agent stops that agent finishing its turn.
 - Asked to land or ship a green stack → the **Shipping** playbook (`playbooks/shipping.md`). Green is not safe. Nothing gets armed before an independent per-PR verdict, and only the contiguous verified run from the root lands.
 - An automated PR-review bot or the agentic security review commented → skeptical posture. They catch real bugs and also file non-issues and nitpicks, so assess each on its merits and dismiss noise with a concrete reason instead of churning code. Triage fix / dismiss / ask per `references/bugbot-triage.md`.
@@ -146,11 +150,11 @@ A large or cross-cutting effort (a migration across many call sites, an ambitiou
 
 ## Models
 
-Role defaults, stamped from `plugins/pstack/models.json` (edit there, rerun `tools/generate.mjs`). A matching role line in `~/.claude/pstack-models.md` overrides each at runtime; see `/setup-pstack`.
+Role defaults, stamped from `plugins/pstack/models.json` (edit there, rerun `tools/generate.mjs`). A matching role line in the runtime override sheet overrides each; see `/setup-pstack`. Before dispatch, follow [model and effort resolution](references/model-dispatch.md).
 
 - feature, refactoring: `claude-opus-5`
-- bug-fix: `claude-fable-5`
-- perf-issue: `claude-fable-5`
-- hillclimb: `claude-fable-5`
+- bug-fix: `claude-fable-5-1`
+- perf-issue: `claude-fable-5-1`
+- hillclimb: `claude-fable-5-1`
 - judgment and prose: `claude-opus-5`
-- strongest judgment: `claude-fable-5`
+- strongest judgment: `claude-fable-5-1`

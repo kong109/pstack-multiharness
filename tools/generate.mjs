@@ -33,7 +33,7 @@ import {
   existsSync,
   lstatSync,
   mkdirSync,
-  readFileSync,
+  readFileSync as readFileRaw,
   readdirSync,
   realpathSync,
   rmSync,
@@ -44,7 +44,12 @@ import {
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { markdownFiles, pathIsInside, validateProsePaths, validateSkillsTree } from "./validate-skills.mjs";
+import { displayPath, markdownFiles, pathIsInside, validateProsePaths, validateSkillsTree } from "./validate-skills.mjs";
+
+function readFileSync(path, encoding) {
+  const value = readFileRaw(path, encoding);
+  return encoding === "utf8" ? value.replaceAll("\r\n", "\n") : value;
+}
 
 const repo = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -95,7 +100,7 @@ export function syncPortableAssets(repoRoot, skillsRoot, { log = console.log } =
   for (const dir of expectedByDir.keys()) {
     mkdirSync(dir, { recursive: true });
     if (!pathIsInside(realSkillsRoot, realpathSync(dir))) {
-      throw new Error(`${relative(skillsRoot, dir)} resolves outside the skills tree through a symlink`);
+      throw new Error(`${displayPath(relative(skillsRoot, dir))} resolves outside the skills tree through a symlink`);
     }
   }
 
@@ -198,27 +203,27 @@ export function agentSkills(skillsDir) {
     const text = readFileSync(path, "utf8");
     const front = text.match(/^---\n([\s\S]*?)\n---/)?.[1] ?? "";
     const name = frontmatterValue(text, "name");
-    if (name !== entry) throw new Error(`${path}: frontmatter name "${name}" != directory "${entry}"`);
+    if (name !== entry) throw new Error(`${displayPath(path)}: frontmatter name "${name}" != directory "${entry}"`);
     if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name) || name.length > 64) {
-      throw new Error(`${path}: frontmatter name "${name}" is not a portable Agent Skills name`);
+      throw new Error(`${displayPath(path)}: frontmatter name "${name}" is not a portable Agent Skills name`);
     }
     const description = frontmatterValue(text, "description");
-    if (!description) throw new Error(`${path}: skill has no description frontmatter`);
+    if (!description) throw new Error(`${displayPath(path)}: skill has no description frontmatter`);
     if (description.length > 1024) {
-      throw new Error(`${path}: description exceeds the portable Agent Skills limit of 1024 characters`);
+      throw new Error(`${displayPath(path)}: description exceeds the portable Agent Skills limit of 1024 characters`);
     }
     const flags = front.split("\n");
     // CHANGES 0.9.8: on a skill the flag makes the Skill tool refuse the
     // invocation outright, which breaks the SessionStart mandate. Upstream
     // ships it on every skill; the sync derivation strips it.
     if (flags.includes("disable-model-invocation: true")) {
-      throw new Error(`${path}: disable-model-invocation: true breaks model-initiated entry (CHANGES 0.9.8)`);
+      throw new Error(`${displayPath(path)}: disable-model-invocation: true breaks model-initiated entry (CHANGES 0.9.8)`);
     }
     const userInvocable = !flags.includes("user-invocable: false");
     // CHANGES 0.9.9: principle leaves are read by path from poteto-mode and
     // stay out of the slash menu.
     if (name.startsWith("principle-") && userInvocable) {
-      throw new Error(`${path}: principle leaves carry user-invocable: false (CHANGES 0.9.9)`);
+      throw new Error(`${displayPath(path)}: principle leaves carry user-invocable: false (CHANGES 0.9.9)`);
     }
     skills.push({ name, description, userInvocable });
   }
@@ -245,7 +250,7 @@ export function validatePluginLayout(pluginRoot) {
     readFileSync(file, "utf8").split("\n").forEach((line, i) => {
       for (const name of agents) {
         if (line.includes(`subagent_type: "${name}"`)) {
-          problems.push(`${relative(pluginRoot, file)}:${i + 1}: subagent_type: "${name}" (use "pstack:${name}")`);
+          problems.push(`${displayPath(relative(pluginRoot, file))}:${i + 1}: subagent_type: "${name}" (use "pstack:${name}")`);
         }
       }
     });
@@ -360,7 +365,7 @@ export function regions(models) {
         name: "Models section",
         locate: section("Models"),
         appendHeading: "## Models",
-        render: () => blankPadded(modelsSection(roles)),
+        render: () => blankPadded(modelsSection(roles, skill)),
       })),
     {
       file: skillFile("interrogate"),
@@ -443,11 +448,12 @@ export function deriveSkill(file, text, models = loadModels()) {
   return applyRegions(file, lines.join("\n"), models, { strict: false });
 }
 
-export function modelsSection(roles) {
+export function modelsSection(roles, skill = roles[0]?.skill) {
   const bullets = roles.map((r) => `- ${r.role}: ${codeList(r.models)}`).join("\n");
   return (
     "Role defaults, stamped from `plugins/pstack/models.json` (edit there, rerun `tools/generate.mjs`). " +
-    "A matching role line in `~/.claude/pstack-models.md` overrides each at runtime; see `/setup-pstack`.\n\n" +
+    "A matching role line in the runtime override sheet overrides each; see `/setup-pstack`. " +
+    `Before dispatch, follow [model and effort resolution](${skill === "poteto-mode" ? "references" : "../poteto-mode/references"}/model-dispatch.md).\n\n` +
     bullets
   );
 }
@@ -471,7 +477,10 @@ export function overrideSheetBlock(models) {
     "Per-role model overrides for pstack skills. Each pstack SKILL.md names its defaults in a Models section; " +
     "the values here override those defaults. Delete a line to fall back to the skill default. " +
     "A value of `inherit-parent` or `auto` runs that role on the parent session's model (the `Agent` call omits `model`); " +
-    "an alias entry in a panel list still counts toward that panel's fan-out.\n\n" +
+    "an alias entry in a panel list still counts toward that panel's fan-out. " +
+    "Entries accept model@effort for per-role effort. A line `effort: model = value` sets a model-wide default; " +
+    "inline effort wins, and @default clears it. Resolve both fields with pstack's resolve-models.mjs before dispatch; " +
+    "apply effort through runtime controls, never through the worker brief.\n\n" +
     rows
   );
 }
@@ -491,7 +500,8 @@ export function codexModelNamesSection(models) {
     "signal comes from model diversity, so use the distinct Codex models available to you. A good default quad " +
     `on ChatGPT is ${codeList(models.codex.panelQuad)}. If only one model family is reachable, vary reasoning ` +
     "effort and note in the verdict that diversity was reduced.\n\n" +
-    "`/setup-pstack` writes the configured model list. On Codex, set it to your Codex model slugs."
+    "`/setup-pstack` writes the configured model list. On Codex, set it to your Codex model slugs. " +
+    "Follow [model and effort resolution](model-dispatch.md) before dispatch and pass explicit effort through the supported runtime field."
   );
 }
 
@@ -574,7 +584,7 @@ function main() {
   if (modelStamps === 0) console.log("ok: model-policy sections current");
 
   const strays = markdownFiles(skillsDir).flatMap((full) =>
-    strayModelSlugs(full.slice(repo.length + 1), readFileSync(full, "utf8"), models),
+    strayModelSlugs(relative(repo, full).replaceAll("\\", "/"), readFileSync(full, "utf8"), models),
   );
   if (strays.length) {
     throw new Error(

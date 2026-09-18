@@ -9,7 +9,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 
 const directories: string[] = [];
 afterEach(() => {
@@ -17,7 +17,7 @@ afterEach(() => {
     rmSync(dir, { recursive: true, force: true });
 });
 
-function run(scenario: string, extra: string[] = []) {
+function run(scenario: string, extra: string[] = [], commandShim = false) {
   const dir = mkdtempSync(join(tmpdir(), "watch-transport-"));
   directories.push(dir);
   const bin = join(dir, "bin");
@@ -25,7 +25,7 @@ function run(scenario: string, extra: string[] = []) {
   const gh = join(bin, "gh");
   writeFileSync(
     gh,
-    `#!${process.execPath}
+    `#!/usr/bin/env bun
 import { appendFileSync, writeFileSync } from 'node:fs';
 const args = process.argv.slice(2);
 const scenario = process.env.WATCH_FIXTURE;
@@ -56,6 +56,10 @@ console.log(JSON.stringify(value));
 `,
   );
   chmodSync(gh, 0o755);
+  if (commandShim && process.platform === "win32") {
+    writeFileSync(join(bin, "gh.cmd"), `@"${process.execPath}" "${gh}" %*\r\n`);
+  }
+
   const entry = join(dir, "entry.ts");
   writeFileSync(
     entry,
@@ -72,8 +76,8 @@ console.log(JSON.stringify(value));
       encoding: "utf8",
       timeout: 3000,
       env: {
-        ...process.env,
-        PATH: `${bin}:${process.env.PATH}`,
+        ...Object.fromEntries(Object.entries(process.env).filter(([key]) => key.toUpperCase() !== "PATH")),
+        PATH: [bin, dirname(process.execPath), ...(process.platform === "win32" ? [join(process.env.SystemRoot ?? "C:/Windows", "System32")] : ["/usr/bin", "/bin"])].join(delimiter),
         WATCH_FIXTURE: scenario,
         WATCH_CALLS: callsFile,
         WATCH_PID: pidFile,
@@ -130,4 +134,13 @@ it("cancels an in-flight command at the CLI deadline", () => {
   expect(JSON.parse(result.stdout.trim())).toMatchObject({ kind: "TIMEOUT" });
   const pid = Number(readFileSync(result.pidFile, "utf8"));
   expect(() => process.kill(pid, 0)).toThrow();
+});
+
+it("preserves GraphQL pagination arguments through a Windows command shim", () => {
+  const result = run("threads", [], true);
+  expect(result.status).toBe(3);
+  const queries = result.calls.filter((args) => args.some((arg) => arg.includes("query ReviewThreads")));
+  expect(queries).toHaveLength(2);
+  expect(queries[1]).toContain("after=next");
+  expect(queries[1]).toContain("owner=owner");
 });

@@ -38,8 +38,8 @@ test("resolves role aliases, variants, panel multiplicity and explicit inheritan
   expect(profiles.size).toBe(2);
 });
 
-test("fails closed on a missing variant or conflicting role", () => {
-  expect(() => routesFromSheet("feature: muse-code/muse-spark-1.3")).toThrow("Missing or invalid reasoning variant");
+test("fails closed on an invalid variant or conflicting role", () => {
+  expect(() => routesFromSheet("feature: muse-code/muse-spark-1.3@bad/variant")).toThrow("Invalid reasoning variant");
   expect(() => routesFromSheet(sheet + "\nfeature: openai/gpt-6-astra\n")).toThrow("Conflicting assignment for feature");
   expect(() => routesFromSheet("# Empty sheet")).toThrow("No role assignments");
 });
@@ -78,4 +78,37 @@ test("preserves an unmanaged agent rather than overwriting it", () => {
   writeFileSync(path, "User-owned agent\n");
   expect(() => installProfiles(mapping, config)).toThrow("Refusing to overwrite unmanaged agent");
   expect(readFileSync(path, "utf8")).toBe("User-owned agent\n");
+});
+
+
+test("applies inline and model-wide effort before legacy Muse variants", () => {
+  const text = sheet.replace("feature, refactoring: muse-code/muse-spark-1.3", "feature, refactoring: muse-code/muse-spark-1.3@high")
+    + "\neffort: muse-code/muse-spark-1.3 = medium\n";
+  const { routes, profiles } = routesFromSheet(text);
+  expect(routes.feature[0].variant).toBe("high");
+  expect(routes["arena runners"].map((target) => target.variant)).toEqual(["max", "medium", "medium"]);
+  expect([...profiles.values()]).toContain("muse-code/muse-spark-1.3#high");
+});
+
+test("explicit default clears legacy variants and model-wide effort", () => {
+  const { routes, profiles } = routesFromSheet(sheet.replace("feature, refactoring: muse-code/muse-spark-1.3", "feature, refactoring: muse-code/muse-spark-1.3@default")
+    + "\neffort: muse-code/muse-spark-1.3 = high\n");
+  expect(routes.feature[0].variant).toBeNull();
+  expect(profiles.get(routes.feature[0].agent)).toBe("muse-code/muse-spark-1.3");
+  expect(routesFromSheet("feature: muse-code/muse-spark-1.3").routes.feature[0].variant).toBeNull();
+});
+
+test("does not silently drop effort on an inherited model", () => {
+  expect(() => routesFromSheet("swarm workers: inherit-parent@high")).toThrow("Cannot apply explicit effort");
+});
+
+test("effort changes make installed Muse profiles stale and reinstall selects the new variant", () => {
+  const { mapping, config } = fixture();
+  installProfiles(mapping, config);
+  writeFileSync(mapping, sheet + "\neffort: muse-code/muse-spark-1.3 = high\n");
+  expect(() => installProfiles(mapping, config, { check: true })).toThrow("routing is stale");
+  const { routes } = installProfiles(mapping, config);
+  const profile = readFileSync(join(config, "agents", `${routes.feature[0].agent}.md`), "utf8");
+  expect(profile).toContain("model: muse-code/muse-spark-1.3#high\n");
+  installProfiles(mapping, config, { check: true });
 });

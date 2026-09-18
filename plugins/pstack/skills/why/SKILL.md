@@ -160,7 +160,7 @@ After the Sources Consulted block, if the user's `why` question is a precursor t
 
 ## Models
 
-Role defaults, stamped from `plugins/pstack/models.json` (edit there, rerun `tools/generate.mjs`). A matching role line in `~/.claude/pstack-models.md` overrides each at runtime; see `/setup-pstack`.
+Role defaults, stamped from `plugins/pstack/models.json` (edit there, rerun `tools/generate.mjs`). A matching role line in the runtime override sheet overrides each; see `/setup-pstack`. Before dispatch, follow [model and effort resolution](../poteto-mode/references/model-dispatch.md).
 
 - why investigators: `claude-opus-5`
 - why synthesizer: `claude-opus-5`

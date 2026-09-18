@@ -8,7 +8,7 @@ Use the launcher and configuration of the current session. A custom launcher suc
 
 ## Install and check the routes
 
-Use the owner's `pstack-models.md`, not a guessed model or a mapping from an isolated runtime's empty home directory. Locate the active OpenCode configuration directory through `OPENCODE_CONFIG_DIR`, then `XDG_CONFIG_HOME/opencode`, then the user's global OpenCode directory.
+Select the active sheet using [configuration scope](model-dispatch.md#configuration-scope), including project overrides and explicitly configured legacy paths. Do not use a guessed model or a mapping from an isolated runtime's empty home directory. Locate the active OpenCode configuration directory through `OPENCODE_CONFIG_DIR`, then `XDG_CONFIG_HOME/opencode`, then the user's global OpenCode directory.
 
 Run the bundled `../scripts/opencode-agents.mjs` helper with explicit absolute paths:
 
@@ -16,7 +16,7 @@ Run the bundled `../scripts/opencode-agents.mjs` helper with explicit absolute p
 node /path/to/poteto-mode/scripts/opencode-agents.mjs --mapping /path/to/pstack-models.md --config-dir /path/to/opencode --install
 ```
 
-The helper creates model-specific Markdown agents and `pstack-routing.json`. It preserves unrelated configuration and refuses to overwrite unmanaged files. Each explicit model needs a reasoning-variant row in the mapping sheet. Rerun installation when the sheet changes. Old generated profiles are retained, but only current routes may be used.
+The helper creates model-specific Markdown agents and `pstack-routing.json`. It preserves unrelated configuration and refuses to overwrite unmanaged files. The helper uses the shared model/effort resolver: inline `model@effort` wins over model-wide `effort:` settings, which win over legacy reasoning-variant table rows. `@default` clears both defaults and uses the runtime default. Without an effort setting or legacy variant row, the profile uses the runtime default. Explicit effort on `auto` or `inherit-parent` is rejected because this adapter cannot apply it to the generic agent. Validate model and variant availability against the running runtime catalog before installation. Rerun installation when the sheet changes. Old generated profiles are retained, but only current routes may be used.
 
 ## Launch by role
 

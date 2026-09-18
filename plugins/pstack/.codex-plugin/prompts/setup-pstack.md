@@ -1,6 +1,6 @@
 ---
 name: setup-pstack
-description: configure pstack per-role model choices
+description: configure role models and effort at project or user scope, optionally from a preset
 disable-model-invocation: true
 ---
 

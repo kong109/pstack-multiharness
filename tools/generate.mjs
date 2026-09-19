@@ -533,7 +533,7 @@ export function strayModelSlugs(file, text, models) {
 // Every ${CLAUDE_PLUGIN_ROOT}/<path> a hook command names must exist in the
 // plugin, and one the command executes directly must be executable, or the
 // SessionStart hook fails silently for every user.
-export function validateHooks(hooksJson, { statOf }) {
+export function validateHooks(hooksJson, { statOf, platform = process.platform }) {
   const problems = [];
   for (const [event, groups] of Object.entries(JSON.parse(hooksJson).hooks ?? {})) {
     for (const group of groups) {
@@ -547,7 +547,7 @@ export function validateHooks(hooksJson, { statOf }) {
         refs.forEach((rel, i) => {
           const st = statOf(rel);
           if (!st) problems.push(`${event}: ${rel} does not exist`);
-          else if (i === 0 && executed && !(st.mode & 0o111)) problems.push(`${event}: ${rel} is not executable`);
+          else if (i === 0 && executed && platform !== "win32" && !(st.mode & 0o111)) problems.push(`${event}: ${rel} is not executable`);
         });
       }
     }

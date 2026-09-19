@@ -2,6 +2,14 @@
 
 This port applies the Cursor → Claude Code substitutions in skill bodies. Earlier drafts left them flagged; this revision resolves them. A later pass added a Codex build that shares the same skills; see [Codex port](#codex-port) below.
 
+## Unreleased - combined role effort and OpenCode routing
+
+The combined base retains upstream 0.9.35, local role effort and presets, and Windows support. OpenCode routing uses the shared effort resolver while preserving legacy variant tables and ignoring session-hook settings. Windows fixes cover hook launch fixtures, executable checks, shipping fixtures, and drive-letter checkpoint links.
+
+The OpenCode adapter installs named subagent profiles from the user's role sheet, including reasoning variants. The shared routing guide is linked from poteto-mode, setup-pstack, arena, architect, how, why, swarm, interrogate, and reflect. These are runtime-specific dispatch corrections, not changes to the upstream workflows or model defaults.
+
+The installer preserves unrelated configuration, refuses unmanaged-file collisions, and detects stale mappings before role lookup. Panels preserve order and duplicate entries. Explicit assignments cannot silently fall back to a generic agent. A live smoke task through the Muse branch's native subagent tool recorded `muse-code/muse-spark-1.3#max` in its child session metadata.
+
 ## 0.9.35 - route Codex sessions through pstack
 
 The bundled `SessionStart` hook now runs on both Claude Code and Codex. A runtime-aware executable reads `session hook` from `~/.claude/pstack-models.md` or `~/.codex/pstack-models.md`, while the Codex manifest explicitly declares the shared hook and includes resume events. The setup skill, Codex mapping, README, and reference explain Codex's `/hooks` trust step and the difference between native-plugin and skills-only installs. Tests execute the shipped command under both runtime environments and cover missing, on, and off settings. The README now leads with installation, a first task, and a workflow diagram; the slash-command table, runtime notes, dependencies, and maintenance documentation move to `docs/reference.md`, which the generator reads for the Codex prompt stubs. The upstream pin remains at `e8d856f`.

@@ -168,7 +168,7 @@ describe("validateHooks", () => {
     expect(() => validateHooks(hooks('"${CLAUDE_PLUGIN_ROOT}/hooks/nope"'), { statOf: () => null })).toThrow(
       "SessionStart: hooks/nope does not exist",
     );
-    expect(() => validateHooks(hooks('"${CLAUDE_PLUGIN_ROOT}/hooks/session-start"'), { statOf: () => plain })).toThrow(
+    expect(() => validateHooks(hooks('"${CLAUDE_PLUGIN_ROOT}/hooks/session-start"'), { statOf: () => plain, platform: "linux" })).toThrow(
       "hooks/session-start is not executable",
     );
   });
@@ -216,7 +216,7 @@ describe("slashCommands", () => {
     expect(rows[0].name).toBe("poteto-mode");
     for (const row of rows) {
       const prompt = readFileSync(join(repoRoot, "plugins/pstack/.codex-plugin/prompts", `${row.name}.md`), "utf8");
-      expect(prompt).toBe(promptStub(row));
+      expect(prompt.replaceAll("\r\n", "\n")).toBe(promptStub(row));
     }
   });
 });

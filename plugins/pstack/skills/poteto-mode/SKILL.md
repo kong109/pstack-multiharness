@@ -7,6 +7,8 @@ description: poteto's agent style for concise, detailed responses, deliberate su
 
 ## Platform Adaptation
 
+On OpenCode V2, read [OpenCode model routing](references/opencode-tools.md) before delegating. Resolve the calling skill's role through the user's model sheet and launch the returned named agent. This overrides the Claude-specific `subagent_type` and per-call `model` instructions below. Never treat a missing per-call model parameter as proof that OpenCode cannot select a subagent model.
+
 Follow [operating-system guidance](references/operating-systems.md) for shell commands, temporary paths, and bundled helpers.
 
 These skills use Claude Code tool names (the `Skill` tool, the `Agent` tool, `AskUserQuestion`) and Claude model slugs (`claude-*`). On Claude Code they work as written. On Codex, read [`references/codex-tools.md`](references/codex-tools.md) for the Codex equivalent of a Claude tool, model, or skill named by these workflows. Other runtimes can discover the same Agent Skills tree, but they must use their own tool, model, and configuration equivalents. `codex-tools.md` is not a cross-runtime map.

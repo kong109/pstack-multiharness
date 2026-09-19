@@ -91,7 +91,7 @@ test('reuses a project artifact without making a competing copy', () => fixture(
 test('rejects symlink artifacts outside the project', () => fixture(({ run }) => {
   const saved = note(run);
   rmSync(saved.artifact);
-  symlinkSync('/etc/hosts', saved.artifact);
+  symlinkSync(fileURLToPath(import.meta.url), saved.artifact);
   const result = run('publish', '--note', saved.note, '--artifact', saved.artifact);
   assert.equal(result.status, 1);
   assert.match(result.value.detail, /must belong to this project/);

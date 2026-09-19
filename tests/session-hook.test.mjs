@@ -7,6 +7,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { bashExecutable, shellPath } from "./platform.mjs";
+
 const pluginRoot = fileURLToPath(new URL("../plugins/pstack/", import.meta.url));
 const sessionStart = JSON.parse(readFileSync(join(pluginRoot, "hooks/hooks.json"), "utf8")).hooks.SessionStart[0];
 const command = sessionStart.hooks[0].command;
@@ -17,10 +19,10 @@ const codexManifest = JSON.parse(readFileSync(join(pluginRoot, ".codex-plugin/pl
 // relocated their Codex directory.
 const runtimes = {
   claude: { sheetDir: ".claude", env: () => ({}) },
-  codex: { sheetDir: ".codex", env: () => ({ PLUGIN_ROOT: pluginRoot }) },
+  codex: { sheetDir: ".codex", env: () => ({ PLUGIN_ROOT: shellPath(pluginRoot) }) },
   "codex with CODEX_HOME": {
     sheetDir: "codex-home",
-    env: (sheetRoot) => ({ PLUGIN_ROOT: pluginRoot, CODEX_HOME: sheetRoot }),
+    env: (sheetRoot) => ({ PLUGIN_ROOT: shellPath(pluginRoot), CODEX_HOME: shellPath(sheetRoot) }),
   },
 };
 
@@ -33,8 +35,8 @@ function runHook(runtime, sheet) {
     writeFileSync(join(sheetRoot, "pstack-models.md"), sheet);
   }
   try {
-    const r = spawnSync("sh", ["-c", command], {
-      env: { PATH: process.env.PATH, HOME: home, CLAUDE_PLUGIN_ROOT: pluginRoot, ...env(sheetRoot) },
+    const r = spawnSync(bashExecutable, ["-c", command], {
+      env: { PATH: process.env.PATH, HOME: shellPath(home), CLAUDE_PLUGIN_ROOT: shellPath(pluginRoot), ...env(sheetRoot) },
       encoding: "utf8",
     });
     return { status: r.status, out: r.stdout, err: r.stderr };

@@ -5,6 +5,8 @@ description: Configure pstack role models and effort at project or user scope, o
 
 # Setup pstack
 
+On OpenCode V2, follow [OpenCode model routing](../poteto-mode/references/opencode-tools.md). Detect models and reasoning variants from the running OpenCode catalog, preserve the user's role sheet, and install named agent profiles with the bundled helper after any mapping change. Confirm a live child session's recorded model and variant before claiming routing works. The Claude-specific include and per-call model instructions below do not apply to OpenCode.
+
 On Codex, read the [platform mapping](../poteto-mode/references/codex-tools.md), including its per-skill notes, before following this skill.
 
 Configure the project or user override sheet using [configuration scope](../poteto-mode/references/model-dispatch.md#configuration-scope). Respect a scope named by the user. Otherwise keep the existing project scope when one exists; if no target is established, ask whether to configure this project or the user default. Preset storage scope and the scope being configured are independent. A user preset can be applied to a project, and a project preset can become the user default.

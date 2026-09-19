@@ -134,7 +134,7 @@ Each shortcut invokes its skill. The commands skip existing files and links. Rem
 
 ## Configuration and dependencies
 
-Invoke [setup-pstack](../plugins/pstack/skills/setup-pstack/SKILL.md) to choose models for each role. It detects available models, confirms the choices, and writes an override sheet. Its [runtime table](../plugins/pstack/skills/setup-pstack/SKILL.md#other-runtimes) names the sheet path and loading mechanism for each runtime. Defaults live in [models.json](../plugins/pstack/models.json).
+Invoke [setup-pstack](../plugins/pstack/skills/setup-pstack/SKILL.md) to choose models for each role. It detects available models, confirms the choices, and writes an override sheet. The [configuration scope guide](../plugins/pstack/skills/poteto-mode/references/model-dispatch.md#configuration-scope) names the sheet paths and project precedence. Defaults live in [models.json](../plugins/pstack/models.json).
 
 For design comparisons and reviews, choose distinct models available to your runtime. The default panel uses different Claude models.
 
@@ -145,7 +145,7 @@ Install dependencies for the workflows you use:
 | GitHub CLI, `gh` | PR monitoring and shipping. Authenticate with `gh auth login`. |
 | Bun | The bundled `watch-pr` and `orch` scripts. Their bootstrap installs script dependencies on first run. |
 | Graphite CLI, `gt` | The Orchestrate playbook and `orch` stack frontier. Shipping and autopilot playbooks use `gh` or Origin's CLI when available. |
-| `jq` and `rg` | PR and transcript columns in `worktree-audit.sh`. Missing tools produce warnings and blank columns. |
+| Node, `jq` and `rg` | PR and transcript columns in `worktree-audit.sh`. Missing tools produce warnings and blank columns. |
 | `plugin-dev` | Claude Code skill-authoring guidance used by `automate-me`, `reflect`, and `poteto-mode`. |
 
 Install the Claude Code skill-authoring companion with:

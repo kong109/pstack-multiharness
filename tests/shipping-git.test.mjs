@@ -12,6 +12,7 @@ function fixture(body) {
   const root = mkdtempSync(join(tmpdir(), 'pstack-shipping-'));
   try {
     run(root, 'init', '-b', 'main');
+    run(root, 'config', 'core.autocrlf', 'false');
     run(root, 'config', 'user.email', 'fixture@example.invalid');
     run(root, 'config', 'user.name', 'Fixture');
     const commit = (file, content) => {

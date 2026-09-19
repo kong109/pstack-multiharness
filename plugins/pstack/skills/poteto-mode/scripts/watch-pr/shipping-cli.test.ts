@@ -1,7 +1,7 @@
 import { expect, it } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { tmpdir } from "node:os";
 import { object } from "./landing.ts";
 
@@ -12,7 +12,7 @@ function fixture(body: (run: (...args: string[]) => { status: number | null; out
     id: "pr-id", state: "OPEN", headRefOid: "head", baseRefName: "main", baseRefOid: "base",
     autoMergeRequest: { enabledAt: "now" }, mergeQueueEntry: { id: "queue" }, mergeCommit: null,
   }));
-  const gh = join(dir, "gh");
+  const gh = join(dir, process.platform === "win32" ? "gh.mjs" : "gh");
   writeFileSync(gh, `#!${process.execPath}
 import { readFileSync, writeFileSync, appendFileSync } from 'node:fs';
 const state = JSON.parse(readFileSync(process.env.SHIPPING_STATE, 'utf8'));
@@ -31,12 +31,13 @@ writeFileSync(process.env.SHIPPING_STATE, JSON.stringify(state));
 console.log(JSON.stringify({ data: result }));
 `);
   chmodSync(gh, 0o755);
+  if (process.platform === "win32") writeFileSync(join(dir, "gh.cmd"), `@echo off\r\n"${process.execPath}" "${gh}" %*\r\n`);
   const entry = join(dir, "entry.ts");
   writeFileSync(entry, `import { main } from ${JSON.stringify(join(import.meta.dir, "shipping-cli.ts"))}; process.exitCode = await main(process.argv.slice(2));`);
   const run = (...args: string[]) => {
     const result = spawnSync(process.execPath, [entry, ...args], {
       encoding: "utf8", timeout: 3000,
-      env: { ...process.env, PATH: `${dir}:${process.env.PATH}`, SHIPPING_STATE: file },
+      env: { ...process.env, PATH: `${dir}${delimiter}${process.env.PATH}`, SHIPPING_STATE: file },
     });
     return { status: result.status, output: object(JSON.parse(result.stdout), "CLI result") };
   };

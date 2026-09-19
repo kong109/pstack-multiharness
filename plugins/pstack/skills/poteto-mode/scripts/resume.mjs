@@ -42,7 +42,7 @@ function verifyLinks(note, artifacts) {
   const content = readFileSync(note.path, 'utf8');
   const paths = [...content.matchAll(/\[[^\]]*\]\(([^)]+)\)/g)]
     .map(match => match[1])
-    .filter(target => !/^(?:[a-z]+:|#)/i.test(target))
+    .filter(target => isAbsolute(target) || !/^(?:[a-z]+:|#)/i.test(target))
     .map(target => realpathSync(resolve(dirname(note.path), decodeURIComponent(target.split('#')[0]))));
   for (const artifact of artifacts)
     if (!paths.includes(artifact.path)) throw new Error(`note must link requested artifact: ${artifact.path}`);

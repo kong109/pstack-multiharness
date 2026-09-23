@@ -2,6 +2,10 @@
 
 This port applies the Cursor → Claude Code substitutions in skill bodies. Earlier drafts left them flagged; this revision resolves them. A later pass added a Codex build that shares the same skills; see [Codex port](#codex-port) below.
 
+## Unreleased - Claude Code effort routing
+
+The `Agent` tool carries a model but no effort, so per-role effort on Claude Code was resolved and then dropped. `claude-agents.mjs` installs one `pstack-<model>-<effort>` agent per effort-bearing role entry into the scope's `.claude/agents`, with `model:` and `effort:` frontmatter, and answers `--role` with the agent to launch. Entries without effort keep the calling skill's `subagent_type` and per-call `model`. Explicit effort on an inherited model becomes `model: inherit`, which OpenCode cannot express. The OpenCode and Claude adapters now share one routing core, `agent-routes.mjs`; the OpenCode tests pass unchanged. `claude-routing.md` is linked from model-dispatch, poteto-mode and setup-pstack.
+
 ## Unreleased - OpenCode V2 role-to-model routing
 
 The OpenCode adapter installs named subagent profiles from the user's role sheet, including reasoning variants. The shared routing guide is linked from poteto-mode, setup-pstack, arena, architect, how, why, swarm, interrogate, and reflect. These are runtime-specific dispatch corrections, not changes to the upstream workflows or model defaults.

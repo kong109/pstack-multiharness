@@ -31,7 +31,7 @@ Pass resolved model and effort through actual runtime controls. A sentence in a 
 
 - Inspect the current dispatch tool schema and model capabilities. Validate effort for that model; do not infer support from its slug.
 - If the tool exposes `reasoning_effort` or `effort`, pass the resolved value there. Omit the field for null effort. On Codex, obey fork restrictions on model and effort overrides and select a supported context mode when either is explicit.
-- If the host configures effort through agent definitions or model variants, select or configure a worker definition with that model and effort through the host's documented mechanism. On OpenCode, verify that the worker dispatch selects the configured agent or variant. The parent's variant alone does not prove a child uses it.
+- If the host configures effort through agent definitions or model variants, select or configure a worker definition with that model and effort through the host's documented mechanism. On OpenCode, verify that the worker dispatch selects the configured agent or variant. The parent's variant alone does not prove a child uses it. On Claude Code, the `Agent` tool has no effort field, so follow [Claude Code effort routing](claude-routing.md) for any entry with explicit effort.
 - If explicit effort cannot be applied, report the unsupported model/effort pair before launching that worker and obtain a supported choice. Do not silently drop it, substitute another level, or claim it was applied through prompt text.
 - If a rejected model is replaced, resolve and validate effort again. Do not carry a model-specific default to a different model.
 

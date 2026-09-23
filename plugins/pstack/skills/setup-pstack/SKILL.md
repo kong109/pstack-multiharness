@@ -1,11 +1,13 @@
 ---
 name: setup-pstack
-description: Configure pstack role models and effort at project or user scope, optionally starting from a saved preset, and install model-specific subagents for OpenCode V2. Use for /setup-pstack, pstack-setup, choosing a pstack preset, or changing role mappings.
+description: Configure pstack role models and effort at project or user scope, optionally starting from a saved preset, and install model- and effort-specific subagents for OpenCode V2 and Claude Code. Use for /setup-pstack, pstack-setup, choosing a pstack preset, or changing role mappings.
 ---
 
 # Setup pstack
 
 On OpenCode V2, follow [OpenCode model routing](../poteto-mode/references/opencode-tools.md). Detect models and reasoning variants from the running OpenCode catalog, preserve the user's role sheet, and install named agent profiles with the bundled helper after any mapping change. Confirm a live child session's recorded model and variant before claiming routing works. The Claude-specific include and per-call model instructions below do not apply to OpenCode.
+
+On Claude Code, the `Agent` tool cannot carry effort. Whenever the written sheet has any explicit effort, install the routed agents with [Claude Code effort routing](../poteto-mode/references/claude-routing.md) after step 5 and confirm them in step 7. Do not report effort as unsupported on Claude Code; it is applied through those agents.
 
 On Codex, read the [platform mapping](../poteto-mode/references/codex-tools.md), including its per-skill notes, before following this skill.
 
@@ -33,7 +35,7 @@ Show every role with its current model, marking any real slug not in the detecte
 
 ### 4. Validate
 
-Run the resolver for every role using the proposed sheet and its default model list. Single-model roles must have one entry. Validate explicit effort against the host model capabilities and confirm a concrete dispatch control can apply it. Prompt text is not an effort control. Report unsupported settings instead of dropping them. Remove legacy prose describing effort as only a worker-brief instruction, while preserving its `effort:` settings.
+Run the resolver for every role using the proposed sheet and its default model list. Single-model roles must have one entry. Validate explicit effort against the host model capabilities and confirm a concrete dispatch control can apply it; on Claude Code that control is the routed agent's `effort:` frontmatter. Prompt text is not an effort control. Report unsupported settings instead of dropping them. Remove legacy prose describing effort as only a worker-brief instruction, while preserving its `effort:` settings.
 
 Every real slug written must be in the detected set; `inherit-parent` and `auto` always pass. If a chosen real slug is not available, stop and ask again.
 
@@ -71,7 +73,7 @@ Add or update one scoped instruction in the destination instructions file to rea
 
 ### 7. Confirm
 
-Report the config scope, target path, selected preset scope/name if any, and how it loads. Mention `pstack-preset` for saving the resulting configuration for reuse. Re-running setup updates the chosen sheet, not its source preset.
+Report the config scope, target path, selected preset scope/name if any, and how it loads. On Claude Code with explicit effort, also report the installed agents and whether the session can already see them. Mention `pstack-preset` for saving the resulting configuration for reuse. Re-running setup updates the chosen sheet, not its source preset.
 
 ## Models
 

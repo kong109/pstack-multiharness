@@ -28,7 +28,7 @@ export function routesFromSheet(text, adapter) {
     const row = line.trim().match(/^([a-z][a-z ,\/-]*):\s*(\S.*)$/);
     if (!row) continue;
     const [, label] = row;
-    if (label === "effort") continue;
+    if (label === "effort" || label === "session hook") continue;
     const targets = resolveRole(text, label).map((pair) => {
       const { target, profile } = adapter.route(label, pair);
       if (profile) {

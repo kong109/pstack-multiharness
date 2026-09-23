@@ -1,3 +1,4 @@
+import type { LandingRevision } from "./landing.ts";
 declare const prNumberBrand: unique symbol;
 export type PrNumber = number & { readonly [prNumberBrand]: "PrNumber" };
 export type NonEmpty<T> = readonly [T, ...T[]];
@@ -38,14 +39,13 @@ export type ReviewDecision =
   | "CHANGES_REQUESTED"
   | "REVIEW_REQUIRED"
   | null;
-export interface PullRequestFacts {
-  readonly context: PrContext;
+export interface PullRequestFacts extends Omit<LandingRevision, "headRefOid" | "baseRefOid"> {
   readonly mergeable: "MERGEABLE" | "CONFLICTING" | "UNKNOWN";
   readonly mergeStateStatus: MergeStateStatus;
   readonly reviewDecision: ReviewDecision;
   readonly headRefOid: string | null;
+  readonly baseRefOid: string | null;
   readonly headRefName: string;
-  readonly baseRefName: string;
   readonly state: "OPEN" | "CLOSED" | "MERGED";
   readonly mergedAt: string | null;
   readonly isDraft: boolean;
@@ -152,7 +152,7 @@ export type PrSnapshot =
   | {
       readonly kind: "open";
       readonly context: PrContext;
-      readonly facts: PullRequestFacts & { readonly headRefOid: string };
+      readonly facts: PullRequestFacts & LandingRevision;
       readonly threads: readonly ReviewThread[];
       readonly ci: CiState;
       readonly reviewAutomationRunning: boolean;
@@ -161,7 +161,7 @@ export interface ReadyPr {
   readonly kind: "ready-pr";
   readonly context: PrContext;
   readonly proof: {
-    readonly headRefOid: string;
+    readonly revision: LandingRevision;
     readonly mergeability: "clear";
     readonly threads: readonly [];
     readonly ci: CiClean;
@@ -395,7 +395,9 @@ export interface GitHubReader {
   originRepo(): Promise<Repository | null>;
   currentPr(pr: PrNumber | null): Promise<PrContext>;
   pullRequest(context: PrContext): Promise<PullRequestFacts>;
-  headCommit(context: PrContext): Promise<string | null>;
+  revision(
+    context: PrContext,
+  ): Promise<LandingRevision>;
   openPullRequests(repository: Repository): Promise<readonly OpenPullRequest[]>;
   checksFastPath(context: PrContext): Promise<ChecksFastPath>;
   checkRollupPage(

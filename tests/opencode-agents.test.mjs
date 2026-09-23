@@ -102,6 +102,12 @@ test("does not silently drop effort on an inherited model", () => {
   expect(() => routesFromSheet("swarm workers: inherit-parent@high")).toThrow("Cannot apply explicit effort");
 });
 
+test("ignores the session hook setting", () => {
+  const { routes } = routesFromSheet(sheet + "\nsession hook: off\n");
+  expect(routes["session hook"]).toBeUndefined();
+  expect(routes.feature[0].model).toBe("muse-code/muse-spark-1.3");
+});
+
 test("effort changes make installed Muse profiles stale and reinstall selects the new variant", () => {
   const { mapping, config } = fixture();
   installProfiles(mapping, config);

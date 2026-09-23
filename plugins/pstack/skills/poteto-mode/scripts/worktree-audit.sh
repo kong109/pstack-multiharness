@@ -63,11 +63,19 @@ classify_bucket() {
     echo review
 }
 
+# The trunk is whatever the remote says it is; assuming main leaves every
+# worktree unresolved on a repo that trunks elsewhere. main is the last resort,
+# when the remote publishes no usable HEAD.
+base_branch=$(git ls-remote --symref origin HEAD 2>/dev/null \
+    | sed -n 's|^ref: refs/heads/\(.*\)[[:space:]]HEAD$|\1|p')
+base_branch="${base_branch:-main}"
+
 # Keep displaying partial facts when discovery fails, but never label them safe.
 discovery_known=yes
-if ! fetch_err=$(git fetch origin main 2>&1 >/dev/null); then
+# Explicitly update the ref even when a single-branch clone does not track it.
+if ! fetch_err=$(git fetch origin "+refs/heads/$base_branch:refs/remotes/origin/$base_branch" 2>&1 >/dev/null); then
     discovery_known=no
-    echo "warn: could not fetch origin/main; merged column may be stale: $fetch_err" >&2
+    echo "warn: could not fetch origin/$base_branch; merged column may be stale: $fetch_err" >&2
 fi
 
 # PR state by branch, fetched once. Empty if gh is unavailable.
@@ -129,7 +137,7 @@ parse_worktrees | while IFS= read -r -d '' wt && IFS= read -r -d '' state; do
 
     ancestry="?"
     if [ "$head" != "?" ]; then
-        git merge-base --is-ancestor "$head" origin/main >/dev/null 2>&1
+        git merge-base --is-ancestor "$head" "origin/$base_branch" >/dev/null 2>&1
         merge_status=$?
         if [ "$merge_status" -eq 0 ]; then
             ancestry=YES

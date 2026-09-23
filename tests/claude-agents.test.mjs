@@ -3,9 +3,10 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { installProfiles, routesFromSheet } from "../plugins/pstack/skills/poteto-mode/scripts/claude-agents.mjs";
 
-const script = new URL("../plugins/pstack/skills/poteto-mode/scripts/claude-agents.mjs", import.meta.url).pathname;
+const script = fileURLToPath(new URL("../plugins/pstack/skills/poteto-mode/scripts/claude-agents.mjs", import.meta.url));
 const sheet = `# pstack model configuration
 feature, refactoring: claude-opus-5-5@high
 bug-fix: claude-opus-5-5
@@ -54,6 +55,12 @@ test("applies explicit effort to an inherited model through model: inherit", () 
 test("rejects an effort Claude Code cannot apply instead of dropping it", () => {
   expect(() => routesFromSheet("feature: claude-opus-5-5@turbo")).toThrow("Unsupported Claude Code effort for feature: turbo");
   expect(() => routesFromSheet("feature: openai/gpt-6@high")).toThrow("Invalid model assignment for feature: openai/gpt-6");
+});
+
+test("ignores the session hook setting", () => {
+  const { routes } = routesFromSheet(sheet + "session hook: on\n");
+  expect(routes["session hook"]).toBeUndefined();
+  expect(routes.feature).toEqual([{ agent: "pstack-claude-opus-5-5-high", model: "claude-opus-5-5", effort: "high" }]);
 });
 
 test("installs agents with model and effort frontmatter, idempotently, beside unrelated agents", () => {

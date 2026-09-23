@@ -49,6 +49,12 @@ Skills name Claude defaults (a single-role default for code/prose/judgment plus 
 
 `/setup-pstack` writes the configured model list. On Codex, set it to your Codex model slugs. Follow [model and effort resolution](model-dispatch.md) before dispatch and pass explicit effort through the supported runtime field.
 
+## Session routing hook
+
+The native pstack plugin bundles the same `SessionStart` routing hook as the Claude Code plugin. Codex runs it on startup, resume, clear, and compact after the user trusts the hook through `/hooks`. The hook reads `session hook` from `~/.codex/pstack-models.md`; `session hook: off` disables injection.
+
+A skills-only installation does not include plugin hooks. Request `poteto-mode` explicitly or add a standing instruction to `AGENTS.md` in that case.
+
 ## Driver and bundled skills pstack references
 
 The [driver policy](../SKILL.md#non-negotiables) selects the app driver. For skills and drivers named by these workflows, use these Codex equivalents:
@@ -77,7 +83,7 @@ Affected skill entry points and the optional Codex slash stubs point here. Most 
 
 ## Vendored scripts
 
-`skills/poteto-mode/scripts/` ships the `watch-pr` PR watcher, the `orch` store CLI, and `worktree-audit.sh`. Run them with explicit Bun or Bash interpreters through the shell, following [operating-system guidance](operating-systems.md). They need `bun`, `gh`, (for stack work) `gt`, and (for `worktree-audit.sh`) Node, `jq` and `rg`. `worktree-audit.sh` reads Claude Code transcripts under `~/.claude/projects/`; point it at your runtime's transcript directory instead when you run it elsewhere.
+`skills/poteto-mode/scripts/` ships the `watch-pr` PR watcher, the `orch` store CLI, and `worktree-audit.sh`. The `watch-pr/ship-pr` command owns pending-merge inspection and cancellation; `resume.mjs` owns the shared checkpoint locator described in [Resume storage](resume-storage.md). Run them with explicit Bun or Bash interpreters through the shell, following [operating-system guidance](operating-systems.md). They need `bun`, `gh`, (for stack work) `gt`, and (for `worktree-audit.sh`) Node, `jq` and `rg`. `worktree-audit.sh` reads Claude Code transcripts under `~/.claude/projects/`; point it at your runtime's transcript directory instead when you run it elsewhere.
 
 ## Instructions file
 

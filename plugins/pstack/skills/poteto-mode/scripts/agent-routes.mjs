@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
@@ -97,7 +97,7 @@ export function main(args, adapter) {
 }
 
 export function runIfMain(importMetaUrl, adapter) {
-  if (!process.argv[1] || importMetaUrl !== pathToFileURL(resolve(process.argv[1])).href) return;
+  if (!process.argv[1] || importMetaUrl !== pathToFileURL(realpathSync(resolve(process.argv[1]))).href) return;
   try { main(process.argv.slice(2), adapter); }
   catch (error) { console.error(error.message); process.exitCode = 1; }
 }

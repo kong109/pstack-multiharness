@@ -1,8 +1,8 @@
 import { afterEach, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { installProfiles, routesFromSheet } from "../plugins/pstack/skills/poteto-mode/scripts/claude-agents.mjs";
 
 const script = new URL("../plugins/pstack/skills/poteto-mode/scripts/claude-agents.mjs", import.meta.url).pathname;
@@ -89,6 +89,14 @@ test("refuses to overwrite an unmanaged agent or an OpenCode routing manifest", 
   rmSync(join(agents, "pstack-claude-opus-5-5-high.md"));
   writeFileSync(join(config, "pstack-routing.json"), '{"generatedBy":"pstack-opencode"}');
   expect(() => installProfiles(mapping, config)).toThrow("Refusing to overwrite unmanaged routing file");
+});
+
+test("the CLI runs when invoked through a symlinked skills directory", () => {
+  const { mapping, config } = fixture();
+  const link = join(directories[0], "linked-scripts");
+  symlinkSync(dirname(script), link);
+  const result = spawnSync("node", [join(link, "claude-agents.mjs"), "--mapping", mapping, "--config-dir", config, "--install"], { encoding: "utf8" });
+  expect(JSON.parse(result.stdout).status).toBe("installed");
 });
 
 test("the CLI installs and then answers a role", () => {

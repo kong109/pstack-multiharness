@@ -77,5 +77,5 @@ Short list, no preamble:
 
 Role defaults, stamped from `plugins/pstack/models.json` (edit there, rerun `tools/generate.mjs`). A matching role line in the runtime override sheet overrides each; see `/setup-pstack`. Before dispatch, follow [model and effort resolution](../poteto-mode/references/model-dispatch.md).
 
-- reflect tooling: `claude-opus-5`
-- reflect judgment, divergent, synthesizer: `claude-opus-5`
+- reflect tooling: `claude-opus-5-5`
+- reflect judgment, divergent, synthesizer: `claude-opus-5-5`

@@ -93,4 +93,4 @@ The caller's usage is written first and the type sketch derived from it. One fil
 
 Role defaults, stamped from `plugins/pstack/models.json` (edit there, rerun `tools/generate.mjs`). A matching role line in the runtime override sheet overrides each; see `/setup-pstack`. Before dispatch, follow [model and effort resolution](../poteto-mode/references/model-dispatch.md).
 
-- architect runners: `claude-opus-5`, `claude-fable-5-1`, `claude-sonnet-5`
+- architect runners: `claude-opus-5-5`, `claude-fable-5-1`, `claude-sonnet-5`

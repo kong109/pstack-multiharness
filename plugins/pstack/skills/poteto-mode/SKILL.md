@@ -154,9 +154,9 @@ A large or cross-cutting effort (a migration across many call sites, an ambitiou
 
 Role defaults, stamped from `plugins/pstack/models.json` (edit there, rerun `tools/generate.mjs`). A matching role line in the runtime override sheet overrides each; see `/setup-pstack`. Before dispatch, follow [model and effort resolution](references/model-dispatch.md).
 
-- feature, refactoring: `claude-opus-5`
+- feature, refactoring: `claude-opus-5-5`
 - bug-fix: `claude-fable-5-1`
 - perf-issue: `claude-fable-5-1`
 - hillclimb: `claude-fable-5-1`
-- judgment and prose: `claude-opus-5`
+- judgment and prose: `claude-opus-5-5`
 - strongest judgment: `claude-fable-5-1`

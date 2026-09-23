@@ -90,6 +90,11 @@ const rules = [
     file: "poteto-mode/SKILL.md",
     phrase: "severity decides its artifact, not where it turned up",
   },
+  {
+    source: "#86 confirm the first status read",
+    file: "poteto-mode/playbooks/babysit.md",
+    phrase: "confirm that the PR or stack it reports matches the request",
+  },
 ];
 
 describe("port-local skill rules", () => {

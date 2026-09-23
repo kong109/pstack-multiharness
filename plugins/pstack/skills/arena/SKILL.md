@@ -77,5 +77,5 @@ One synthesized artifact. One short synthesis note alongside, naming the base, t
 
 Role defaults, stamped from `plugins/pstack/models.json` (edit there, rerun `tools/generate.mjs`). A matching role line in the runtime override sheet overrides each; see `/setup-pstack`. Before dispatch, follow [model and effort resolution](../poteto-mode/references/model-dispatch.md).
 
-- arena runners: `claude-opus-5`, `claude-fable-5-1`, `claude-sonnet-5`
-- arena cross-judge pool: `claude-opus-5`, `claude-fable-5-1`, `claude-sonnet-5`
+- arena runners: `claude-opus-5-5`, `claude-fable-5-1`, `claude-sonnet-5`
+- arena cross-judge pool: `claude-opus-5-5`, `claude-fable-5-1`, `claude-sonnet-5`

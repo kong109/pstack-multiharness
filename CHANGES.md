@@ -2,6 +2,16 @@
 
 This port applies the Cursor → Claude Code substitutions in skill bodies. Earlier drafts left them flagged; this revision resolves them. A later pass added a Codex build that shares the same skills; see [Codex port](#codex-port) below.
 
+## 0.9.37 - move the Opus roles to Opus 5.5
+
+`plugins/pstack/models.json` names `claude-opus-5-5` where it named `claude-opus-5`: the single-role default, the panel, and every single-model role that ran Opus 5 (`feature, refactoring`, `judgment and prose`, `how explorer`, `how explainer`, `why investigators`, `why synthesizer`, `reflect tooling`, `reflect judgment, divergent, synthesizer`, `swarm workers`). The generator restamped the `## Models` sections, the interrogate reviewer table, and setup-pstack's override sheet and available-model line. Opus 5.5 joins the available-model list as `Opus 5.5`; Opus 5 stays there for `/setup-pstack` overrides. The Fable roles are unchanged. The pin remains at `e8d856f`.
+
+## 0.9.36 - Babysit confirms the first status read
+
+This is a deliberate local fork. Preserve it during upstream sync.
+
+The Babysit playbook took a PR number or a status from the request and never said to check that the first status read was about that PR or stack. Step 2 makes the merge frontier the only PR that matters, but no step said to name it before acting. Step 6 now says to confirm that the PR or stack the first status read reports matches the request, and to name the current merge frontier. The sentence adds no command. On GitHub the watcher already answers both: `--stack` follows the connected open stack from one `--pr`, and its verdict carries `frontier`. A request may name a stack by any PR in it, so the requested PR does not have to be the frontier. Step 1 stays identical to upstream.
+
 ## Local routing - Claude Code effort routing
 
 The `Agent` tool carries a model but no effort, so per-role effort on Claude Code was resolved and then dropped. `claude-agents.mjs` installs one `pstack-<model>-<effort>` agent per effort-bearing role entry into the scope's `.claude/agents`, with `model:` and `effort:` frontmatter, and answers `--role` with the agent to launch. Entries without effort keep the calling skill's `subagent_type` and per-call `model`. Explicit effort on an inherited model becomes `model: inherit`, which OpenCode cannot express. The OpenCode and Claude adapters now share one routing core, `agent-routes.mjs`; the OpenCode tests pass unchanged. `claude-routing.md` is linked from model-dispatch, poteto-mode and setup-pstack. The routing core skips the `session hook` line.

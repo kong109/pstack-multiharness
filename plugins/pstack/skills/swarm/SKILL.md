@@ -52,4 +52,4 @@ Return one consolidated in-chat report with the table, issue one-liners, gaps or
 
 Role defaults, stamped from `plugins/pstack/models.json` (edit there, rerun `tools/generate.mjs`). A matching role line in the runtime override sheet overrides each; see `/setup-pstack`. Before dispatch, follow [model and effort resolution](../poteto-mode/references/model-dispatch.md).
 
-- swarm workers: `claude-opus-5`
+- swarm workers: `claude-opus-5-5`

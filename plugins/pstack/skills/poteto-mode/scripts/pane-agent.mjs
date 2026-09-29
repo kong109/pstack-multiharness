@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -15,12 +15,23 @@ const TURN_START_MS = 90_000;
 const DEFAULT_WAIT_MS = 1_800_000;
 const RESULT_TEXT_LIMIT = 200_000;
 const SCREEN_LINES = 60;
+const NONE_POLL_MS = 5_000;
+const TOKEN = /^[A-Za-z0-9][A-Za-z0-9_./:-]*$/;
 
 export const panesRoot = (env = process.env) => env.PSTACK_PANES_DIR ?? join(realpathSync(tmpdir()), "pstack-panes");
 
 export function sh(cmd, args, { timeoutMs } = {}) {
   const r = spawnSync(cmd, args, { encoding: "utf8", timeout: timeoutMs, maxBuffer: 32 * 1024 * 1024 });
-  return { status: r.status, stdout: r.stdout ?? "", stderr: r.stderr ?? "", timedOut: r.error?.code === "ETIMEDOUT" };
+  return { status: r.status, stdout: r.stdout ?? "", stderr: r.stderr || r.error?.message || "", timedOut: r.error?.code === "ETIMEDOUT" };
+}
+
+function ownedPrivateDir(root) {
+  mkdirSync(root, { recursive: true, mode: 0o700 });
+  const info = lstatSync(root);
+  const foreign = typeof process.getuid === "function" && (info.uid !== process.getuid() || (info.mode & 0o022) !== 0);
+  if (!info.isDirectory() || info.isSymbolicLink() || foreign) {
+    throw new Error(`${root} must be a directory you own that no one else can write to; set PSTACK_PANES_DIR to a private path`);
+  }
 }
 
 const pause = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
@@ -75,7 +86,9 @@ function statePath(name, env) {
 function loadState(name, env) {
   const path = join(statePath(name, env), "state.json");
   if (!existsSync(path)) throw new Error(`No pane agent named ${name}`);
-  return JSON.parse(readFileSync(path, "utf8"));
+  const state = JSON.parse(readFileSync(path, "utf8"));
+  if (state.run !== statePath(name, env)) throw new Error(`state.json for ${name} names a different run directory; refusing to use it`);
+  return state;
 }
 
 const saveState = (state) => writeFileSync(join(state.run, "state.json"), JSON.stringify(state, null, 2) + "\n");
@@ -139,6 +152,7 @@ export function herdrMux(runner, env) {
       return r.status === 0 ? screenText(r.stdout) : `(unreadable: ${(r.stderr || r.stdout).trim().slice(0, 200)})`;
     },
     close(state) {
+      if (!state.ids?.tab) return true;
       const r = call(["tab", "close", state.ids.tab]);
       return r.ok || r.code === "tab_not_found" || r.code === "not_found";
     },
@@ -160,28 +174,33 @@ export function tuiosMux(runner, env) {
     if (r.status !== 0) return "gone";
     try { return JSON.parse(r.stdout).state ?? "unknown"; } catch { return "unknown"; }
   };
-  const waitFor = (state, until, timeoutMs) => {
-    const r = call("wait-for", ["agent-state", "-w", state.name, "--until", until, "--timeout", String(timeoutMs)], timeoutMs);
-    if (r.status === 0) return true;
-    return false;
-  };
-  const rest = new Set(["idle", "done", "none"]);
+  const waitFor = (state, until, timeoutMs) =>
+    call("wait-for", ["agent-state", "-w", state.name, "--until", until, "--timeout", String(timeoutMs)], timeoutMs).status === 0;
+  const reported = (state) => ["question.md", "result.md"].some((file) => existsSync(join(state.run, file)));
   const settle = (state, { fresh, timeoutMs }) => {
     const deadline = Date.now() + timeoutMs;
     const left = () => Math.max(1000, deadline - Date.now());
-    if (fresh && !waitFor(state, "working,needs_input,errored,done", Math.min(TURN_START_MS, left()))) {
-      return agentState(state) === "gone" ? { kind: "gone" } : { kind: "stalled" };
+    let seenWorking = false;
+    if (fresh) {
+      if (waitFor(state, "working,needs_input,errored,done", Math.min(TURN_START_MS, left()))) {
+        seenWorking = true;
+      } else {
+        const cur = agentState(state);
+        if (cur === "gone") return { kind: "gone" };
+        if (cur !== "none") return { kind: "stalled" };
+      }
     }
-    for (let i = 0; i < 100; i++) {
+    for (;;) {
       const cur = agentState(state);
       if (cur === "gone") return { kind: "gone" };
       if (cur === "needs_input") return { kind: "blocked" };
       if (cur === "errored") return { kind: "error", detail: "the agent reported errored" };
-      if (rest.has(cur)) return { kind: "rest" };
+      if (cur === "working") seenWorking = true;
+      if (cur === "idle" || cur === "done" || (cur === "none" && (seenWorking || reported(state)))) return { kind: "rest" };
       if (Date.now() >= deadline) return { kind: "timeout" };
-      waitFor(state, "idle,done,needs_input,errored", left());
+      const slice = cur === "none" ? Math.min(left(), NONE_POLL_MS) : left();
+      if (!waitFor(state, "idle,done,needs_input,errored", slice)) pause(500);
     }
-    return { kind: "timeout" };
   };
   return {
     id: "tuios",
@@ -190,6 +209,7 @@ export function tuiosMux(runner, env) {
       const r = runner("tuios", ["new-window", "-s", session, state.name, "--cwd", cwd, "--no-focus", "--print-id", "--", ...argv]);
       if (r.status !== 0) throw new Error(`tuios new-window failed: ${(r.stderr || r.stdout).trim()}`);
       state.ids = { window: r.stdout.trim(), session };
+      state.prompted = true;
       saveState(state);
       return null;
     },
@@ -197,8 +217,13 @@ export function tuiosMux(runner, env) {
     submit(state, text, timeoutMs) {
       const from = env.TUIOS_PANE_ID ? ["--from", env.TUIOS_PANE_ID] : [];
       const r = call("ask-agent", ["-w", state.name, ...from, "--timeout", String(timeoutMs), text], timeoutMs);
-      if (r.status !== 0 && /agent_blocked/.test(r.stderr + r.stdout)) return { kind: "blocked" };
-      if (r.status !== 0 && agentState(state) === "gone") return { kind: "gone" };
+      if (r.status !== 0) {
+        const out = `${r.stderr}${r.stdout}`;
+        if (/agent_blocked/.test(out)) return { kind: "blocked" };
+        if (agentState(state) === "gone") return { kind: "gone" };
+        if (/time(d)? ?out/i.test(out)) return { kind: "timeout" };
+        return { kind: "error", detail: `ask-agent failed: ${out.trim().slice(0, 300)}` };
+      }
       return settle(state, { fresh: false, timeoutMs });
     },
     wait: (state, timeoutMs) => settle(state, { fresh: false, timeoutMs }),
@@ -215,8 +240,8 @@ export function tuiosMux(runner, env) {
       return r.status === 0 ? screenText(r.stdout) : `(unreadable: ${(r.stderr || r.stdout).trim().slice(0, 200)})`;
     },
     close(state) {
-      const r = call("run-command", ["CloseWindow", state.name]);
-      return r.status === 0;
+      if (agentState(state) === "gone") return true;
+      return call("run-command", ["CloseWindow", state.name]).status === 0 || agentState(state) === "gone";
     },
   };
 }
@@ -252,17 +277,30 @@ function conclude(state, mux, settled, { timeoutMs, nudge }) {
   if (settled.kind === "gone") return { ...base, verdict: "error", detail: "the pane or its agent is gone (the harness exited)" };
   if (settled.kind === "error") return { ...base, verdict: "error", detail: settled.detail };
   if (settled.kind === "timeout") return { ...base, verdict: "timeout", screen: mux.peek(state) };
-  if (nudge) {
+  if (nudge && settled.kind === "rest") {
     return conclude(state, mux, mux.submit(state, nudgePrompt(state.run), timeoutMs), { timeoutMs, nudge: false });
   }
   return { ...base, verdict: settled.kind === "stalled" ? "stalled" : "no_result", screen: mux.peek(state) };
 }
 
+function deliverBrief(state, mux, timeoutMs) {
+  const settled = mux.submit(state, launchPrompt(state.run), timeoutMs);
+  if (!["blocked", "gone", "error"].includes(settled.kind)) {
+    state.prompted = true;
+    saveState(state);
+  }
+  return settled;
+}
+
+const withBrief = (state, mux, settled, timeoutMs) =>
+  settled.kind === "rest" && !state.prompted ? deliverBrief(state, mux, timeoutMs) : settled;
+
 export function launch(options, { runner = sh, env = process.env } = {}) {
   const { name, harness, model, effort = null, access = "read", brief, cwd = process.cwd(), wait = true } = options;
   const dir = statePath(name, env);
   if (!Object.hasOwn(harnesses, harness ?? "")) throw new Error(`--harness must be one of ${Object.keys(harnesses).join(", ")}`);
-  if (!model) throw new Error("--model is required");
+  if (!TOKEN.test(model ?? "")) throw new Error("--model is required and may hold only letters, digits, and . _ / : -");
+  if (effort !== null && !TOKEN.test(effort)) throw new Error("--effort may hold only letters, digits, and . _ / : -");
   foreignTarget("launch", { harness, model, effort });
   if (!["read", "write"].includes(access)) throw new Error("--access is read or write");
   if (!brief || !existsSync(brief)) throw new Error("--brief must name an existing file");
@@ -273,6 +311,7 @@ export function launch(options, { runner = sh, env = process.env } = {}) {
   const run = dir;
   if (/[,()\s]/.test(run)) throw new Error(`Run directory ${run} contains a comma, parenthesis, or space; set PSTACK_PANES_DIR to a plain path`);
 
+  ownedPrivateDir(panesRoot(env));
   mkdirSync(run, { recursive: true });
   writeFileSync(join(run, "brief.md"), briefText(readFileSync(brief, "utf8"), { run, access }));
   const state = { name, mux: muxId, harness, model, effort, access, run, cwd: resolve(cwd), startedAt: new Date().toISOString() };
@@ -282,13 +321,12 @@ export function launch(options, { runner = sh, env = process.env } = {}) {
   const prompt = launchPrompt(run);
   try {
     const args = harnessArgs(harness, { model, effort, access, run });
-    let settled = mux.launch(state, { command: spec.command, args, cwd: state.cwd, prompt, promptFirst: spec.promptFirst });
+    const started = mux.launch(state, { command: spec.command, args, cwd: state.cwd, prompt, promptFirst: spec.promptFirst });
     if (!wait) return { name, mux: muxId, run, launched: true };
-    if (!settled) settled = muxId === "tuios" ? mux.initial(state, timeoutMs) : mux.submit(state, prompt, timeoutMs);
-    return conclude(state, mux, settled, { timeoutMs, nudge: true });
+    const settled = started ?? (muxId === "tuios" ? mux.initial(state, timeoutMs) : { kind: "rest" });
+    return conclude(state, mux, withBrief(state, mux, settled, timeoutMs), { timeoutMs, nudge: true });
   } catch (error) {
-    mux.close?.(state);
-    rmSync(run, { recursive: true, force: true });
+    try { mux.close?.(state); } finally { rmSync(run, { recursive: true, force: true }); }
     throw error;
   }
 }
@@ -297,7 +335,8 @@ export function waitFor(name, options = {}, { runner = sh, env = process.env } =
   const state = loadState(name, env);
   const mux = muxFor(state.mux, runner, env);
   const timeoutMs = options.timeoutMs ?? DEFAULT_WAIT_MS;
-  return conclude(state, mux, mux.wait(state, timeoutMs), { timeoutMs, nudge: false });
+  const fresh = !state.prompted;
+  return conclude(state, mux, withBrief(state, mux, mux.wait(state, timeoutMs), timeoutMs), { timeoutMs, nudge: fresh });
 }
 
 export function send(name, { text, keys, timeoutMs = DEFAULT_WAIT_MS }, { runner = sh, env = process.env } = {}) {
@@ -305,10 +344,13 @@ export function send(name, { text, keys, timeoutMs = DEFAULT_WAIT_MS }, { runner
   const state = loadState(name, env);
   const mux = muxFor(state.mux, runner, env);
   for (const file of ["question.md", "result.md"]) {
-    if (existsSync(join(state.run, file))) unlinkSync(join(state.run, file));
+    if (existsSync(join(state.run, file))) renameSync(join(state.run, file), join(state.run, `${file}.prev`));
   }
-  const settled = keys ? mux.keys(state, keys.split(/\s+/).filter(Boolean), timeoutMs) : mux.submit(state, text, timeoutMs);
-  return conclude(state, mux, settled, { timeoutMs, nudge: false });
+  const fresh = !state.prompted;
+  const settled = keys
+    ? withBrief(state, mux, mux.keys(state, keys.split(/\s+/).filter(Boolean), timeoutMs), timeoutMs)
+    : mux.submit(state, /^\s*-/.test(text) ? ` ${text}` : text, timeoutMs);
+  return conclude(state, mux, settled, { timeoutMs, nudge: fresh });
 }
 
 export function peek(name, { runner = sh, env = process.env } = {}) {

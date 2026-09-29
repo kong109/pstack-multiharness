@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { runInNewContext } from "node:vm";
+import { resolveRole } from "../plugins/pstack/skills/poteto-mode/scripts/resolve-models.mjs";
 import { apply, parseMessage, planApply } from "../plugins/pstack/skills/pstack-effort/scripts/apply.mjs";
 import { buildProviders, codexModels } from "../plugins/pstack/skills/pstack-effort/scripts/render.mjs";
 import { parseSheet, slotText } from "../plugins/pstack/skills/pstack-effort/scripts/sheet.mjs";
@@ -146,7 +147,8 @@ function mount(text) {
   const roleIndex = (name) => parseSheet(text).roles.findIndex((r) => r.role === name);
   const efforts = (ri, si) => ["low", "medium", "high", "xhigh", "max", "ultra"].filter((e) => root.find(`e-${ri}-${si}-${e}`));
   const press = (label, nth = 0) => root.buttons(label)[nth].fire("click");
-  return { choose, tick, message, role, roleIndex, efforts, press, has: (id) => Boolean(root.find(id)), click: (id) => at(id).fire("click"), next: () => parseMessage(message()).next };
+  const rolesText = () => at("roles").textContent;
+  return { choose, tick, message, role, roleIndex, efforts, press, rolesText, has: (id) => Boolean(root.find(id)), click: (id) => at(id).fire("click"), next: () => parseMessage(message()).next };
 }
 
 test("the page writes an unchanged sheet back byte for byte", () => {
@@ -164,8 +166,8 @@ test("switching a slot to another harness prefixes the entry and keeps a support
   page.tick(`e-${ri}-0-ultra`);
   expect(page.role("feature")).toBe("feature: codex:gpt-6.1-sol@ultra");
   page.choose(`p-${ri}-0`, "claude");
-  expect(page.role("feature")).toBe("feature: claude-opus-5-5");
-  expect(page.message()).toContain("feature: claude-opus-5-5@high -> claude-opus-5-5");
+  expect(page.role("feature")).toBe("feature: claude-opus-5-5@default");
+  expect(page.message()).toContain("feature: claude-opus-5-5@high -> claude-opus-5-5@default");
 });
 
 test("a valid effort survives a provider change", () => {
@@ -193,7 +195,7 @@ test("aliases have no provider select and stay bare, and an unlisted model is pr
   const ri = page.roleIndex("why synthesizer");
   expect(page.role("why synthesizer")).toBe("why synthesizer: claude:claude-opus-5-5@medium");
   page.tick(`e-${ri}-0-medium`);
-  expect(page.role("why synthesizer")).toBe("why synthesizer: claude:claude-opus-5-5");
+  expect(page.role("why synthesizer")).toBe("why synthesizer: claude:claude-opus-5-5@default");
 });
 
 test("repeat and remove edit a panel's slots and reset restores the sheet", () => {
@@ -220,10 +222,10 @@ test("refuses an entry the routing helper rejects", () => {
 
 test("lists only the roles whose entries changed", () => {
   const next = sheet.replace("feature: claude-opus-5-5@high", "feature: codex:gpt-6.1-sol@xhigh");
-  expect(planApply(sheet, next)).toEqual([
+  expect(planApply(sheet, next).changes).toEqual([
     { role: "feature", from: "claude-opus-5-5@high", to: "codex:gpt-6.1-sol@xhigh", foreign: [{ harness: "codex", model: "gpt-6.1-sol", effort: "xhigh" }] },
   ]);
-  expect(planApply(sheet, sheet)).toEqual([]);
+  expect(planApply(sheet, sheet).changes).toEqual([]);
 });
 
 function message(root, sheetPath, next) {
@@ -280,4 +282,63 @@ test("restores the sheet when the agent install fails", () => {
 
 test("rejects a message with no sheet block", () => {
   expect(() => parseMessage("/pstack-effort apply\nsheet: /x\n")).toThrow("fenced block");
+});
+
+test("a cleared box writes @default when the sheet has a model-wide effort line, so the resolver agrees with the page", () => {
+  const page = mount(pageSheet);
+  const ri = page.roleIndex("feature");
+  page.tick(`e-${ri}-0-high`);
+  expect(page.role("feature")).toBe("feature: claude-opus-5-5@default");
+  expect(resolveRole(page.next(), "feature")).toEqual([{ model: "claude-opus-5-5", effort: null }]);
+  const bare = mount(pageSheet.replace("effort: claude-opus-5-5 = max\n", ""));
+  bare.tick(`e-${ri}-0-high`);
+  expect(bare.role("feature")).toBe("feature: claude-opus-5-5");
+});
+
+test("a slot with no box ticked says which effort applies", () => {
+  const page = mount(pageSheet.replace("feature: claude-opus-5-5@high", "feature: claude-opus-5-5"));
+  expect(page.rolesText()).toContain("the sheet's effort line sets max for this model");
+});
+
+test("an effort the model does not list is kept and called out", () => {
+  const page = mount(pageSheet);
+  expect(page.role("arena runners")).toContain("codex:gpt-6.1-sol@xhigh");
+  expect(page.rolesText()).toContain("keeps effort xhigh, which this model does not list");
+});
+
+test("lines of roles the user did not touch stay exactly as written", () => {
+  const spaced = pageSheet.replace("feature: claude-opus-5-5@high", "feature:    claude-opus-5-5@high");
+  const page = mount(spaced);
+  page.tick(`e-${page.roleIndex("swarm workers") + 1}-0-medium`);
+  expect(page.next()).toContain("feature:    claude-opus-5-5@high\n");
+});
+
+test("the message fence is longer than any backtick run inside the sheet", () => {
+  const fenced = `${sheet}\nExample:\n\`\`\`\ncode\n\`\`\`\n`;
+  const page = mount(fenced);
+  page.tick(`e-${page.roleIndex("feature")}-0-high`);
+  expect(page.message()).toContain("````pstack-sheet\n");
+  expect(page.next()).toContain("Example:\n```\ncode\n```\n");
+});
+
+test("apply changes only the role lines of the file on disk, so lines added after the page was rendered survive", () => {
+  const root = scratch();
+  const sheetPath = join(root, "pstack-models.md");
+  const rendered = "feature: claude-opus-5-5@high\nbug-fix: claude-opus-5-5@medium\n";
+  const onDisk = `${rendered}\n# added after the page was rendered\neffort: claude-opus-5-5 = max\nsession hook: off\n`;
+  writeFileSync(sheetPath, onDisk);
+  apply({ message: message(root, sheetPath, rendered.replace("@high", "@low")), log: () => {} });
+  expect(readFileSync(sheetPath, "utf8")).toBe(onDisk.replace("feature: claude-opus-5-5@high", "feature: claude-opus-5-5@low"));
+});
+
+test("apply keeps a sheet's code fence and CRLF endings intact", () => {
+  const root = scratch();
+  const sheetPath = join(root, "pstack-models.md");
+  const onDisk = "feature: claude-opus-5-5@high\r\n```\r\nnot a role: x\r\n```\r\nbug-fix: claude-opus-5-5@medium\r\n";
+  writeFileSync(sheetPath, onDisk);
+  const next = "feature: claude-opus-5-5@low\n```\nnot a role: x\n```\nbug-fix: claude-opus-5-5@medium\n";
+  const file = join(root, "message.txt");
+  writeFileSync(file, `/pstack-effort apply\nsheet: ${sheetPath}\nscope: user\nconfig-dir: ${join(root, ".claude")}\n\n\`\`\`\`pstack-sheet\n${next.replace(/\n$/, "")}\n\`\`\`\`\n`);
+  apply({ message: file, log: () => {} });
+  expect(readFileSync(sheetPath, "utf8")).toBe(onDisk.replace("@high", "@low"));
 });

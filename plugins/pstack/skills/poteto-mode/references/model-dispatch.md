@@ -21,7 +21,7 @@ arena cross-judge pool: model-a@high, model-b@high
 effort: model-b = medium
 ```
 
-A `harness:` prefix sends one entry to another CLI harness, for example `codex:model-b@xhigh` or `claude:model-a@max`. The prefix must be a harness in the [registry](../scripts/harnesses.json) and the entry must name a concrete model. The resolver returns `harness` on those entries and omits it on the rest. `effort: harness:model = value` sets a default for one harness's copy of a model, and a plain `effort: model = value` covers both. An entry whose harness is the session's own runs natively.
+A `harness:` prefix sends one entry to another CLI harness, for example `codex:model-b@xhigh` or `claude:model-a@max`. The prefix must be a harness in the [registry](../scripts/harnesses.json) and the entry must name a concrete model. The resolver returns `harness` on those entries and omits it on the rest. `effort: harness:model = value` sets a default for entries written with that prefix, and a plain `effort: model = value` covers both. A bare entry never reads the prefixed line, even when the prefix names the session's own harness. An entry whose harness is the session's own runs natively.
 
 An inline effort wins over `effort: model = value`, which supplies a model-wide default across roles, including roles using their default model lists. Without either, use the runtime's default effort. `model@default` explicitly clears a model-wide override. Preserve model-wide defaults when editing a role. Legacy OpenCode reasoning-variant table rows supply effort defaults when no `effort:` line exists for that model; preset snapshots convert these rows to portable `effort:` settings.
 

@@ -35,20 +35,22 @@ The agent writes its report to `result.md` in its run directory and a blocking q
 | `question` | the agent needs a decision | Answer with `send --text`, run in the background, and treat its verdict the same way. |
 | `blocked` | a TUI dialog is open, such as an approval, a trust prompt, or a login | Read `screen`. Answer a routine dialog with `send --keys`. Ask the user when it wants authority the brief did not grant. |
 | `no_result` | the turn ended with no report, even after one automatic reminder | Run `peek`, then send a correction or close the agent. |
-| `stalled` | the turn never started | Run `peek`, then resend or relaunch. |
+| `stalled` | the turn never started, or herdr saw no activity after the prompt. The text may still have arrived | Run `peek` before resending. The helper never types a second prompt on its own. |
 | `timeout` | the wait ran out | Run `peek`. Extend with `wait --name NAME`, or close it. |
 | `error` | the pane or harness is gone | Report it and relaunch if the work still matters. |
 
-`send --text` types a reply. `send --keys "Down Enter"` presses keys, using names such as `Enter`, `Escape`, `Up`, `Down`, `Tab`, and single characters. `wait --name NAME` blocks again after a human answered the dialog in the pane. `peek --name NAME` prints the recent screen.
+`send --text` types a reply. `send --keys "Down Enter"` presses keys, using names such as `Enter`, `Escape`, `Up`, `Down`, `Tab`, and single characters. `wait --name NAME` blocks again after a human answered the dialog in the pane. It also delivers the brief when the launch never sent it, as after a startup dialog or `launch --no-wait`. `send` moves the previous `result.md` and `question.md` aside as `.prev` files before it delivers. `peek --name NAME` prints the recent screen.
 
 ## Why this misses no prompt
 
 The launch flags remove the prompts that can be removed. Codex runs with `-a never`. Claude Code runs in `dontAsk` mode with an explicit allow list and without `AskUserQuestion`, so a denied action becomes a `question` instead of a dialog. The brief tells the agent to ask through `question.md` and never in the terminal. Whatever dialog is left, such as a folder trust prompt or an expired login, makes the multiplexer report a blocked state, and the blocking call returns `blocked` at once with the screen. The person watching the pane sees the same state in herdr's status badge or the tuios Inbox and may answer it there, after which `wait` resumes. A turn that ends without a report is reminded once and then reported. Every wait has a timeout.
 
+tuios reports blocked and working states only for harnesses whose hooks are wired to it. Run `tuios integration install --all` once and check it with `tuios doctor agents`. Without the hooks a pane reads `none`. The helper then treats it as running until it sees activity or a report file, and it checks for the files every five seconds, so a dialog goes unnoticed until the timeout.
+
 ## Access
 
 - **`read`.** Claude Code may read, search, and run a fixed set of read-only git and search commands, and may write only inside its run directory. Codex has no read-only sandbox that can also write the report, so its `read` profile is a workspace-write sandbox held to read-only by the brief. Run `git status` when a Codex reader finishes.
-- **`write`.** Claude Code may edit files and run commands without prompts. Codex runs in its workspace-write sandbox. Hand `write` only to work you would give a native worker with full tools.
+- **`write`.** Claude Code may edit files and run commands without prompts. Codex runs in its workspace-write sandbox. Hand `write` only to work you would give a native worker with full tools. The Claude Code `read` profile writes its report through a path rule that has been checked on macOS only.
 
 ## Clean up
 

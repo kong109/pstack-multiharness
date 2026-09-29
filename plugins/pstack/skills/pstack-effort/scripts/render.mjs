@@ -39,10 +39,10 @@ export function buildProviders({ providers, available, codex }) {
 }
 
 export function pageData({ sheetPath, scope, configDir, native, generated, text, catalog }) {
-  const { lines, roles } = parseSheet(text);
+  const { lines, roles, defaults } = parseSheet(text);
   if (!roles.length) throw new Error(`no role lines found in ${sheetPath}`);
   return {
-    sheetPath, scope, configDir, native, generated, lines, roles,
+    sheetPath, scope, configDir, native, generated, lines, roles, defaults,
     providers: buildProviders(catalog),
   };
 }

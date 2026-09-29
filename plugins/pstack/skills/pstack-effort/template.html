@@ -190,8 +190,17 @@ function modelOf(s) {
   return p && p.models.find(m => m.slug === s.model);
 }
 function writesHarnessPrefix(s) { return !isAlias(s) && (s.prefixed || s.harness !== DATA.native); }
+function modelDefault(s) {
+  return (writesHarnessPrefix(s) && DATA.defaults[s.harness + ":" + s.model]) || DATA.defaults[s.model] || "";
+}
+function clearEffort(s) { s.effort = modelDefault(s) ? "default" : ""; }
+function unsupportedEffort(s) {
+  const m = modelOf(s);
+  return Boolean(m && s.effort && s.effort !== "default" && !m.efforts.includes(s.effort));
+}
 function entry(s) {
-  return (writesHarnessPrefix(s) ? s.harness + ":" : "") + s.model + (s.effort ? "@" + s.effort : "");
+  const effort = s.effort === "default" && !modelDefault(s) ? "" : s.effort;
+  return (writesHarnessPrefix(s) ? s.harness + ":" : "") + s.model + (effort ? "@" + effort : "");
 }
 function line(r) { return r.role + ": " + r.slots.map(entry).join(", "); }
 
@@ -234,7 +243,7 @@ function changeProvider(s, harness) {
   s.harness = harness;
   s.prefixed = false;
   if (!next.models.some(m => m.slug === s.model)) s.model = next.models[0].slug;
-  if (s.effort && !modelOf(s).efforts.includes(s.effort)) s.effort = "";
+  if (unsupportedEffort(s)) clearEffort(s);
 }
 
 function providerSelect(r, s, si, ri) {
@@ -269,8 +278,7 @@ function modelSelect(r, s, si, ri) {
   sel.addEventListener("change", () => {
     s.model = sel.value;
     if (isAlias(s)) { s.harness = DATA.native; s.prefixed = false; }
-    const m = modelOf(s);
-    if (s.effort && (!m || !m.efforts.includes(s.effort))) s.effort = "";
+    if (s.effort && (!modelOf(s) || unsupportedEffort(s))) clearEffort(s);
     commit();
   });
   return sel;
@@ -283,10 +291,18 @@ function effortBoxes(r, s, si, ri) {
     const id = `e-${ri}-${si}-${e}`;
     const cb = el("input", { type: "checkbox", id, value: e });
     cb.checked = s.effort === e;
-    cb.addEventListener("change", () => { s.effort = cb.checked ? e : ""; commit(); });
+    cb.addEventListener("change", () => { if (cb.checked) s.effort = e; else clearEffort(s); commit(); });
     fs.append(el("label", { class: "eff", "data-e": e, for: id }, [cb, document.createTextNode(e)]));
   });
   return fs;
+}
+
+function effortNote(s) {
+  if (unsupportedEffort(s)) return `keeps effort ${s.effort}, which this model does not list`;
+  if (s.effort === "default") return "no box ticked: writes @default, the harness's own effort";
+  if (s.effort) return "";
+  const inherited = modelDefault(s);
+  return inherited ? `no box ticked: the sheet's effort line sets ${inherited} for this model` : "no box ticked: harness default effort";
 }
 
 function renderRoles() {
@@ -315,7 +331,8 @@ function renderRoles() {
         row.append(el("span", { class: "session-note", text: "Current entry is preserved. Select a model to edit its effort." }));
       } else {
         row.append(effortBoxes(r, s, si, ri));
-        if (!s.effort) row.append(el("span", { class: "session-note", text: "no box ticked: harness default effort" }));
+        const note = effortNote(s);
+        if (note) row.append(el("span", { class: "session-note", text: note }));
       }
       if (isPanel) {
         const acts = el("div", { class: "slot-actions" });
@@ -338,7 +355,7 @@ function renderRoles() {
 
 function sheetText() {
   const lines = DATA.lines.slice();
-  state.forEach(r => { lines[r.line] = line(r); });
+  state.forEach((r, i) => { if (line(r) !== line(original[i])) lines[r.line] = line(r); });
   return lines.join("\n").replace(/\n+$/, "") + "\n";
 }
 
@@ -349,6 +366,8 @@ function renderResponse() {
   ul.textContent = "";
   if (!diffs.length) ul.append(el("li", { class: "none", text: "No changes yet. The message below would rewrite the sheet unchanged." }));
   diffs.forEach(d => ul.append(el("li", { text: d })));
+  const body = sheetText();
+  const fence = "`".repeat(Math.max(3, Math.max(0, ...(body.match(/`+/g) || []).map(t => t.length)) + 1));
   const msg = [
     "/pstack-effort apply",
     `sheet: ${DATA.sheetPath}`,
@@ -357,9 +376,9 @@ function renderResponse() {
     `changes: ${diffs.length}`,
     ...diffs.map(d => `- ${d}`),
     "",
-    "```pstack-sheet",
-    sheetText().replace(/\n$/, ""),
-    "```"
+    fence + "pstack-sheet",
+    body.replace(/\n$/, ""),
+    fence
   ].filter(x => x !== null).join("\n");
   document.getElementById("out").textContent = msg;
   return msg;

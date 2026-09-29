@@ -16,12 +16,15 @@ export const slotText = ({ harness, model, effort }) => `${harness ? `${harness}
 export function parseSheet(text) {
   const lines = text.split(/\r?\n/);
   const roles = [];
+  const defaults = {};
   lines.forEach((line, index) => {
+    const model = /^effort:\s*(\S+)\s*=\s*(\S+)\s*$/.exec(line);
+    if (model) defaults[model[1]] = model[2];
     const m = /^([a-z][a-z ,\-]*[a-z]):\s*(\S.*)$/.exec(line);
     if (!m || NOT_ROLES.has(m[1])) return;
     const slots = m[2].split(",").map((entry) => parseSlot(entry));
     if (slots.some((slot) => !slot)) return;
     roles.push({ role: m[1], line: index, slots });
   });
-  return { lines, roles };
+  return { lines, roles, defaults };
 }

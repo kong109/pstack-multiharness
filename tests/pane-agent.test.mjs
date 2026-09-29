@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  briefText, close, detectMux, harnessArgs, launch, list, nudgePrompt, peek, send, waitFor,
+  briefText, close, detectMux, harnessArgs, launch, launchPrompt, list, nudgePrompt, peek, send, sh, waitFor,
 } from "../plugins/pstack/skills/poteto-mode/scripts/pane-agent.mjs";
 
 let root;
@@ -294,4 +294,163 @@ test("tuios send goes through ask-agent and close closes the window by name", ()
   expect(ask.slice(ask.indexOf("--from"), ask.indexOf("--from") + 2)).toEqual(["--from", "self"]);
   close("arena-a", {}, { runner, env: tuiosEnv() });
   expect(calls.at(-1)).toEqual(["tuios", "run-command", "-s", "work", "CloseWindow", "arena-a"]);
+});
+
+const prompts = (calls) => calls.filter((c) => c[2] === "prompt");
+
+test("herdr launch --no-wait leaves the brief for wait to deliver, exactly once", () => {
+  const { runner, calls } = scripted({
+    ...herdrBase,
+    "herdr agent wait": agent("idle"),
+    "herdr agent prompt": () => { write("result.md", "delivered late\n"); return agent("done"); },
+  });
+  expect(launch(options({ wait: false }), { runner, env: herdrEnv() })).toMatchObject({ launched: true });
+  expect(prompts(calls)).toHaveLength(0);
+  expect(waitFor("arena-a", {}, { runner, env: herdrEnv() })).toMatchObject({ verdict: "done", result: "delivered late\n" });
+  expect(prompts(calls)).toHaveLength(1);
+  expect(prompts(calls)[0][4]).toBe(launchPrompt(runDir()));
+});
+
+test("a startup dialog the human clears is followed by the brief, not by no_result", () => {
+  const { runner, calls } = scripted({
+    ...herdrBase,
+    "herdr agent start": failJson("agent_not_ready", "trust dialog"),
+    "herdr agent wait": agent("idle"),
+    "herdr agent prompt": () => { write("result.md", "after trust\n"); return agent("done"); },
+  });
+  expect(launch(options(), { runner, env: herdrEnv() }).verdict).toBe("blocked");
+  expect(prompts(calls)).toHaveLength(0);
+  expect(waitFor("arena-a", {}, { runner, env: herdrEnv() })).toMatchObject({ verdict: "done", result: "after trust\n" });
+  expect(prompts(calls)).toHaveLength(1);
+  expect(prompts(calls)[0][4]).toBe(launchPrompt(runDir()));
+});
+
+test("a wait that is still blocked at startup does not send the brief", () => {
+  const { runner, calls } = scripted({
+    ...herdrBase,
+    "herdr agent start": failJson("agent_not_ready", "login"),
+    "herdr agent wait": agent("blocked"),
+  });
+  launch(options(), { runner, env: herdrEnv() });
+  expect(waitFor("arena-a", {}, { runner, env: herdrEnv() }).verdict).toBe("blocked");
+  expect(prompts(calls)).toHaveLength(0);
+});
+
+test("a prompt herdr reports as stalled is not typed a second time", () => {
+  const { runner, calls } = scripted({ ...herdrBase, "herdr agent prompt": failJson("agent_prompt_stalled") });
+  expect(launch(options(), { runner, env: herdrEnv() })).toMatchObject({ verdict: "stalled", screen: expect.stringContaining("screen line") });
+  expect(prompts(calls)).toHaveLength(1);
+});
+
+test("a failed tab create surfaces the herdr error and leaves nothing behind", () => {
+  const { runner } = scripted({ "herdr tab create": failJson("workspace_not_found", "no such workspace") });
+  expect(() => launch(options(), { runner, env: herdrEnv() })).toThrow("tab create failed: workspace_not_found");
+  expect(existsSync(runDir())).toBe(false);
+  expect(list({ env: herdrEnv() })).toEqual([]);
+});
+
+test("a missing multiplexer binary names the cause instead of an empty message", () => {
+  const missing = sh("pstack-no-such-binary", []);
+  expect(missing.status).not.toBe(0);
+  expect(missing.stderr).toContain("pstack-no-such-binary");
+});
+
+test("launch refuses a model or effort that could be read as a flag", () => {
+  const { runner, calls } = scripted({});
+  expect(() => launch(options({ model: "-m" }), { runner, env: herdrEnv() })).toThrow("--model");
+  expect(() => launch(options({ model: "a b" }), { runner, env: herdrEnv() })).toThrow("--model");
+  expect(() => launch(options({ effort: "x;y" }), { runner, env: herdrEnv() })).toThrow("--effort");
+  expect(calls).toEqual([]);
+});
+
+test("send types text that starts with a dash as text, not as a flag", () => {
+  const { runner, calls } = scripted({ ...herdrBase, "herdr agent prompt": () => { write("result.md", "r\n"); return agent("done"); } });
+  launch(options(), { runner, env: herdrEnv() });
+  send("arena-a", { text: "--force is fine" }, { runner, env: herdrEnv() });
+  expect(prompts(calls).at(-1)[4]).toBe(" --force is fine");
+});
+
+test("send keeps the previous report as a .prev file instead of deleting it", () => {
+  const { runner } = scripted({
+    ...herdrBase,
+    "herdr agent prompt": [() => { write("result.md", "first\n"); return agent("done"); }, failJson("agent_not_found")],
+  });
+  launch(options(), { runner, env: herdrEnv() });
+  expect(send("arena-a", { text: "again" }, { runner, env: herdrEnv() }).verdict).toBe("error");
+  expect(readFileSync(join(runDir(), "result.md.prev"), "utf8")).toBe("first\n");
+});
+
+test("a state file that names another run directory is refused", () => {
+  const { runner } = scripted({ ...herdrBase, "herdr agent prompt": () => { write("result.md", "r\n"); return agent("done"); } });
+  launch(options(), { runner, env: herdrEnv() });
+  const path = join(runDir(), "state.json");
+  writeFileSync(path, readFileSync(path, "utf8").replace(runDir(), join(root, "elsewhere")));
+  expect(() => close("arena-a", {}, { runner, env: herdrEnv() })).toThrow("different run directory");
+});
+
+test.skipIf(typeof process.getuid !== "function")("a shared, world-writable panes directory is refused", () => {
+  const { runner, calls } = scripted({});
+  mkdirSync(join(root, "panes"));
+  chmodSync(join(root, "panes"), 0o777);
+  expect(() => launch(options(), { runner, env: herdrEnv() })).toThrow("no one else can write to");
+  expect(calls).toEqual([]);
+});
+
+test("tuios treats state none as working until it sees activity or a report", () => {
+  const { runner, calls } = scripted({
+    ...tuiosBase,
+    "tuios get-agent-state": tuiosState("none"),
+    "tuios wait-for": [{ status: 1, stdout: "", stderr: "timeout" }, () => { write("result.md", "no hooks\n"); return text(""); }],
+  });
+  const out = launch(options(), { runner, env: tuiosEnv() });
+  expect(out).toMatchObject({ verdict: "done", result: "no hooks\n" });
+  expect(calls.filter((c) => c[1] === "ask-agent")).toHaveLength(0);
+});
+
+test("tuios reports stalled when the turn never starts and does not type a nudge into it", () => {
+  const { runner, calls } = scripted({
+    ...tuiosBase,
+    "tuios get-agent-state": tuiosState("idle"),
+    "tuios wait-for": { status: 1, stdout: "", stderr: "timeout" },
+  });
+  expect(launch(options(), { runner, env: tuiosEnv() })).toMatchObject({ verdict: "stalled", screen: "tuios screen" });
+  expect(calls.filter((c) => c[1] === "ask-agent")).toHaveLength(0);
+});
+
+test("a tuios wait-for that fails at once is paced and still ends at the deadline", () => {
+  const { runner, calls } = scripted({
+    ...tuiosBase,
+    "tuios get-agent-state": tuiosState("working"),
+    "tuios wait-for": { status: 1, stdout: "", stderr: "server unreachable" },
+  });
+  launch(options({ wait: false }), { runner, env: tuiosEnv() });
+  const started = Date.now();
+  expect(waitFor("arena-a", { timeoutMs: 1000 }, { runner, env: tuiosEnv() }).verdict).toBe("timeout");
+  expect(Date.now() - started).toBeGreaterThanOrEqual(900);
+  expect(calls.filter((c) => c[1] === "get-agent-state").length).toBeLessThan(8);
+});
+
+test("a tuios ask-agent failure is an error verdict, not a silent no_result", () => {
+  const { runner } = scripted({
+    ...tuiosBase,
+    "tuios get-agent-state": tuiosState("done"),
+    "tuios wait-for": () => { write("result.md", "r\n"); return text(""); },
+    "tuios ask-agent": { status: 1, stdout: "", stderr: "rate_limited" },
+  });
+  launch(options(), { runner, env: tuiosEnv() });
+  expect(send("arena-a", { text: "more" }, { runner, env: tuiosEnv() }))
+    .toMatchObject({ verdict: "error", detail: expect.stringContaining("ask-agent failed: rate_limited") });
+});
+
+test("closing a tuios agent whose window already exited still removes its run directory", () => {
+  const gone = { status: 1, stdout: "", stderr: "window not found" };
+  const { runner, calls } = scripted({
+    ...tuiosBase,
+    "tuios get-agent-state": [tuiosState("done"), gone],
+    "tuios wait-for": () => { write("result.md", "r\n"); return text(""); },
+  });
+  launch(options(), { runner, env: tuiosEnv() });
+  expect(close("arena-a", {}, { runner, env: tuiosEnv() })).toMatchObject({ closed: true, kept: null });
+  expect(calls.some((c) => c[1] === "run-command")).toBe(false);
+  expect(existsSync(runDir())).toBe(false);
 });

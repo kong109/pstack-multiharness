@@ -12,9 +12,9 @@ export function presetDirectory(scope, project = process.cwd(), home = homedir()
 }
 
 function presetPath(directory, name) {
-  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name) || name.length > 64 ||
-      /^(con|prn|aux|nul|com[0-9]|lpt[0-9])$/.test(name)) {
-    throw new Error("Preset name must be a portable lowercase slug, at most 64 characters");
+  if (!/^[a-z0-9]+(?:[-.][a-z0-9]+)*$/.test(name) || name.length > 64 ||
+      /^(con|prn|aux|nul|com[0-9]|lpt[0-9])(?:\.|$)/.test(name)) {
+    throw new Error("Preset name must be a portable lowercase name, at most 64 characters");
   }
   return join(directory, `${name}.md`);
 }

@@ -114,3 +114,25 @@ test("the CLI installs and then answers a role", () => {
   expect(JSON.parse(run("--role", "arena runners").stdout)[1]).toEqual(
     { agent: "pstack-claude-fable-5-1-max", model: "claude-fable-5-1", effort: "max" });
 });
+
+test("routes a foreign-harness entry to a pane target with no generated agent", () => {
+  const { routes, profiles } = routesFromSheet("arena runners: claude-opus-5-5@high, codex:gpt-6.1-sol@xhigh, claude:claude-fable-5-1@max");
+  expect(routes["arena runners"]).toEqual([
+    { agent: "pstack-claude-opus-5-5-high", model: "claude-opus-5-5", effort: "high" },
+    { agent: null, harness: "codex", model: "gpt-6.1-sol", effort: "xhigh", pane: true },
+    { agent: "pstack-claude-fable-5-1-max", model: "claude-fable-5-1", effort: "max" },
+  ]);
+  expect([...profiles.keys()]).toEqual(["pstack-claude-opus-5-5-high", "pstack-claude-fable-5-1-max"]);
+});
+
+test("a foreign entry skips the Claude model check but keeps its own harness's effort check", () => {
+  expect(routesFromSheet("feature: codex:openai/gpt-6@medium").routes.feature[0].model).toBe("openai/gpt-6");
+  expect(() => routesFromSheet("feature: claude:claude-opus-5-5@turbo")).toThrow("Unsupported Claude Code effort");
+});
+
+test("installs no agent for a sheet whose entries are all foreign", () => {
+  const { mapping, config } = fixture("feature: codex:gpt-6.1-sol@high\n");
+  const { routes, agents } = installProfiles(mapping, config);
+  expect(agents).toEqual([]);
+  expect(routes.feature[0]).toMatchObject({ harness: "codex", pane: true });
+});

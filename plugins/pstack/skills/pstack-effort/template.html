@@ -1,0 +1,390 @@
+<title>Pstack Effort Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600..800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root {
+  --ground: #f1f2f6;
+  --surface: #ffffff;
+  --surface-2: #f6f7fa;
+  --ink: #16171d;
+  --ink-2: #4c4f5c;
+  --ink-3: #737787;
+  --line: #d9dbe3;
+  --accent: #5b3fd1;
+  --accent-soft: #ebe6fb;
+  --changed: #b4560f;
+  --changed-soft: #fcecde;
+  --e-low: #5f8a6b;
+  --e-medium: #3f7fb0;
+  --e-high: #5b3fd1;
+  --e-xhigh: #a63f9c;
+  --e-max: #c2402f;
+  --e-ultra: #7a1f5c;
+  --focus: #1f6fd1;
+  --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --ground: #0f1015;
+    --surface: #171821;
+    --surface-2: #12131a;
+    --ink: #e8e9ef;
+    --ink-2: #a6a9b8;
+    --ink-3: #7d8092;
+    --line: #2a2c3a;
+    --accent: #9d86ff;
+    --accent-soft: #231d3d;
+    --changed: #f09a52;
+    --changed-soft: #35220f;
+    --e-low: #7fb38e;
+    --e-medium: #6cb0e4;
+    --e-high: #9d86ff;
+    --e-xhigh: #de79d2;
+    --e-max: #f07866;
+    --e-ultra: #f27fc6;
+    --focus: #6aa8ff;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ground: #0f1015;
+  --surface: #171821;
+  --surface-2: #12131a;
+  --ink: #e8e9ef;
+  --ink-2: #a6a9b8;
+  --ink-3: #7d8092;
+  --line: #2a2c3a;
+  --accent: #9d86ff;
+  --accent-soft: #231d3d;
+  --changed: #f09a52;
+  --changed-soft: #35220f;
+  --e-low: #7fb38e;
+  --e-medium: #6cb0e4;
+  --e-high: #9d86ff;
+  --e-xhigh: #de79d2;
+  --e-max: #f07866;
+  --e-ultra: #f27fc6;
+  --focus: #6aa8ff;
+}
+* { box-sizing: border-box; }
+body { background: var(--ground); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.5; }
+.wrap { max-width: 900px; margin: 0 auto; padding-inline: 16px; padding-block: 28px 64px; display: grid; gap: 24px; }
+h1, h2 { font-family: var(--display); margin: 0; line-height: 1.1; text-wrap: balance; }
+h1 { font-size: clamp(28px, 5vw, 40px); font-weight: 800; letter-spacing: -0.02em; }
+h2 { font-size: 20px; font-weight: 700; }
+p { margin: 0; max-width: 70ch; }
+code { font-family: var(--mono); font-size: 0.88em; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
+header { display: grid; gap: 10px; }
+header p { color: var(--ink-2); }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 18px; font-family: var(--mono); font-size: 12.5px; color: var(--ink-2); }
+.meta span { overflow-wrap: anywhere; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 13px; color: var(--ink-2); }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+
+.roles { display: grid; gap: 10px; }
+.role { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; display: grid; gap: 10px; }
+.role.changed { border-color: var(--changed); box-shadow: inset 3px 0 0 var(--changed); }
+.role-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; }
+.role-name { font-weight: 600; font-size: 15.5px; }
+.role-kind { font-family: var(--mono); font-size: 11px; color: var(--ink-3); letter-spacing: 0.04em; }
+.role-note { font-size: 13px; color: var(--ink-3); flex-basis: 100%; }
+.was { font-family: var(--mono); font-size: 12px; color: var(--changed); margin-left: auto; }
+.slots { display: grid; gap: 8px; }
+.slot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 8px 10px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 5px; }
+.slot-n { font-family: var(--mono); font-size: 12px; color: var(--ink-3); width: 18px; }
+select { font: inherit; font-size: 13.5px; font-family: var(--mono); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; max-width: 100%; }
+.efforts { display: flex; flex-wrap: wrap; gap: 6px; border: 0; margin: 0; padding: 0; }
+.efforts legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.eff { --c: var(--accent); position: relative; display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 12.5px; padding: 3px 9px 3px 7px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); cursor: pointer; user-select: none; }
+.eff input { margin: 0; width: 14px; height: 14px; accent-color: var(--c); }
+.eff:has(input:checked) { border-color: var(--c); background: color-mix(in srgb, var(--c) 14%, var(--surface)); color: var(--ink); font-weight: 500; }
+.eff[data-e="low"] { --c: var(--e-low); }
+.eff[data-e="medium"] { --c: var(--e-medium); }
+.eff[data-e="high"] { --c: var(--e-high); }
+.eff[data-e="xhigh"] { --c: var(--e-xhigh); }
+.eff[data-e="max"] { --c: var(--e-max); }
+.eff[data-e="ultra"] { --c: var(--e-ultra); }
+.session-note { font-size: 12px; color: var(--ink-3); font-style: italic; }
+.slot-actions { margin-left: auto; display: flex; gap: 6px; }
+button { font: inherit; cursor: pointer; }
+.ghost { font-size: 12.5px; color: var(--ink-2); background: transparent; border: 1px solid var(--line); border-radius: 4px; padding: 3px 9px; }
+.ghost:hover { color: var(--ink); border-color: var(--ink-3); }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+.response { background: var(--surface); border: 2px solid var(--accent); border-radius: 6px; padding: 18px; display: grid; gap: 12px; }
+.response p { color: var(--ink-2); font-size: 14px; }
+.changes { margin: 0; padding-left: 18px; font-size: 14px; color: var(--ink-2); display: grid; gap: 2px; }
+.changes .none { list-style: none; margin-left: -18px; font-style: italic; color: var(--ink-3); }
+pre.out { margin: 0; font-family: var(--mono); font-size: 12.5px; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--surface-2); border: 1px solid var(--line); border-radius: 5px; padding: 12px; max-height: 360px; overflow: auto; }
+.actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.primary { font-weight: 600; color: #ffffff; background: var(--accent); border: 0; border-radius: 5px; padding: 10px 18px; }
+.primary:hover { filter: brightness(1.08); }
+.status { font-size: 13px; color: var(--ink-2); }
+@media (max-width: 520px) { .slot-actions { margin-left: 0; } .was { margin-left: 0; flex-basis: 100%; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">pstack routing</div>
+    <h1>Role to model map</h1>
+    <p>Each row is one pstack role. Pick the provider and model for each slot, then tick an effort level. Ticking a level clears the others in that slot. Clear every box to run at the session's own effort. Panel roles run one worker per slot, so you can add, remove or repeat slots. Changed rows are marked. The block at the bottom is a ready message to paste back into Claude Code.</p>
+    <div class="meta" id="meta"></div>
+    <div class="legend" id="legend"></div>
+  </header>
+
+  <div class="toolbar">
+    <button class="ghost" type="button" id="reset">Reset to the current sheet</button>
+  </div>
+
+  <section class="roles" id="roles" aria-label="Roles"></section>
+
+  <section class="response" aria-labelledby="resp-h">
+    <h2 id="resp-h">Message to paste back</h2>
+    <p>Copy this and paste it into Claude Code. It names the sheet, lists what changed, and carries the whole new sheet, so the update needs nothing else.</p>
+    <ul class="changes" id="changes"></ul>
+    <pre class="out" id="out" tabindex="0" aria-label="Message text"></pre>
+    <div class="actions">
+      <button class="primary" type="button" id="copy">Copy message</button>
+      <span class="status" id="status" aria-live="polite"></span>
+    </div>
+  </section>
+</div>
+
+<script>
+const DATA = /*__PSTACK_DATA__*/null;
+const PROVIDERS = DATA.providers;
+const ALIASES = ["inherit-parent", "auto"];
+const PANEL = /(runners|pool|reviewers)$/;
+const NOTES = {
+  "feature, refactoring": "Code delegates for Feature and Refactoring playbooks.",
+  "bug-fix": "Bug fix playbook delegate.",
+  "perf-issue": "Perf issue playbook delegate.",
+  "hillclimb": "Hillclimb loop workers.",
+  "judgment and prose": "Default for judgment calls, reviews and writing.",
+  "strongest judgment": "Hardest changes: cross-cutting design, concurrency, subtle algorithms.",
+  "how explorer": "how skill: explores the code.",
+  "how explainer": "how skill: writes the explanation.",
+  "why investigators": "why skill: parallel investigators.",
+  "why synthesizer": "why skill: merges the investigations.",
+  "reflect tooling": "reflect skill: tooling checks.",
+  "reflect judgment, divergent, synthesizer": "reflect skill: judgment passes.",
+  "swarm workers": "swarm skill fan-out workers and verifiers.",
+  "arena runners": "arena: one competing build per slot.",
+  "arena cross-judge pool": "arena: judges drawn from this pool.",
+  "architect runners": "architect: one design per slot.",
+  "interrogate reviewers": "interrogate: one adversarial reviewer per slot."
+};
+const STORE = "pstack-effort:v2:" + DATA.sheetPath;
+
+function clone(x) { return JSON.parse(JSON.stringify(x)); }
+function isAlias(s) { return ALIASES.includes(s.model); }
+function byHarness(h) { return PROVIDERS.find(p => p.harness === h); }
+function modelOf(s) {
+  const p = byHarness(s.harness);
+  return p && p.models.find(m => m.slug === s.model);
+}
+function writesHarnessPrefix(s) { return !isAlias(s) && (s.prefixed || s.harness !== DATA.native); }
+function entry(s) {
+  return (writesHarnessPrefix(s) ? s.harness + ":" : "") + s.model + (s.effort ? "@" + s.effort : "");
+}
+function line(r) { return r.role + ": " + r.slots.map(entry).join(", "); }
+
+const original = DATA.roles.map(r => ({
+  role: r.role, line: r.line,
+  slots: r.slots.map(s => ({ harness: s.harness || DATA.native, prefixed: Boolean(s.harness), model: s.model, effort: s.effort }))
+}));
+let state = clone(original);
+try {
+  const saved = JSON.parse(localStorage.getItem(STORE) || "null");
+  const fits = saved && saved.length === original.length &&
+    saved.every((r, i) => r.role === original[i].role && r.slots.every(s => "harness" in s && "model" in s));
+  if (fits) state = saved;
+} catch (e) {}
+
+function save() { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {} }
+function el(tag, attrs, kids) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k === "class") n.className = v; else if (k === "text") n.textContent = v; else n.setAttribute(k, v);
+  }
+  (kids || []).forEach(c => c && n.append(c));
+  return n;
+}
+
+function renderMeta() {
+  const m = document.getElementById("meta");
+  m.append(el("span", { text: "sheet " + DATA.sheetPath }));
+  m.append(el("span", { text: "scope " + DATA.scope }));
+  m.append(el("span", { text: "native harness " + DATA.native }));
+  if (DATA.configDir) m.append(el("span", { text: "agents " + DATA.configDir }));
+  m.append(el("span", { text: "read " + DATA.generated }));
+  const lg = document.getElementById("legend");
+  lg.textContent = "Providers: " + PROVIDERS.map(p => p.label + " runs on " + p.harness).join("; ") +
+    ". A slot on another harness opens its own herdr tab or tuios window.";
+}
+
+function changeProvider(s, harness) {
+  const next = byHarness(harness);
+  s.harness = harness;
+  s.prefixed = false;
+  if (!next.models.some(m => m.slug === s.model)) s.model = next.models[0].slug;
+  if (s.effort && !modelOf(s).efforts.includes(s.effort)) s.effort = "";
+}
+
+function providerSelect(r, s, si, ri) {
+  const sel = el("select", { id: `p-${ri}-${si}`, "aria-label": `${r.role} slot ${si + 1} provider` });
+  PROVIDERS.forEach(p => {
+    const o = el("option", { value: p.harness, text: p.label });
+    if (p.harness === s.harness) o.selected = true;
+    sel.append(o);
+  });
+  if (!byHarness(s.harness)) {
+    const cur = el("option", { value: s.harness, text: "Current: " + s.harness });
+    cur.disabled = true; cur.selected = true; sel.append(cur);
+  }
+  sel.addEventListener("change", () => { changeProvider(s, sel.value); commit(); });
+  return sel;
+}
+
+function modelSelect(r, s, si, ri) {
+  const sel = el("select", { id: `m-${ri}-${si}`, "aria-label": `${r.role} slot ${si + 1} model` });
+  const provider = byHarness(s.harness);
+  const models = provider ? provider.models : [];
+  if (!modelOf(s)) {
+    const cur = el("option", { value: s.model, text: "Current: " + s.model + (provider ? " (not in the " + provider.label + " list)" : "") });
+    cur.disabled = true; cur.selected = true; sel.append(cur);
+  }
+  models.forEach(m => {
+    const o = el("option", { value: m.slug, text: m.label });
+    if (m.slug === s.model) o.selected = true;
+    sel.append(o);
+  });
+  ALIASES.forEach(a => { const o = el("option", { value: a, text: a + " (parent session's model)" }); if (a === s.model) o.selected = true; sel.append(o); });
+  sel.addEventListener("change", () => {
+    s.model = sel.value;
+    if (isAlias(s)) { s.harness = DATA.native; s.prefixed = false; }
+    const m = modelOf(s);
+    if (s.effort && (!m || !m.efforts.includes(s.effort))) s.effort = "";
+    commit();
+  });
+  return sel;
+}
+
+function effortBoxes(r, s, si, ri) {
+  const m = modelOf(s);
+  const fs = el("fieldset", { class: "efforts" }, [el("legend", { text: `${r.role} slot ${si + 1} effort` })]);
+  m.efforts.forEach(e => {
+    const id = `e-${ri}-${si}-${e}`;
+    const cb = el("input", { type: "checkbox", id, value: e });
+    cb.checked = s.effort === e;
+    cb.addEventListener("change", () => { s.effort = cb.checked ? e : ""; commit(); });
+    fs.append(el("label", { class: "eff", "data-e": e, for: id }, [cb, document.createTextNode(e)]));
+  });
+  return fs;
+}
+
+function renderRoles() {
+  const host = document.getElementById("roles");
+  host.textContent = "";
+  state.forEach((r, ri) => {
+    const isPanel = PANEL.test(r.role) || r.slots.length > 1;
+    const changed = line(r) !== line(original[ri]);
+    const card = el("article", { class: "role" + (changed ? " changed" : ""), "aria-label": r.role });
+    const head = el("div", { class: "role-head" }, [
+      el("span", { class: "role-name", text: r.role }),
+      el("span", { class: "role-kind", text: isPanel ? `panel, ${r.slots.length} slot${r.slots.length === 1 ? "" : "s"}` : "single" })
+    ]);
+    if (changed) head.append(el("span", { class: "was", text: "was " + original[ri].slots.map(entry).join(", ") }));
+    if (NOTES[r.role]) head.append(el("span", { class: "role-note", text: NOTES[r.role] }));
+    card.append(head);
+    const slots = el("div", { class: "slots" });
+    r.slots.forEach((s, si) => {
+      const row = el("div", { class: "slot" });
+      if (isPanel) row.append(el("span", { class: "slot-n", text: String(si + 1) }));
+      if (!isAlias(s)) row.append(providerSelect(r, s, si, ri));
+      row.append(modelSelect(r, s, si, ri));
+      if (isAlias(s)) {
+        row.append(el("span", { class: "session-note", text: "runs on the parent session's model and effort" }));
+      } else if (!modelOf(s)) {
+        row.append(el("span", { class: "session-note", text: "Current entry is preserved. Select a model to edit its effort." }));
+      } else {
+        row.append(effortBoxes(r, s, si, ri));
+        if (!s.effort) row.append(el("span", { class: "session-note", text: "no box ticked: harness default effort" }));
+      }
+      if (isPanel) {
+        const acts = el("div", { class: "slot-actions" });
+        const dup = el("button", { class: "ghost", type: "button", text: "Repeat" });
+        dup.addEventListener("click", () => { r.slots.splice(si + 1, 0, { ...s }); commit(); });
+        acts.append(dup);
+        if (r.slots.length > 1) {
+          const rm = el("button", { class: "ghost", type: "button", text: "Remove" });
+          rm.addEventListener("click", () => { r.slots.splice(si, 1); commit(); });
+          acts.append(rm);
+        }
+        row.append(acts);
+      }
+      slots.append(row);
+    });
+    card.append(slots);
+    host.append(card);
+  });
+}
+
+function sheetText() {
+  const lines = DATA.lines.slice();
+  state.forEach(r => { lines[r.line] = line(r); });
+  return lines.join("\n").replace(/\n+$/, "") + "\n";
+}
+
+function renderResponse() {
+  const diffs = [];
+  state.forEach((r, i) => { if (line(r) !== line(original[i])) diffs.push(`${r.role}: ${original[i].slots.map(entry).join(", ")} -> ${r.slots.map(entry).join(", ")}`); });
+  const ul = document.getElementById("changes");
+  ul.textContent = "";
+  if (!diffs.length) ul.append(el("li", { class: "none", text: "No changes yet. The message below would rewrite the sheet unchanged." }));
+  diffs.forEach(d => ul.append(el("li", { text: d })));
+  const msg = [
+    "/pstack-effort apply",
+    `sheet: ${DATA.sheetPath}`,
+    `scope: ${DATA.scope}`,
+    DATA.configDir ? `config-dir: ${DATA.configDir}` : null,
+    `changes: ${diffs.length}`,
+    ...diffs.map(d => `- ${d}`),
+    "",
+    "```pstack-sheet",
+    sheetText().replace(/\n$/, ""),
+    "```"
+  ].filter(x => x !== null).join("\n");
+  document.getElementById("out").textContent = msg;
+  return msg;
+}
+
+function commit() { save(); renderRoles(); renderResponse(); }
+
+document.getElementById("reset").addEventListener("click", () => {
+  state = clone(original);
+  try { localStorage.removeItem(STORE); } catch (e) {}
+  renderRoles(); renderResponse();
+  document.getElementById("status").textContent = "Reset to the sheet as read.";
+});
+document.getElementById("copy").addEventListener("click", () => {
+  const msg = renderResponse();
+  const status = document.getElementById("status");
+  const fallback = () => {
+    const r = document.createRange(); r.selectNodeContents(document.getElementById("out"));
+    const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+    status.textContent = "Copying is blocked here. The message is selected; press Ctrl+C.";
+  };
+  try { navigator.clipboard.writeText(msg).then(() => { status.textContent = "Copied. Paste it into Claude Code."; }, fallback); } catch (e) { fallback(); }
+});
+
+renderMeta();
+renderRoles();
+renderResponse();
+</script>

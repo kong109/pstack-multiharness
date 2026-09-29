@@ -28,6 +28,8 @@ node /path/to/poteto-mode/scripts/opencode-agents.mjs --mapping /path/to/pstack-
 
 This checks that installed profiles match the current sheet and returns agent IDs with model and variant. Use the returned `agent` in `subagent`, retaining the task, file pointers, specialist instructions, and background behavior required by the calling skill. For a panel, launch each returned entry as specified by that skill. For a cross-judge pool, choose one entry according to the skill's selection rule.
 
+An entry that names another harness, such as `codex:` or `claude:`, is returned with `pane` true and no agent. Launch it through [foreign-harness subagents](foreign-harness.md) instead of `subagent`.
+
 Only `auto` and `inherit-parent` deliberately route to `general`. Never substitute `general` or `explore` for an explicit model assignment. A role missing from the sheet needs an explicit assignment before it can be routed with this helper.
 
 If a newly installed agent is not recognized, refresh the location configuration using the running server's documented API or open a fresh session. Do not restart the whole service while other sessions are working. If refresh is unavailable, report that the profiles are installed but not yet usable in the current session.

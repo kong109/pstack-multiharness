@@ -7,6 +7,7 @@ export const efforts = ["low", "medium", "high", "xhigh", "max"];
 // agent; a pair without one keeps the calling skill's subagent_type and passes model on the call.
 export const claude = {
   id: "pstack-claude",
+  harness: "claude",
   marker,
   route(label, { model, effort }) {
     if (model !== null && !/^[a-z0-9][a-z0-9.-]*(\[1m\])?$/.test(model)) {

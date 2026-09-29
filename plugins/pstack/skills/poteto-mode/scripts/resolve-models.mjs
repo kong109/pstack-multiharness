@@ -5,6 +5,24 @@ import { pathToFileURL } from "node:url";
 
 const token = /^[a-zA-Z0-9_./:-]+$/;
 
+export const harnesses = JSON.parse(readFileSync(new URL("./harnesses.json", import.meta.url), "utf8"));
+
+export function parseEntry(entry) {
+  const parts = entry.trim().split("@");
+  const [head, explicitEffort] = parts;
+  const colon = head.indexOf(":");
+  const harness = colon > 0 && Object.hasOwn(harnesses, head.slice(0, colon)) ? head.slice(0, colon) : null;
+  const model = harness ? head.slice(colon + 1) : head;
+  if (parts.length > 2 || !token.test(head) || !model ||
+      (explicitEffort !== undefined && !token.test(explicitEffort))) {
+    throw new Error(`Invalid model entry: ${entry}`);
+  }
+  if (harness && (model === "auto" || model === "inherit-parent")) {
+    throw new Error(`Invalid model entry: ${entry} (a ${harness}: entry names a concrete model)`);
+  }
+  return { harness, model, explicitEffort };
+}
+
 export function normalizeLegacyEffort(text) {
   const effortModels = new Set([...text.matchAll(/^\s*effort:\s*(\S+)\s*=/gm)].map((match) => match[1]));
   const variants = new Map();
@@ -44,14 +62,10 @@ export function resolveRole(text, role, defaults) {
   const value = roles.get(role) ?? defaults;
   if (!value) throw new Error(`No mapping or defaults for role: ${role}`);
   return value.split(",").map((entry) => {
-    const parts = entry.trim().split("@");
-    const [model, explicitEffort] = parts;
-    if (parts.length > 2 || !token.test(model) ||
-        (explicitEffort !== undefined && !token.test(explicitEffort))) {
-      throw new Error(`Invalid model entry: ${entry}`);
-    }
-    const effort = explicitEffort ?? efforts.get(model) ?? "default";
+    const { harness, model, explicitEffort } = parseEntry(entry);
+    const effort = explicitEffort ?? efforts.get(harness ? `${harness}:${model}` : model) ?? efforts.get(model) ?? "default";
     return {
+      ...(harness && { harness }),
       model: model === "auto" || model === "inherit-parent" ? null : model,
       effort: effort === "default" ? null : effort,
     };

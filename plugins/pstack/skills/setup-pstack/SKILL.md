@@ -17,7 +17,7 @@ Configure the project or user override sheet using [configuration scope](../pote
 
 ### 1. Detect available models
 
-Enumerate the model slugs you can pass to an `Agent` subagent in this session — that is the dependable source. The currently available Claude models and the default panel are listed in [Models](#models) below; the quad is chosen for cross-family, cross-tier diversity, and the single-role default stays out of the panels because it already covers the single-model roles. Ask the user to confirm or paste any additional slugs they want available. Never write a real slug you have not confirmed is available. The aliases `inherit-parent` and `auto` are always valid even though they are not detected slugs; both mean the role runs on the parent session's model, which the `Agent` call expresses by omitting `model`.
+Enumerate the model slugs you can pass to an `Agent` subagent in this session — that is the dependable source. The currently available Claude models and the default panel are listed in [Models](#models) below; the quad is chosen for cross-family, cross-tier diversity, and the single-role default stays out of the panels because it already covers the single-model roles. Ask the user to confirm or paste any additional slugs they want available. Also detect the other harnesses with `command -v codex claude gemini opencode`, and whether this session runs inside herdr (`HERDR_ENV`) or tuios (`TUIOS_ENV`). A role entry may name a harness, as in `codex:model@effort`, and it runs in a visible pane through [foreign-harness subagents](../poteto-mode/references/foreign-harness.md). Offer `harness:` entries only for installed harnesses, and only when herdr or tuios is present, because without one the entry has nowhere to run. Never write a real slug you have not confirmed is available. The aliases `inherit-parent` and `auto` are always valid even though they are not detected slugs; both mean the role runs on the parent session's model, which the `Agent` call expresses by omitting `model`.
 
 ### 2. Load current state
 
@@ -41,7 +41,7 @@ On Claude Code and Codex, ask whether to keep the SessionStart routing hook, def
 
 Run the resolver for every role using the proposed sheet and its default model list. Single-model roles must have one entry. Validate explicit effort against the host model capabilities and confirm a concrete dispatch control can apply it; on Claude Code that control is the routed agent's `effort:` frontmatter. Prompt text is not an effort control. Report unsupported settings instead of dropping them. Remove legacy prose describing effort as only a worker-brief instruction, while preserving its `effort:` settings.
 
-Every real slug written must be in the detected set; `inherit-parent` and `auto` always pass. If a chosen real slug is not available, stop and ask again.
+Every unprefixed real slug written must be in the detected set; `inherit-parent` and `auto` always pass. A `harness:` entry's model comes from the user or from that harness's own model list, and its effort must be one the [registry](../poteto-mode/scripts/harnesses.json) accepts for the harness. If a chosen real slug is not available, stop and ask again.
 
 ### 6. Write the override sheet
 
@@ -79,7 +79,7 @@ Add or update one scoped instruction in the destination instructions file to rea
 
 ### 8. Confirm
 
-Report whether the session hook is on and where its setting lives. Report the config scope, target path, selected preset scope/name if any, and how it loads. On Claude Code with explicit effort, also report the installed agents and whether the session can already see them. Mention `pstack-preset` for saving the resulting configuration for reuse. Re-running setup updates the chosen sheet, not its source preset.
+Report whether the session hook is on and where its setting lives. Report the config scope, target path, selected preset scope/name if any, and how it loads. Report each entry that runs in another harness and which multiplexer will show it. On Claude Code with explicit effort, also report the installed agents and whether the session can already see them. Mention `pstack-preset` for saving the resulting configuration for reuse, and `pstack-effort` for editing a slot's provider, model, and effort on a page. Re-running setup updates the chosen sheet, not its source preset.
 
 ## Models
 

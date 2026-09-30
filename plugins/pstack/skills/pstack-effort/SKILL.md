@@ -38,12 +38,12 @@ To add a provider, add an entry to `providers.json` and a matching harness to `.
 
 ## Apply
 
-The pasted message carries `sheet:`, `scope:`, an optional `config-dir:`, a change list, and the whole new sheet in a fenced `pstack-sheet` block.
+The pasted message carries `sheet:`, `scope:`, an optional `config-dir:`, a change list, the role lines as the page read them in a fenced `pstack-base` block, and the whole new sheet in a fenced `pstack-sheet` block.
 
 1. Write the pasted message verbatim to `<scratchpad>/pstack-effort/message.txt`.
 2. Dry run first and show the user the diff it prints.
    `node <skill>/scripts/apply.mjs --message <message.txt> --dry-run`
-   It refuses a sheet whose roles differ from the file's, since the page only edits entries. It also refuses a sheet with any entry the routing helper rejects, such as an effort the harness does not accept. Hand-edit the sheet for structural changes. The diff is complete because apply rewrites only the changed role lines of the file on disk. Everything else in the file, including lines added after the page was rendered, stays as it is.
+   It refuses a sheet whose roles differ from the roles the page rendered, since the page only edits entries. It refuses a role the page changed when the file's line for that role has moved since the page was rendered, and it names the role, so render the page again and redo that edit. It also refuses a sheet with any entry the routing helper rejects, such as an effort the harness does not accept. Hand-edit the sheet for structural changes. The diff is complete because apply rewrites only the roles the page changed, in the file on disk. Everything else in the file, including roles and lines edited after the page was rendered, stays as it is.
 3. Apply.
    `node <skill>/scripts/apply.mjs --message <message.txt>`
    The script backs up the sheet to `<sheet>.bak`, which the next apply replaces, writes the changed role lines, and installs the routed `pstack-<model>-<effort>` agents for every native entry. Entries on another harness install no agent. If the install fails, the script restores the sheet from the backup.

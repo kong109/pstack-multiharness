@@ -32,7 +32,7 @@ The agent writes its report to `result.md` in its run directory and a blocking q
 | verdict | meaning | you do |
 | --- | --- | --- |
 | `done` | `result` holds the final report | Review it as you would a native worker's, then close the agent. |
-| `question` | the agent needs a decision | Answer with `send --text`, run in the background, and treat its verdict the same way. |
+| `question` | the agent needs a decision | Answer with `send --text`, run in the background, and treat its verdict the same way. If the human answers in the pane instead, run `wait --name NAME`. A `result.md` written after the question reads as `done`. |
 | `blocked` | a TUI dialog is open, such as an approval, a trust prompt, or a login | Read `screen`. Answer a routine dialog with `send --keys`. Ask the user when it wants authority the brief did not grant. |
 | `no_result` | the turn ended with no report, even after one automatic reminder | Run `peek`, then send a correction or close the agent. |
 | `stalled` | the turn never started, or herdr saw no activity after the prompt. The text may still have arrived | Run `peek` before resending. The helper never types a second prompt on its own. |
@@ -43,9 +43,9 @@ The agent writes its report to `result.md` in its run directory and a blocking q
 
 ## Why this misses no prompt
 
-The launch flags remove the prompts that can be removed. Codex runs with `-a never`. Claude Code runs in `dontAsk` mode with an explicit allow list and without `AskUserQuestion`, so a denied action becomes a `question` instead of a dialog. The brief tells the agent to ask through `question.md` and never in the terminal. Whatever dialog is left, such as a folder trust prompt or an expired login, makes the multiplexer report a blocked state, and the blocking call returns `blocked` at once with the screen. The person watching the pane sees the same state in herdr's status badge or the tuios Inbox and may answer it there, after which `wait` resumes. A turn that ends without a report is reminded once and then reported. Every wait has a timeout.
+The launch flags remove the prompts that can be removed. Codex runs with `-a never`. Claude Code runs in `dontAsk` mode with an explicit allow list and without `AskUserQuestion`, so a denied action becomes a `question` instead of a dialog. The brief tells the agent to ask through `question.md` and never in the terminal. Whatever dialog is left, such as a folder trust prompt or an expired login, makes the multiplexer report a blocked state, and the blocking call returns `blocked` at once with the screen. The person watching the pane sees the same state in herdr's status badge or the tuios Inbox and may answer it there, after which `wait` resumes. A turn that ends without a report is reminded once and then reported, and each `send --text` starts a new turn with its own reminder. This holds for a `launch --no-wait` followed by `wait` as well. Every wait has a timeout.
 
-tuios reports blocked and working states only for harnesses whose hooks are wired to it. Run `tuios integration install --all` once and check it with `tuios doctor agents`. Without the hooks a pane reads `none`. The helper then treats it as running until it sees activity or a report file, and it checks for the files every five seconds, so a dialog goes unnoticed until the timeout.
+tuios reports blocked and working states only for harnesses whose hooks are wired to it. Run `tuios integration install --all` once and check it with `tuios doctor agents`. Without the hooks a pane reads `none`. The helper then treats it as running until it sees activity or a report file. In every state it checks for the files every five seconds, so a report ends the wait even when a hook was lost, and a dialog goes unnoticed until the timeout.
 
 ## Access
 

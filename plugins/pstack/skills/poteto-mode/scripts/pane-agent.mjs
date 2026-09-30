@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
-import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -18,7 +18,7 @@ const SCREEN_LINES = 60;
 const NONE_POLL_MS = 5_000;
 const TOKEN = /^[A-Za-z0-9][A-Za-z0-9_./:-]*$/;
 
-export const panesRoot = (env = process.env) => env.PSTACK_PANES_DIR ?? join(realpathSync(tmpdir()), "pstack-panes");
+export const panesRoot = (env = process.env) => resolve(env.PSTACK_PANES_DIR ?? join(realpathSync(tmpdir()), "pstack-panes"));
 
 export function sh(cmd, args, { timeoutMs } = {}) {
   const r = spawnSync(cmd, args, { encoding: "utf8", timeout: timeoutMs, maxBuffer: 32 * 1024 * 1024 });
@@ -179,27 +179,40 @@ export function tuiosMux(runner, env) {
   const reported = (state) => ["question.md", "result.md"].some((file) => existsSync(join(state.run, file)));
   const settle = (state, { fresh, timeoutMs }) => {
     const deadline = Date.now() + timeoutMs;
-    const left = () => Math.max(1000, deadline - Date.now());
+    const startBy = Math.min(deadline, Date.now() + TURN_START_MS);
+    let starting = fresh;
     let seenWorking = false;
-    if (fresh) {
-      if (waitFor(state, "working,needs_input,errored,done", Math.min(TURN_START_MS, left()))) {
-        seenWorking = true;
-      } else {
-        const cur = agentState(state);
-        if (cur === "gone") return { kind: "gone" };
-        if (cur !== "none") return { kind: "stalled" };
+    const begun = () => {
+      starting = false;
+      if (state.awaitTurn) {
+        state.awaitTurn = false;
+        saveState(state);
       }
-    }
+    };
     for (;;) {
       const cur = agentState(state);
       if (cur === "gone") return { kind: "gone" };
       if (cur === "needs_input") return { kind: "blocked" };
       if (cur === "errored") return { kind: "error", detail: "the agent reported errored" };
-      if (cur === "working") seenWorking = true;
-      if (cur === "idle" || cur === "done" || (cur === "none" && (seenWorking || reported(state)))) return { kind: "rest" };
-      if (Date.now() >= deadline) return { kind: "timeout" };
-      const slice = cur === "none" ? Math.min(left(), NONE_POLL_MS) : left();
-      if (!waitFor(state, "idle,done,needs_input,errored", slice)) pause(500);
+      if (cur === "working" || cur === "done") seenWorking = true;
+      if (reported(state)) {
+        begun();
+        return { kind: "rest" };
+      }
+      if (starting && seenWorking) begun();
+      if (starting && Date.now() >= startBy) {
+        if (cur !== "none") return { kind: "stalled" };
+        begun();
+      }
+      if (!starting) {
+        if (cur === "idle" || cur === "done" || (cur === "none" && seenWorking)) return { kind: "rest" };
+        if (Date.now() >= deadline) return { kind: "timeout" };
+      }
+      const until = starting ? "working,needs_input,errored,done" : "idle,done,needs_input,errored";
+      const cap = Math.max(1000, (starting ? startBy : deadline) - Date.now());
+      const began = Date.now();
+      waitFor(state, until, Math.min(NONE_POLL_MS, cap));
+      if (Date.now() - began < 200) pause(500);
     }
   };
   return {
@@ -210,6 +223,7 @@ export function tuiosMux(runner, env) {
       if (r.status !== 0) throw new Error(`tuios new-window failed: ${(r.stderr || r.stdout).trim()}`);
       state.ids = { window: r.stdout.trim(), session };
       state.prompted = true;
+      state.awaitTurn = true;
       saveState(state);
       return null;
     },
@@ -226,7 +240,7 @@ export function tuiosMux(runner, env) {
       }
       return settle(state, { fresh: false, timeoutMs });
     },
-    wait: (state, timeoutMs) => settle(state, { fresh: false, timeoutMs }),
+    wait: (state, timeoutMs) => settle(state, { fresh: Boolean(state.awaitTurn), timeoutMs }),
     keys(state, keys, timeoutMs) {
       const mapped = keys.map((k) => TUIOS_KEYS[k.toLowerCase()] ?? k);
       const r = call("send-keys", ["-w", state.name, mapped.join(" ")]);
@@ -264,21 +278,27 @@ const muxFor = (id, runner, env) => {
 
 const readIfPresent = (path) => (existsSync(path) ? readFileSync(path, "utf8") : null);
 
-function conclude(state, mux, settled, { timeoutMs, nudge }) {
+function conclude(state, mux, settled, { timeoutMs }) {
   const base = { name: state.name, mux: mux.id, harness: state.harness, model: state.model };
-  const question = readIfPresent(join(state.run, "question.md"));
-  if (question !== null) return { ...base, verdict: "question", question, questionFile: join(state.run, "question.md") };
-  const result = readIfPresent(join(state.run, "result.md"));
+  const questionFile = join(state.run, "question.md");
+  const resultFile = join(state.run, "result.md");
+  const question = readIfPresent(questionFile);
+  const result = readIfPresent(resultFile);
+  if (question !== null && (result === null || statSync(resultFile).mtimeMs < statSync(questionFile).mtimeMs)) {
+    return { ...base, verdict: "question", question, questionFile };
+  }
   if (result !== null) {
     const big = result.length > RESULT_TEXT_LIMIT;
-    return { ...base, verdict: "done", resultFile: join(state.run, "result.md"), ...(big ? {} : { result }) };
+    return { ...base, verdict: "done", resultFile, ...(big ? {} : { result }) };
   }
   if (settled.kind === "blocked") return { ...base, verdict: "blocked", screen: mux.peek(state) };
   if (settled.kind === "gone") return { ...base, verdict: "error", detail: "the pane or its agent is gone (the harness exited)" };
   if (settled.kind === "error") return { ...base, verdict: "error", detail: settled.detail };
   if (settled.kind === "timeout") return { ...base, verdict: "timeout", screen: mux.peek(state) };
-  if (nudge && settled.kind === "rest") {
-    return conclude(state, mux, mux.submit(state, nudgePrompt(state.run), timeoutMs), { timeoutMs, nudge: false });
+  if (settled.kind === "rest" && !state.nudged) {
+    state.nudged = true;
+    saveState(state);
+    return conclude(state, mux, mux.submit(state, nudgePrompt(state.run), timeoutMs), { timeoutMs });
   }
   return { ...base, verdict: settled.kind === "stalled" ? "stalled" : "no_result", screen: mux.peek(state) };
 }
@@ -324,7 +344,7 @@ export function launch(options, { runner = sh, env = process.env } = {}) {
     const started = mux.launch(state, { command: spec.command, args, cwd: state.cwd, prompt, promptFirst: spec.promptFirst });
     if (!wait) return { name, mux: muxId, run, launched: true };
     const settled = started ?? (muxId === "tuios" ? mux.initial(state, timeoutMs) : { kind: "rest" });
-    return conclude(state, mux, withBrief(state, mux, settled, timeoutMs), { timeoutMs, nudge: true });
+    return conclude(state, mux, withBrief(state, mux, settled, timeoutMs), { timeoutMs });
   } catch (error) {
     try { mux.close?.(state); } finally { rmSync(run, { recursive: true, force: true }); }
     throw error;
@@ -335,8 +355,7 @@ export function waitFor(name, options = {}, { runner = sh, env = process.env } =
   const state = loadState(name, env);
   const mux = muxFor(state.mux, runner, env);
   const timeoutMs = options.timeoutMs ?? DEFAULT_WAIT_MS;
-  const fresh = !state.prompted;
-  return conclude(state, mux, withBrief(state, mux, mux.wait(state, timeoutMs), timeoutMs), { timeoutMs, nudge: fresh });
+  return conclude(state, mux, withBrief(state, mux, mux.wait(state, timeoutMs), timeoutMs), { timeoutMs });
 }
 
 export function send(name, { text, keys, timeoutMs = DEFAULT_WAIT_MS }, { runner = sh, env = process.env } = {}) {
@@ -346,11 +365,14 @@ export function send(name, { text, keys, timeoutMs = DEFAULT_WAIT_MS }, { runner
   for (const file of ["question.md", "result.md"]) {
     if (existsSync(join(state.run, file))) renameSync(join(state.run, file), join(state.run, `${file}.prev`));
   }
-  const fresh = !state.prompted;
+  if (text) {
+    state.nudged = false;
+    saveState(state);
+  }
   const settled = keys
     ? withBrief(state, mux, mux.keys(state, keys.split(/\s+/).filter(Boolean), timeoutMs), timeoutMs)
     : mux.submit(state, /^\s*-/.test(text) ? ` ${text}` : text, timeoutMs);
-  return conclude(state, mux, settled, { timeoutMs, nudge: fresh });
+  return conclude(state, mux, settled, { timeoutMs });
 }
 
 export function peek(name, { runner = sh, env = process.env } = {}) {

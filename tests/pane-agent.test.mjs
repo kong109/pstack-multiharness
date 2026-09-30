@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  briefText, close, detectMux, harnessArgs, launch, launchPrompt, list, nudgePrompt, peek, send, sh, waitFor,
+  briefText, close, detectMux, harnessArgs, launch, launchPrompt, list, nudgePrompt, panesRoot, peek, send, sh, waitFor,
 } from "../plugins/pstack/skills/poteto-mode/scripts/pane-agent.mjs";
 
 let root;
@@ -24,6 +24,10 @@ const failJson = (code, message = code) => ({ status: 1, stdout: "", stderr: JSO
 const agent = (status) => okJson({ agent: { agent_status: status } });
 const text = (stdout) => ({ status: 0, stdout, stderr: "" });
 const write = (file, body) => writeFileSync(join(runDir(), file), body);
+const age = (file, seconds) => {
+  const then = new Date(Date.now() - seconds * 1000);
+  utimesSync(join(runDir(), file), then, then);
+};
 
 function scripted(rules) {
   const calls = [];
@@ -96,11 +100,11 @@ test("herdr launch opens one labelled tab, starts the harness in it, prompts wit
   expect(readFileSync(join(runDir(), "brief.md"), "utf8")).toContain("Review the diff.");
 });
 
-test("a pending question outranks a result and send answers it, clearing both files", () => {
+test("a question written after a draft result is pending, and send answers it, clearing both files", () => {
   const { runner, calls } = scripted({
     ...herdrBase,
     "herdr agent prompt": [
-      () => { write("question.md", "Which branch?\n"); write("result.md", "status\n"); return agent("done"); },
+      () => { write("result.md", "status\n"); age("result.md", 60); write("question.md", "Which branch?\n"); return agent("done"); },
       () => {
         expect(existsSync(join(runDir(), "question.md"))).toBe(false);
         expect(existsSync(join(runDir(), "result.md"))).toBe(false);
@@ -114,6 +118,22 @@ test("a pending question outranks a result and send answers it, clearing both fi
   const second = send("arena-a", { text: "main" }, { runner, env: herdrEnv() });
   expect(second).toMatchObject({ verdict: "done", result: "final\n" });
   expect(calls.filter((c) => c[2] === "prompt").at(-1)[4]).toBe("main");
+});
+
+test("a question the human answered in the pane no longer masks the result written after it", () => {
+  const { runner } = scripted({
+    ...herdrBase,
+    "herdr agent prompt": () => { write("question.md", "Which branch?\n"); return agent("done"); },
+    "herdr agent wait": () => { write("result.md", "final\n"); age("question.md", 60); return agent("done"); },
+  });
+  expect(launch(options(), { runner, env: herdrEnv() })).toMatchObject({ verdict: "question" });
+  expect(waitFor("arena-a", {}, { runner, env: herdrEnv() })).toMatchObject({ verdict: "done", result: "final\n" });
+});
+
+test("a relative pane directory is resolved before it reaches the brief or the harness flags", () => {
+  const root = panesRoot({ PSTACK_PANES_DIR: "relative/panes" });
+  expect(root.startsWith("/")).toBe(true);
+  expect(root.endsWith("relative/panes")).toBe(true);
 });
 
 test("a blocked TUI comes back as a blocked verdict with the screen, without a poll loop", () => {
@@ -232,7 +252,7 @@ const tuiosBase = {
 test("tuios launch opens a named window that runs the harness with the prompt, then waits on events in two phases", () => {
   const { runner, calls } = scripted({
     ...tuiosBase,
-    "tuios get-agent-state": [tuiosState("working"), tuiosState("done")],
+    "tuios get-agent-state": [tuiosState("idle"), tuiosState("working"), tuiosState("done")],
     "tuios wait-for": (args) => {
       if (args.includes("idle,done,needs_input,errored")) write("result.md", "tuios result\n");
       return text("");
@@ -252,7 +272,7 @@ test("tuios launch opens a named window that runs the harness with the prompt, t
 test("tuios puts the prompt before the flags for a harness with variadic tool flags", () => {
   const { runner, calls } = scripted({
     ...tuiosBase,
-    "tuios get-agent-state": tuiosState("done"),
+    "tuios get-agent-state": [tuiosState("working"), tuiosState("done")],
     "tuios wait-for": () => { write("result.md", "r\n"); return text(""); },
   });
   launch(options({ harness: "claude", model: "claude-opus-5-5", effort: "high" }), { runner, env: tuiosEnv() });
@@ -283,7 +303,7 @@ test("a tuios window that vanished is an error verdict, not a hang", () => {
 test("tuios send goes through ask-agent and close closes the window by name", () => {
   const { runner, calls } = scripted({
     ...tuiosBase,
-    "tuios get-agent-state": tuiosState("done"),
+    "tuios get-agent-state": [tuiosState("working"), tuiosState("done")],
     "tuios wait-for": () => { write("result.md", "r\n"); return text(""); },
     "tuios ask-agent": () => { write("result.md", "second\n"); return text("answer printed\n"); },
   });
@@ -413,8 +433,63 @@ test("tuios reports stalled when the turn never starts and does not type a nudge
     "tuios get-agent-state": tuiosState("idle"),
     "tuios wait-for": { status: 1, stdout: "", stderr: "timeout" },
   });
-  expect(launch(options(), { runner, env: tuiosEnv() })).toMatchObject({ verdict: "stalled", screen: "tuios screen" });
+  expect(launch(options({ timeoutMs: 1500 }), { runner, env: tuiosEnv() })).toMatchObject({ verdict: "stalled", screen: "tuios screen" });
   expect(calls.filter((c) => c[1] === "ask-agent")).toHaveLength(0);
+});
+
+const slices = (calls) => calls.filter((c) => c[1] === "wait-for").map((c) => Number(c[c.indexOf("--timeout") + 1]));
+
+test("a hookless tuios pane is checked for report files every few seconds from the first wait", () => {
+  const { runner, calls } = scripted({
+    ...tuiosBase,
+    "tuios get-agent-state": tuiosState("none"),
+    "tuios wait-for": [{ status: 1, stdout: "", stderr: "timeout" }, () => { write("result.md", "hookless\n"); return { status: 1, stdout: "", stderr: "timeout" }; }],
+  });
+  expect(launch(options(), { runner, env: tuiosEnv() })).toMatchObject({ verdict: "done", result: "hookless\n" });
+  expect(Math.max(...slices(calls))).toBeLessThanOrEqual(5000);
+});
+
+test("a tuios agent whose state hook was lost still ends its turn when it reports", () => {
+  for (const state of ["working", "unknown"]) {
+    const { runner, calls } = scripted({
+      ...tuiosBase,
+      "tuios get-agent-state": state === "unknown" ? text("not json") : tuiosState(state),
+      "tuios wait-for": () => { write("result.md", `lost ${state}\n`); return { status: 1, stdout: "", stderr: "timeout" }; },
+    });
+    expect(launch(options(), { runner, env: tuiosEnv() })).toMatchObject({ verdict: "done", result: `lost ${state}\n` });
+    expect(Math.max(...slices(calls))).toBeLessThanOrEqual(5000);
+    rmSync(runDir(), { recursive: true, force: true });
+  }
+});
+
+test("a tuios state read that cannot be parsed while wait-for succeeds at once is paced, not spun", () => {
+  const { runner, calls } = scripted({
+    ...tuiosBase,
+    "tuios get-agent-state": text("not json"),
+    "tuios wait-for": text(""),
+  });
+  launch(options({ wait: false }), { runner, env: tuiosEnv() });
+  const started = Date.now();
+  expect(waitFor("arena-a", { timeoutMs: 1000 }, { runner, env: tuiosEnv() }).verdict).toBe("stalled");
+  expect(Date.now() - started).toBeGreaterThanOrEqual(900);
+  expect(calls.filter((c) => c[1] === "get-agent-state").length).toBeLessThan(8);
+});
+
+test("tuios launch --no-wait then wait still sends the one reminder when the turn ends with no report", () => {
+  const { runner, calls } = scripted({
+    ...tuiosBase,
+    "tuios get-agent-state": [tuiosState("idle"), tuiosState("working"), tuiosState("idle")],
+    "tuios wait-for": text(""),
+    "tuios ask-agent": text("nudged\n"),
+  });
+  launch(options({ wait: false }), { runner, env: tuiosEnv() });
+  expect(waitFor("arena-a", {}, { runner, env: tuiosEnv() }).verdict).toBe("no_result");
+  const asks = calls.filter((c) => c[1] === "ask-agent");
+  expect(asks).toHaveLength(1);
+  expect(asks[0]).toContain(nudgePrompt(runDir()));
+  const first = calls.find((c) => c[1] === "wait-for");
+  expect(first[first.indexOf("--until") + 1]).toBe("working,needs_input,errored,done");
+  expect(calls.indexOf(first)).toBeLessThan(calls.indexOf(asks[0]));
 });
 
 test("a tuios wait-for that fails at once is paced and still ends at the deadline", () => {
@@ -446,7 +521,7 @@ test("closing a tuios agent whose window already exited still removes its run di
   const gone = { status: 1, stdout: "", stderr: "window not found" };
   const { runner, calls } = scripted({
     ...tuiosBase,
-    "tuios get-agent-state": [tuiosState("done"), gone],
+    "tuios get-agent-state": [tuiosState("working"), tuiosState("done"), gone],
     "tuios wait-for": () => { write("result.md", "r\n"); return text(""); },
   });
   launch(options(), { runner, env: tuiosEnv() });

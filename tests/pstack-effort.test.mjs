@@ -88,8 +88,7 @@ function cacheHome() {
   return home;
 }
 
-function renderPage(text) {
-  const root = scratch();
+function renderPage(text, root = scratch()) {
   const sheetPath = join(root, "pstack-models.md");
   const out = join(root, "page.html");
   writeFileSync(sheetPath, text);
@@ -127,12 +126,11 @@ class Node {
   }
 }
 
-function mount(text) {
-  const { html } = renderPage(text);
+function mount(text, store = new Map(), dir = scratch()) {
+  const { html } = renderPage(text, dir);
   const script = /<script>\n([\s\S]*)\n<\/script>/.exec(html)[1];
   const root = new Node("root");
   for (const id of ["meta", "legend", "roles", "changes", "out", "reset", "copy", "status"]) { const n = new Node("div"); n.setAttribute("id", id); root.append(n); }
-  const store = new Map();
   const context = {
     document: { getElementById: (id) => root.find(id), createElement: (tag) => new Node(tag), createTextNode: (t) => Object.assign(new Node("#text"), { text: t }) },
     localStorage: { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, v), removeItem: (k) => store.delete(k) },
@@ -211,26 +209,29 @@ test("repeat and remove edit a panel's slots and reset restores the sheet", () =
 });
 
 test("refuses a sheet whose roles differ from the file's", () => {
-  expect(() => planApply(sheet, sheet.replace("feature:", "extra:"))).toThrow("refused");
-  expect(() => planApply(sheet, sheet.replace("swarm workers: inherit-parent\n", ""))).toThrow("refused");
+  expect(() => planApply(sheet, sheet.replace("feature:", "extra:"), sheet)).toThrow("refused");
+  expect(() => planApply(sheet, sheet.replace("swarm workers: inherit-parent\n", ""), sheet)).toThrow("refused");
 });
 
 test("refuses an entry the routing helper rejects", () => {
-  expect(() => planApply(sheet, sheet.replace("claude-opus-5-5@high", "claude-opus-5-5@turbo"))).toThrow("Unsupported Claude Code effort");
-  expect(() => planApply(sheet, sheet.replace("feature: claude-opus-5-5@high", "feature: openai/gpt-6@high"))).toThrow("Invalid model assignment for feature");
+  expect(() => planApply(sheet, sheet.replace("claude-opus-5-5@high", "claude-opus-5-5@turbo"), sheet)).toThrow("Unsupported Claude Code effort");
+  expect(() => planApply(sheet, sheet.replace("feature: claude-opus-5-5@high", "feature: openai/gpt-6@high"), sheet)).toThrow("Invalid model assignment for feature");
 });
 
 test("lists only the roles whose entries changed", () => {
   const next = sheet.replace("feature: claude-opus-5-5@high", "feature: codex:gpt-6.1-sol@xhigh");
-  expect(planApply(sheet, next).changes).toEqual([
+  expect(planApply(sheet, next, sheet).changes).toEqual([
     { role: "feature", from: "claude-opus-5-5@high", to: "codex:gpt-6.1-sol@xhigh", foreign: [{ harness: "codex", model: "gpt-6.1-sol", effort: "xhigh" }] },
   ]);
-  expect(planApply(sheet, sheet).changes).toEqual([]);
+  expect(planApply(sheet, sheet, sheet).changes).toEqual([]);
 });
 
-function message(root, sheetPath, next) {
+function message(root, sheetPath, next, base = readFileSync(sheetPath, "utf8")) {
   const file = join(root, "message.txt");
-  writeFileSync(file, ["/pstack-effort apply", `sheet: ${sheetPath}`, "scope: user", `config-dir: ${join(root, ".claude")}`, "", "```pstack-sheet", next.replace(/\n$/, ""), "```"].join("\n"));
+  writeFileSync(file, [
+    "/pstack-effort apply", `sheet: ${sheetPath}`, "scope: user", `config-dir: ${join(root, ".claude")}`, "",
+    "```pstack-base", base.replace(/\n$/, ""), "```", "```pstack-sheet", next.replace(/\n$/, ""), "```",
+  ].join("\n"));
   return file;
 }
 
@@ -281,7 +282,7 @@ test("restores the sheet when the agent install fails", () => {
 });
 
 test("rejects a message with no sheet block", () => {
-  expect(() => parseMessage("/pstack-effort apply\nsheet: /x\n")).toThrow("fenced block");
+  expect(() => parseMessage("/pstack-effort apply\nsheet: /x\n")).toThrow("pstack-base");
 });
 
 test("a cleared box writes @default when the sheet has a model-wide effort line, so the resolver agrees with the page", () => {
@@ -313,6 +314,19 @@ test("lines of roles the user did not touch stay exactly as written", () => {
   expect(page.next()).toContain("feature:    claude-opus-5-5@high\n");
 });
 
+test("a saved draft is offered again only for the same sheet text, never against a sheet that gained lines", () => {
+  const store = new Map();
+  const dir = scratch();
+  const first = mount(pageSheet, store, dir);
+  first.tick(`e-${first.roleIndex("feature")}-0-high`);
+  const revised = `# a note added above the roles\n${pageSheet}`;
+  const other = mount(revised, store, dir);
+  expect(other.next()).toBe(revised);
+  expect(other.message()).toContain("changes: 0");
+  const same = mount(pageSheet, store, dir);
+  expect(same.role("feature")).toBe("feature: claude-opus-5-5@default");
+});
+
 test("the message fence is longer than any backtick run inside the sheet", () => {
   const fenced = `${sheet}\nExample:\n\`\`\`\ncode\n\`\`\`\n`;
   const page = mount(fenced);
@@ -327,8 +341,40 @@ test("apply changes only the role lines of the file on disk, so lines added afte
   const rendered = "feature: claude-opus-5-5@high\nbug-fix: claude-opus-5-5@medium\n";
   const onDisk = `${rendered}\n# added after the page was rendered\neffort: claude-opus-5-5 = max\nsession hook: off\n`;
   writeFileSync(sheetPath, onDisk);
-  apply({ message: message(root, sheetPath, rendered.replace("@high", "@low")), log: () => {} });
+  apply({ message: message(root, sheetPath, rendered.replace("@high", "@low"), rendered), log: () => {} });
   expect(readFileSync(sheetPath, "utf8")).toBe(onDisk.replace("feature: claude-opus-5-5@high", "feature: claude-opus-5-5@low"));
+});
+
+test("apply leaves a role edited on disk after the page was rendered when the page did not touch it", () => {
+  const root = scratch();
+  const sheetPath = join(root, "pstack-models.md");
+  const rendered = "feature: claude-opus-5-5@high\nbug-fix: claude-opus-5-5@medium\n";
+  const onDisk = "feature: claude-opus-5-5@max\nbug-fix: claude-opus-5-5@medium\n";
+  writeFileSync(sheetPath, onDisk);
+  const result = apply({ message: message(root, sheetPath, rendered.replace("bug-fix: claude-opus-5-5@medium", "bug-fix: claude-opus-5-5@low"), rendered), log: () => {} });
+  expect(readFileSync(sheetPath, "utf8")).toBe("feature: claude-opus-5-5@max\nbug-fix: claude-opus-5-5@low\n");
+  expect(result.changes.map((c) => c.role)).toEqual(["bug-fix"]);
+});
+
+test("apply refuses a role the page changed when the file's line moved on, and writes nothing", () => {
+  const root = scratch();
+  const sheetPath = join(root, "pstack-models.md");
+  const rendered = "feature: claude-opus-5-5@high\nbug-fix: claude-opus-5-5@medium\n";
+  const onDisk = "feature: claude-opus-5-5@max\nbug-fix: claude-opus-5-5@medium\n";
+  writeFileSync(sheetPath, onDisk);
+  const file = message(root, sheetPath, rendered.replace("feature: claude-opus-5-5@high", "feature: claude-opus-5-5@low"), rendered);
+  expect(() => apply({ message: file, log: () => {} })).toThrow(/refused: feature changed in the file after the page was rendered/);
+  expect(readFileSync(sheetPath, "utf8")).toBe(onDisk);
+  expect(existsSync(`${sheetPath}.bak`)).toBe(false);
+});
+
+test("the page's message carries the role lines as it read them, so apply can tell a stale page from an edit", () => {
+  const page = mount(pageSheet);
+  page.tick(`e-${page.roleIndex("feature")}-0-high`);
+  const { base } = parseMessage(page.message());
+  expect(base).toContain("feature: claude-opus-5-5@high\n");
+  expect(base).not.toContain("@default");
+  expect(parseSheet(base).roles.map((r) => r.role)).toEqual(parseSheet(pageSheet).roles.map((r) => r.role));
 });
 
 test("apply keeps a sheet's code fence and CRLF endings intact", () => {
@@ -338,7 +384,8 @@ test("apply keeps a sheet's code fence and CRLF endings intact", () => {
   writeFileSync(sheetPath, onDisk);
   const next = "feature: claude-opus-5-5@low\n```\nnot a role: x\n```\nbug-fix: claude-opus-5-5@medium\n";
   const file = join(root, "message.txt");
-  writeFileSync(file, `/pstack-effort apply\nsheet: ${sheetPath}\nscope: user\nconfig-dir: ${join(root, ".claude")}\n\n\`\`\`\`pstack-sheet\n${next.replace(/\n$/, "")}\n\`\`\`\`\n`);
+  const base = onDisk.replace(/\r\n/g, "\n").replace(/\n$/, "");
+  writeFileSync(file, `/pstack-effort apply\nsheet: ${sheetPath}\nscope: user\nconfig-dir: ${join(root, ".claude")}\n\n\`\`\`\`pstack-base\n${base}\n\`\`\`\`\n\`\`\`\`pstack-sheet\n${next.replace(/\n$/, "")}\n\`\`\`\`\n`);
   apply({ message: file, log: () => {} });
   expect(readFileSync(sheetPath, "utf8")).toBe(onDisk.replace("@high", "@low"));
 });

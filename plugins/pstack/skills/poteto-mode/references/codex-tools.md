@@ -37,6 +37,7 @@ poteto-mode's Subagents section sets Claude-specific defaults (`subagent_type: "
 - `spawn_agent` calls already run concurrently with your turn, so `run_in_background: true` has no separate flag. Issue the dispatch and continue.
 - There is no `comment-sicko` subagent type either. The **no-comments** skill spawns it on Claude Code; on Codex dispatch a `spawn_agent` whose instructions tell it to read `poteto-mode/references/agents/comment-sicko.md` in full first.
 - Claude Code runs every subagent on this machine, so the **swarm** skill's workers and the fan-out playbooks (`orchestrate`, `autopilot-full`, `autopilot-stack`) isolate writers with worktrees. The same holds on Codex.
+- Entries in the sheet with a `claude:` prefix, and any other harness that is not `codex`, run in a visible herdr tab or tuios window through [foreign-harness subagents](foreign-harness.md). `codex:` entries and unprefixed entries stay on `spawn_agent`.
 - Keep the rest of the policy unchanged. Pass file pointers not inlined context, give each worker its own worktree or branch when they write, review every subagent's diff yourself.
 
 ## Model names

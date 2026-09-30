@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { resolveRole } from "../plugins/pstack/skills/poteto-mode/scripts/resolve-models.mjs";
+import { parseEntry, resolveRole } from "../plugins/pstack/skills/poteto-mode/scripts/resolve-models.mjs";
 
 test("existing sheets preserve panel order and apply model-wide effort", () => {
   expect(resolveRole("arena runners: a, b, a\neffort: b = medium", "arena runners")).toEqual([
@@ -45,4 +45,30 @@ test("CLI emits JSON and does not ignore missing files", () => {
   const missing = run("/nonexistent-pstack-sheet.md", "role", "a");
   expect(missing.status).toBe(1);
   expect(missing.stdout).toBe("");
+});
+
+test("a registered harness prefix names another harness and keeps the model and effort", () => {
+  expect(resolveRole("role: codex:gpt-6.1-sol@xhigh, claude-opus-5-5@high", "role")).toEqual([
+    { harness: "codex", model: "gpt-6.1-sol", effort: "xhigh" },
+    { model: "claude-opus-5-5", effort: "high" },
+  ]);
+  expect(parseEntry("claude:claude-opus-5-5")).toEqual({ harness: "claude", model: "claude-opus-5-5", explicitEffort: undefined });
+});
+
+test("a prefix that is not a registered harness stays part of the model id", () => {
+  expect(resolveRole("role: ollama:qwen3:8b", "role")).toEqual([{ model: "ollama:qwen3:8b", effort: null }]);
+});
+
+test("model-wide effort applies to a harness entry by bare or qualified model", () => {
+  const sheet = "role: codex:gpt-6.1-sol, codex:gpt-6.1-luna\neffort: gpt-6.1-sol = high\neffort: codex:gpt-6.1-luna = low";
+  expect(resolveRole(sheet, "role")).toEqual([
+    { harness: "codex", model: "gpt-6.1-sol", effort: "high" },
+    { harness: "codex", model: "gpt-6.1-luna", effort: "low" },
+  ]);
+});
+
+test("a harness entry needs a concrete model", () => {
+  for (const entry of ["codex:", "codex:auto", "codex:inherit-parent@high"]) {
+    expect(() => resolveRole(`role: ${entry}`, "role")).toThrow("Invalid model entry");
+  }
 });

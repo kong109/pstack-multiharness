@@ -1,0 +1,28 @@
+{
+  "claude": {
+    "command": "claude",
+    "kind": "claude",
+    "promptFirst": true,
+    "model": ["--model", "{model}"],
+    "effort": ["--effort", "{effort}"],
+    "efforts": ["low", "medium", "high", "xhigh", "max"],
+    "runDir": ["--add-dir", "{run}"],
+    "access": {
+      "read": ["--permission-mode", "dontAsk", "--allowedTools", "Read,Grep,Glob,Edit(/{run}/**),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git status:*),Bash(git blame:*),Bash(git rev-parse:*),Bash(git ls-files:*),Bash(git grep:*),Bash(rg:*),Bash(ls:*),Bash(wc:*)", "--disallowedTools", "AskUserQuestion"],
+      "write": ["--permission-mode", "dontAsk", "--allowedTools", "Read,Grep,Glob,Edit,Write,Bash", "--disallowedTools", "AskUserQuestion"]
+    }
+  },
+  "codex": {
+    "command": "codex",
+    "kind": "codex",
+    "promptFirst": false,
+    "model": ["-m", "{model}"],
+    "effort": ["-c", "model_reasoning_effort={effort}"],
+    "efforts": null,
+    "runDir": ["--add-dir", "{run}"],
+    "access": {
+      "read": ["-a", "never", "-s", "workspace-write"],
+      "write": ["-a", "never", "-s", "workspace-write"]
+    }
+  }
+}

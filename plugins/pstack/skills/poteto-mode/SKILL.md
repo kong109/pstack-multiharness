@@ -11,6 +11,8 @@ On OpenCode V2, read [OpenCode model routing](references/opencode-tools.md) befo
 
 On Claude Code, a role entry with explicit effort launches the generated agent that [Claude Code effort routing](references/claude-routing.md) returns, with no per-call `model`. Entries without effort use the `subagent_type` and `model` instructions below unchanged.
 
+A role entry that names a harness other than this session's, such as a `codex:` entry on Claude Code, runs in a visible herdr tab or tuios window through [foreign-harness subagents](references/foreign-harness.md). Never run it as a hidden process or an `Agent` call.
+
 Follow [operating-system guidance](references/operating-systems.md) for shell commands, temporary paths, and bundled helpers.
 
 These skills use Claude Code tool names (the `Skill` tool, the `Agent` tool, `AskUserQuestion`) and Claude model slugs (`claude-*`). On Claude Code they work as written. On Codex, read [`references/codex-tools.md`](references/codex-tools.md) for the Codex equivalent of a Claude tool, model, or skill named by these workflows. Other runtimes can discover the same Agent Skills tree, but they must use their own tool, model, and configuration equivalents. `codex-tools.md` is not a cross-runtime map.

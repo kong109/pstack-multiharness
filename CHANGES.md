@@ -2,6 +2,22 @@
 
 This port applies the Cursor → Claude Code substitutions in skill bodies. Earlier drafts left them flagged; this revision resolves them. A later pass added a Codex build that shares the same skills; see [Codex port](#codex-port) below.
 
+## 0.9.38 - route roles to other CLI harnesses
+
+This is a deliberate local fork. Preserve it during upstream sync.
+
+A role entry can now name a harness, as in `codex:gpt-6.1-sol@xhigh`. The grammar is `[harness:]model[@effort]`. The prefix counts only when the harness is listed in `poteto-mode/scripts/harnesses.json`, so a model id such as `ollama:qwen3:8b` keeps its colon. An entry with no prefix, or with the running session's own harness, dispatches as before.
+
+An entry on another harness runs in that harness's real TUI, in a pane the user can watch. `pane-agent.mjs` launches it in herdr as one tab per agent, or in tuios as one window per agent, and names the tab or window after the agent. It closes the tab or window when the work is done. `references/foreign-harness.md` holds the rules.
+
+Prompts no longer depend on polling. The launch flags remove the approvals they can, the brief turns a denied action into a `question.md` file, and the multiplexer's own blocked state returns the launch call at once with the screen. The parent runs each launch in the background and waits for the notification. Every wait has a timeout, and a turn that ends without a report is reminded once.
+
+`resolve-models.mjs` returns a `harness` key when an entry has a prefix. `agent-routes.mjs` gives an entry on another harness an `agent` of null and `pane` true, and installs no generated agent for it. Model-wide `effort:` lines accept either `harness:model` or the bare model.
+
+`pstack-effort` moves into the plugin as a public skill. Each slot picks a provider and a model, and the effort boxes come from that model's own levels. The OpenAI list is read from the Codex model cache when it exists. `apply.mjs` imports the routing helper directly, validates the whole sheet before writing, and restores the backup if the agent install fails.
+
+Only the Claude Code and Codex harnesses are registered. Adding another takes a `harnesses.json` entry and a live launch check in each multiplexer.
+
 ## 0.9.37 - move the Opus roles to Opus 5.5
 
 `plugins/pstack/models.json` names `claude-opus-5-5` where it named `claude-opus-5`: the single-role default, the panel, and every single-model role that ran Opus 5 (`feature, refactoring`, `judgment and prose`, `how explorer`, `how explainer`, `why investigators`, `why synthesizer`, `reflect tooling`, `reflect judgment, divergent, synthesizer`, `swarm workers`). The generator restamped the `## Models` sections, the interrogate reviewer table, and setup-pstack's override sheet and available-model line. Opus 5.5 joins the available-model list as `Opus 5.5`; Opus 5 stays there for `/setup-pstack` overrides. The Fable roles are unchanged. The pin remains at `e8d856f`.

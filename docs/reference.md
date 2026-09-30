@@ -4,7 +4,7 @@ Start with the [README](../README.md) for installation and your first task.
 
 ## Slash commands
 
-The package includes 55 skill directories: 32 public skills and 23 `principle-*` references. Claude Code uses `/pstack:<name>`. In Codex, request a skill by name or install the [optional shortcuts](#codex) for the `/name` form below.
+The package includes 56 skill directories: 33 public skills and 23 `principle-*` references. Claude Code uses `/pstack:<name>`. In Codex, request a skill by name or install the [optional shortcuts](#codex) for the `/name` form below.
 
 Find each skill's instructions in the [skills tree](../plugins/pstack/skills/).
 
@@ -30,6 +30,7 @@ Find each skill's instructions in the [skills tree](../plugins/pstack/skills/).
 | `/recall` | catch up on recent working context from chat history, live state, and the shared record |
 | `/setup-pstack` | configure role models and effort at project or user scope, optionally from a preset |
 | `/pstack-preset` | save the current role mapping as a named project or user preset |
+| `/pstack-effort` | edit the role mapping as a page with a provider, model, and effort choice per slot, then apply it |
 | `/unslop` | clean up writing by removing AI tells |
 | `/no-comments` | strip comments before review, fix the accepted findings, encode claimed constraints |
 | `/create-verification-skill` | generate a project-local verification skill and feature map |
@@ -209,7 +210,7 @@ See the [license summary](../README.md#license) for licenses and full-plugin att
 
 ## Role effort and presets
 
-Use `setup-pstack` to choose models and effort for each role. Entries support `model@effort`; `effort: model = value` supplies a model-wide default. Inline effort wins, and `model@default` clears it. The [dispatch resolver](../plugins/pstack/skills/poteto-mode/references/model-dispatch.md) reads both fields before worker launch. Explicit effort must use a supported runtime control; worker-brief text is not sufficient. Defaults live in [models.json](../plugins/pstack/models.json). Project configuration lives in `.pstack/models.md` and takes precedence over the user sheet. User sheets are `~/.claude/pstack-models.md` on Claude Code, `~/.codex/pstack-models.md` on Codex, and `~/.agents/pstack/models.md` on other runtimes unless a legacy path is explicitly configured. Setup adds a pointer in the corresponding instructions file. Use `pstack-preset` to save mappings at user scope in `~/.agents/pstack/presets/` or project scope in `.pstack/presets/`. Setup lists both scopes and copies the selected preset into either config scope. Presets include effort and remain independent of applied copies. Use distinct available models for panels that compare independent designs or reviews.
+Use `setup-pstack` to choose models and effort for each role. Entries support `[harness:]model[@effort]`; `effort: model = value` supplies a model-wide default. A harness prefix such as `codex:gpt-6.1-sol@xhigh` runs that role in the other CLI's own TUI, in a herdr tab or a tuios window that the user can watch, as [foreign-harness](../plugins/pstack/skills/poteto-mode/references/foreign-harness.md) describes. `/pstack-effort` edits the whole map as a page. Inline effort wins, and `model@default` clears it. The [dispatch resolver](../plugins/pstack/skills/poteto-mode/references/model-dispatch.md) reads both fields before worker launch. Explicit effort must use a supported runtime control; worker-brief text is not sufficient. Defaults live in [models.json](../plugins/pstack/models.json). Project configuration lives in `.pstack/models.md` and takes precedence over the user sheet. User sheets are `~/.claude/pstack-models.md` on Claude Code, `~/.codex/pstack-models.md` on Codex, and `~/.agents/pstack/models.md` on other runtimes unless a legacy path is explicitly configured. Setup adds a pointer in the corresponding instructions file. Use `pstack-preset` to save mappings at user scope in `~/.agents/pstack/presets/` or project scope in `.pstack/presets/`. Setup lists both scopes and copies the selected preset into either config scope. Presets include effort and remain independent of applied copies. Use distinct available models for panels that compare independent designs or reviews.
 
 ## Windows, Linux, and macOS
 

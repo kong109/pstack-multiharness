@@ -3,7 +3,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 
-import { resolveRole } from "./resolve-models.mjs";
+import { harnesses, resolveRole } from "./resolve-models.mjs";
 
 export const skill = fileURLToPath(new URL("../SKILL.md", import.meta.url));
 
@@ -18,6 +18,15 @@ export function agentName(reference) {
   return `pstack-${reference.replace(/[^a-z0-9]+/g, "-")}`;
 }
 
+export function foreignTarget(label, { harness, model, effort }) {
+  const { effort: flag, efforts } = harnesses[harness];
+  if (effort !== null && !flag) throw new Error(`${harness} takes no effort setting (${label}: ${model}@${effort})`);
+  if (effort !== null && efforts && !efforts.includes(effort)) {
+    throw new Error(`Unsupported ${harness} effort for ${label}: ${effort} (use ${efforts.join(", ")})`);
+  }
+  return { agent: null, harness, model, effort, pane: true };
+}
+
 // An adapter maps one resolved {model, effort} pair to a route target and, when the runtime needs a
 // generated agent to carry that pair, the profile to install: { target, profile?: { agent, key, text } }.
 export function routesFromSheet(text, adapter) {
@@ -29,7 +38,8 @@ export function routesFromSheet(text, adapter) {
     if (!row) continue;
     const [, label] = row;
     if (label === "effort" || label === "session hook") continue;
-    const targets = resolveRole(text, label).map((pair) => {
+    const targets = resolveRole(text, label).map(({ harness, ...pair }) => {
+      if (harness && harness !== adapter.harness) return foreignTarget(label, { harness, ...pair });
       const { target, profile } = adapter.route(label, pair);
       if (profile) {
         if (profiles.has(profile.agent) && profiles.get(profile.agent) !== profile.key) {

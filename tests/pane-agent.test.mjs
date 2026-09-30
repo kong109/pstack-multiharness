@@ -158,6 +158,17 @@ test("a turn that ends with neither file is nudged once, then reported as no_res
   expect(prompts[1][4]).toBe(nudgePrompt(runDir()));
 });
 
+test("each text the parent sends starts a turn with its own reminder", () => {
+  const { runner, calls } = scripted({ ...herdrBase, "herdr agent prompt": agent("done") });
+  expect(launch(options(), { runner, env: herdrEnv() }).verdict).toBe("no_result");
+  expect(calls.filter((c) => c[2] === "prompt")).toHaveLength(2);
+  expect(send("arena-a", { text: "try again" }, { runner, env: herdrEnv() }).verdict).toBe("no_result");
+  const prompts = calls.filter((c) => c[2] === "prompt");
+  expect(prompts).toHaveLength(4);
+  expect(prompts[2][4]).toBe("try again");
+  expect(prompts[3][4]).toBe(nudgePrompt(runDir()));
+});
+
 test("a dropped first prompt recovers when the nudge lands", () => {
   const { runner } = scripted({
     ...herdrBase,
@@ -473,6 +484,69 @@ test("a tuios state read that cannot be parsed while wait-for succeeds at once i
   expect(waitFor("arena-a", { timeoutMs: 1000 }, { runner, env: tuiosEnv() }).verdict).toBe("stalled");
   expect(Date.now() - started).toBeGreaterThanOrEqual(900);
   expect(calls.filter((c) => c[1] === "get-agent-state").length).toBeLessThan(8);
+});
+
+const savedState = () => JSON.parse(readFileSync(join(runDir(), "state.json"), "utf8"));
+
+test("a tuios wait after a delivered question blocks while the agent works instead of returning the same question", () => {
+  const { runner, calls } = scripted({
+    ...tuiosBase,
+    "tuios get-agent-state": [tuiosState("working"), tuiosState("done"), tuiosState("working"), tuiosState("working"), tuiosState("done")],
+    "tuios wait-for": [
+      () => { write("question.md", "Which branch?\n"); return text(""); },
+      () => { write("result.md", "final\n"); age("question.md", 60); return text(""); },
+    ],
+  });
+  expect(launch(options(), { runner, env: tuiosEnv() })).toMatchObject({ verdict: "question", question: "Which branch?\n" });
+  const before = calls.filter((c) => c[1] === "wait-for").length;
+  expect(waitFor("arena-a", {}, { runner, env: tuiosEnv() })).toMatchObject({ verdict: "done", result: "final\n" });
+  expect(calls.filter((c) => c[1] === "wait-for").length).toBeGreaterThan(before);
+});
+
+test("a dialog that opens after a delivered question is reported as blocked, with the question alongside", () => {
+  const { runner } = scripted({
+    ...tuiosBase,
+    "tuios get-agent-state": () => { write("question.md", "Which branch?\n"); return tuiosState("needs_input"); },
+    "tuios peek-prompt": text("Allow Bash: git push? [y/n]\n"),
+  });
+  expect(launch(options(), { runner, env: tuiosEnv() })).toMatchObject({
+    verdict: "blocked", screen: "Allow Bash: git push? [y/n]", question: "Which branch?\n",
+  });
+});
+
+test("send --keys after a startup dialog waits for the first turn to start before it judges the turn over", () => {
+  const { runner, calls } = scripted({
+    ...tuiosBase,
+    "tuios get-agent-state": [tuiosState("needs_input"), tuiosState("idle"), tuiosState("idle"), tuiosState("idle"), tuiosState("working"), tuiosState("idle")],
+    "tuios wait-for": text(""),
+    "tuios send-keys": text(""),
+    "tuios ask-agent": text("nudged\n"),
+  });
+  expect(launch(options(), { runner, env: tuiosEnv() }).verdict).toBe("blocked");
+  expect(savedState().awaitTurn).toBe(true);
+  send("arena-a", { keys: "Enter" }, { runner, env: tuiosEnv() });
+  const afterKeys = calls.slice(calls.findIndex((c) => c[1] === "send-keys"));
+  expect(afterKeys.find((c) => c[1] === "wait-for")).toContain("working,needs_input,errored,done");
+  expect(savedState().awaitTurn).toBe(false);
+});
+
+test("the turn-start wait is dropped once a turn is seen, and kept when a short timeout ends first", () => {
+  const { runner } = scripted({
+    ...tuiosBase,
+    "tuios get-agent-state": [tuiosState("working"), tuiosState("working"), tuiosState("idle")],
+    "tuios wait-for": text(""),
+    "tuios ask-agent": text("nudged\n"),
+  });
+  launch(options({ wait: false }), { runner, env: tuiosEnv() });
+  expect(savedState().awaitTurn).toBe(true);
+  waitFor("arena-a", {}, { runner, env: tuiosEnv() });
+  expect(savedState().awaitTurn).toBe(false);
+
+  const quiet = scripted({ ...tuiosBase, "tuios get-agent-state": tuiosState("none"), "tuios wait-for": { status: 1, stdout: "", stderr: "timeout" } });
+  close("arena-a", {}, { runner: quiet.runner, env: tuiosEnv() });
+  launch(options({ wait: false }), { runner: quiet.runner, env: tuiosEnv() });
+  expect(waitFor("arena-a", { timeoutMs: 1000 }, { runner: quiet.runner, env: tuiosEnv() }).verdict).toBe("timeout");
+  expect(savedState().awaitTurn).toBe(true);
 });
 
 test("tuios launch --no-wait then wait still sends the one reminder when the turn ends with no report", () => {

@@ -32,14 +32,14 @@ The agent writes its report to `result.md` in its run directory and a blocking q
 | verdict | meaning | you do |
 | --- | --- | --- |
 | `done` | `result` holds the final report | Review it as you would a native worker's, then close the agent. |
-| `question` | the agent needs a decision | Answer with `send --text`, run in the background, and treat its verdict the same way. If the human answers in the pane instead, run `wait --name NAME`. A `result.md` written after the question reads as `done`. |
-| `blocked` | a TUI dialog is open, such as an approval, a trust prompt, or a login | Read `screen`. Answer a routine dialog with `send --keys`. Ask the user when it wants authority the brief did not grant. |
+| `question` | the agent needs a decision | Answer with `send --text`, run in the background, and treat its verdict the same way. If the human answers in the pane instead, run `wait --name NAME`. It blocks while the agent works, and a `result.md` written after the question reads as `done`. |
+| `blocked` | a TUI dialog is open, such as an approval, a trust prompt, or a login. A `question` field appears when a question is still unanswered | Read `screen`. Answer a routine dialog with `send --keys`. Ask the user when it wants authority the brief did not grant. |
 | `no_result` | the turn ended with no report, even after one automatic reminder | Run `peek`, then send a correction or close the agent. |
 | `stalled` | the turn never started, or herdr saw no activity after the prompt. The text may still have arrived | Run `peek` before resending. The helper never types a second prompt on its own. |
 | `timeout` | the wait ran out | Run `peek`. Extend with `wait --name NAME`, or close it. |
 | `error` | the pane or harness is gone | Report it and relaunch if the work still matters. |
 
-`send --text` types a reply. `send --keys "Down Enter"` presses keys, using names such as `Enter`, `Escape`, `Up`, `Down`, `Tab`, and single characters. `wait --name NAME` blocks again after a human answered the dialog in the pane. It also delivers the brief when the launch never sent it, as after a startup dialog or `launch --no-wait`. `send` moves the previous `result.md` and `question.md` aside as `.prev` files before it delivers. `peek --name NAME` prints the recent screen.
+`send --text` types a reply. `send --keys "Down Enter"` presses keys, using names such as `Enter`, `Escape`, `Up`, `Down`, `Tab`, and single characters. `wait --name NAME` blocks again after a human answered the dialog in the pane. It also delivers the brief when the launch never sent it, as after a startup dialog or `launch --no-wait`. After `launch --no-wait`, call `wait` before the first turn can end. On tuios a turn that ended unobserved reads as `stalled` after 90 seconds, so run `peek` and send the reminder yourself. `send` moves the previous `result.md` and `question.md` aside as `.prev` files before it delivers. `peek --name NAME` prints the recent screen.
 
 ## Why this misses no prompt
 

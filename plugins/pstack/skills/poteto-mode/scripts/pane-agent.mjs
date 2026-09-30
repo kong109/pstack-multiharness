@@ -176,7 +176,11 @@ export function tuiosMux(runner, env) {
   };
   const waitFor = (state, until, timeoutMs) =>
     call("wait-for", ["agent-state", "-w", state.name, "--until", until, "--timeout", String(timeoutMs)], timeoutMs).status === 0;
-  const reported = (state) => ["question.md", "result.md"].some((file) => existsSync(join(state.run, file)));
+  const reported = (state) => {
+    if (existsSync(join(state.run, "result.md"))) return true;
+    const asked = stamp(join(state.run, "question.md"));
+    return asked !== null && asked !== state.questionSeen;
+  };
   const settle = (state, { fresh, timeoutMs }) => {
     const deadline = Date.now() + timeoutMs;
     const startBy = Math.min(deadline, Date.now() + TURN_START_MS);
@@ -202,6 +206,7 @@ export function tuiosMux(runner, env) {
       if (starting && seenWorking) begun();
       if (starting && Date.now() >= startBy) {
         if (cur !== "none") return { kind: "stalled" };
+        if (Date.now() >= deadline) return { kind: "timeout" };
         begun();
       }
       if (!starting) {
@@ -238,7 +243,7 @@ export function tuiosMux(runner, env) {
         if (/time(d)? ?out/i.test(out)) return { kind: "timeout" };
         return { kind: "error", detail: `ask-agent failed: ${out.trim().slice(0, 300)}` };
       }
-      return settle(state, { fresh: false, timeoutMs });
+      return settle(state, { fresh: Boolean(state.awaitTurn), timeoutMs });
     },
     wait: (state, timeoutMs) => settle(state, { fresh: Boolean(state.awaitTurn), timeoutMs }),
     keys(state, keys, timeoutMs) {
@@ -246,7 +251,7 @@ export function tuiosMux(runner, env) {
       const r = call("send-keys", ["-w", state.name, mapped.join(" ")]);
       if (r.status !== 0) throw new Error(`tuios send-keys failed: ${(r.stderr || r.stdout).trim()}`);
       for (let i = 0; i < 20 && agentState(state) === "needs_input"; i++) pause(250);
-      return settle(state, { fresh: false, timeoutMs });
+      return settle(state, { fresh: Boolean(state.awaitTurn), timeoutMs });
     },
     peek(state) {
       const blocked = agentState(state) === "needs_input";
@@ -278,13 +283,21 @@ const muxFor = (id, runner, env) => {
 
 const readIfPresent = (path) => (existsSync(path) ? readFileSync(path, "utf8") : null);
 
+function stamp(path) {
+  try { return statSync(path).mtimeMs; } catch { return null; }
+}
+
 function conclude(state, mux, settled, { timeoutMs }) {
   const base = { name: state.name, mux: mux.id, harness: state.harness, model: state.model };
   const questionFile = join(state.run, "question.md");
   const resultFile = join(state.run, "result.md");
   const question = readIfPresent(questionFile);
   const result = readIfPresent(resultFile);
-  if (question !== null && (result === null || statSync(resultFile).mtimeMs < statSync(questionFile).mtimeMs)) {
+  const pending = question !== null && (stamp(resultFile) ?? 0) < (stamp(questionFile) ?? 0);
+  if (pending) {
+    state.questionSeen = stamp(questionFile);
+    saveState(state);
+    if (settled.kind === "blocked") return { ...base, verdict: "blocked", screen: mux.peek(state), question, questionFile };
     return { ...base, verdict: "question", question, questionFile };
   }
   if (result !== null) {

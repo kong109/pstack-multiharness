@@ -128,7 +128,7 @@ class Node {
 
 function mount(text, store = new Map(), dir = scratch()) {
   const { html } = renderPage(text, dir);
-  const script = /<script>\n([\s\S]*)\n<\/script>/.exec(html)[1];
+  const script = /<script>\r?\n([\s\S]*)\r?\n<\/script>/.exec(html)[1];
   const root = new Node("root");
   for (const id of ["meta", "legend", "roles", "changes", "out", "reset", "copy", "status"]) { const n = new Node("div"); n.setAttribute("id", id); root.append(n); }
   const context = {

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import {
   briefText, close, detectMux, harnessArgs, launch, launchPrompt, list, nudgePrompt, panesRoot, peek, send, sh, waitFor,
 } from "../plugins/pstack/skills/poteto-mode/scripts/pane-agent.mjs";
@@ -74,13 +74,14 @@ test("harnessArgs builds each harness's launch flags from the registry", () => {
 });
 
 test("the brief carries the pane protocol with this agent's paths", () => {
-  const out = briefText("Do the thing.\n", { run: "/r/a", access: "read" });
+  const run = join(root, "a");
+  const out = briefText("Do the thing.\n", { run, access: "read" });
   expect(out.startsWith("Do the thing.\n")).toBe(true);
-  expect(out).toContain("skills/poteto-mode/SKILL.md before working");
-  expect(out).toContain("write only the question to /r/a/question.md");
-  expect(out).toContain("write your complete final report to /r/a/result.md");
-  expect(out).toContain("Do not modify any file except /r/a/result.md and /r/a/question.md.");
-  expect(briefText("x", { run: "/r/a", access: "write" })).toContain("Change only what the task assigns");
+  expect(out).toContain(`${join("skills", "poteto-mode", "SKILL.md")} before working`);
+  expect(out).toContain(`write only the question to ${join(run, "question.md")}`);
+  expect(out).toContain(`write your complete final report to ${join(run, "result.md")}`);
+  expect(out).toContain(`Do not modify any file except ${join(run, "result.md")} and ${join(run, "question.md")}.`);
+  expect(briefText("x", { run, access: "write" })).toContain("Change only what the task assigns");
 });
 
 test("herdr launch opens one labelled tab, starts the harness in it, prompts with --wait, and returns the result", () => {
@@ -132,8 +133,8 @@ test("a question the human answered in the pane no longer masks the result writt
 
 test("a relative pane directory is resolved before it reaches the brief or the harness flags", () => {
   const root = panesRoot({ PSTACK_PANES_DIR: "relative/panes" });
-  expect(root.startsWith("/")).toBe(true);
-  expect(root.endsWith("relative/panes")).toBe(true);
+  expect(isAbsolute(root)).toBe(true);
+  expect(root.endsWith(join("relative", "panes"))).toBe(true);
 });
 
 test("a blocked TUI comes back as a blocked verdict with the screen, without a poll loop", () => {
@@ -415,7 +416,7 @@ test("a state file that names another run directory is refused", () => {
   const { runner } = scripted({ ...herdrBase, "herdr agent prompt": () => { write("result.md", "r\n"); return agent("done"); } });
   launch(options(), { runner, env: herdrEnv() });
   const path = join(runDir(), "state.json");
-  writeFileSync(path, readFileSync(path, "utf8").replace(runDir(), join(root, "elsewhere")));
+  writeFileSync(path, JSON.stringify({ ...JSON.parse(readFileSync(path, "utf8")), run: join(root, "elsewhere") }));
   expect(() => close("arena-a", {}, { runner, env: herdrEnv() })).toThrow("different run directory");
 });
 

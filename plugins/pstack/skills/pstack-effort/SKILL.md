@@ -21,11 +21,14 @@ Say which one is active and why in your reply.
 ## Show
 
 1. Render the page into the scratchpad. Keep one stable path per sheet, so a republish from this session keeps the same URL.
-   `node <skill>/scripts/render.mjs --sheet <sheet> --out <scratchpad>/pstack-effort/index.html --scope <scope> --config-dir <config dir>`
+   `node <skill>/scripts/render.mjs --sheet <sheet> --out <scratchpad>/pstack-effort/index.html --scope <scope> --config-dir <config dir> --project-root <project root>`
+   The page embeds every saved preset, user ones from `~/.agents/pstack/presets/` and project ones from `<project root>/.pstack/presets/`. `--project-root` defaults to the working directory.
 2. Publish it with the Artifact tool (`icon: "sliders"`). On a first publish in a new session, first `list` the user's artifacts. If one titled "Pstack Effort Map" exists, `read` it and publish to its `url`, so the user keeps one link.
 3. Reply with the link and the current map as a short table of role and entries. Tell the user to pick providers, models and effort boxes, copy the message at the bottom, and paste it back.
 
 Each slot has a provider select, a model select, and effort checkboxes.
+
+- **Presets.** A select at the top lists the presets as `user/NAME` and `project/NAME`. Choosing one fills every role the preset names with its entries and keeps the rest of the sheet's roles as they are. A preset role the sheet lacks is skipped, since the page edits only existing role lines, and the page names both lists. A preset entry with no effort takes the preset's own `effort:` line for that model. Without one, the entry runs at the harness default, written `@default` when the sheet's own `effort:` line would otherwise apply. The result is an ordinary edit: change slots after it, or reset.
 
 - **Provider.** Anthropic runs on the Claude Code harness and OpenAI runs on the Codex harness. A slot on the session's own harness is written as a bare model. A slot on any other harness is written as `harness:model`, so the sheet routes it to a pane through [foreign-harness](../poteto-mode/references/foreign-harness.md).
 - **Models.** The Anthropic list comes from `providers.json` plus the models the plugin's `models.json` marks available. The OpenAI list is what Codex itself reports in `~/.codex/models_cache.json`, and `providers.json` is the fallback when that cache is missing.

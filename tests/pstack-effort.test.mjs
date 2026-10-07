@@ -1,13 +1,13 @@
 import { afterEach, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { runInNewContext } from "node:vm";
 import { resolveRole } from "../plugins/pstack/skills/poteto-mode/scripts/resolve-models.mjs";
 import { apply, parseMessage, planApply } from "../plugins/pstack/skills/pstack-effort/scripts/apply.mjs";
-import { buildProviders, codexModels } from "../plugins/pstack/skills/pstack-effort/scripts/render.mjs";
+import { buildProviders, codexModels, readPresets } from "../plugins/pstack/skills/pstack-effort/scripts/render.mjs";
 import { parseSheet, slotText } from "../plugins/pstack/skills/pstack-effort/scripts/sheet.mjs";
 
 const render = fileURLToPath(new URL("../plugins/pstack/skills/pstack-effort/scripts/render.mjs", import.meta.url));
@@ -92,8 +92,9 @@ function renderPage(text, root = scratch()) {
   const sheetPath = join(root, "pstack-models.md");
   const out = join(root, "page.html");
   writeFileSync(sheetPath, text);
-  const run = spawnSync(process.execPath, [render, "--sheet", sheetPath, "--out", out, "--scope", "user", "--config-dir", join(root, ".claude")], {
-    encoding: "utf8", env: { ...process.env, CODEX_HOME: cacheHome() },
+  const home = join(root, "home");
+  const run = spawnSync(process.execPath, [render, "--sheet", sheetPath, "--out", out, "--scope", "user", "--config-dir", join(root, ".claude"), "--project-root", join(root, "project")], {
+    encoding: "utf8", env: { ...process.env, CODEX_HOME: cacheHome(), HOME: home, USERPROFILE: home },
   });
   expect(run.status).toBe(0);
   return { html: readFileSync(out, "utf8"), sheetPath, root };
@@ -130,7 +131,7 @@ function mount(text, store = new Map(), dir = scratch()) {
   const { html } = renderPage(text, dir);
   const script = /<script>\r?\n([\s\S]*)\r?\n<\/script>/.exec(html)[1];
   const root = new Node("root");
-  for (const id of ["meta", "legend", "roles", "changes", "out", "reset", "copy", "status"]) { const n = new Node("div"); n.setAttribute("id", id); root.append(n); }
+  for (const id of ["meta", "legend", "preset", "preset-note", "roles", "changes", "out", "reset", "copy", "status"]) { const n = new Node("div"); n.setAttribute("id", id); root.append(n); }
   const context = {
     document: { getElementById: (id) => root.find(id), createElement: (tag) => new Node(tag), createTextNode: (t) => Object.assign(new Node("#text"), { text: t }) },
     localStorage: { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, v), removeItem: (k) => store.delete(k) },
@@ -146,7 +147,8 @@ function mount(text, store = new Map(), dir = scratch()) {
   const efforts = (ri, si) => ["low", "medium", "high", "xhigh", "max", "ultra"].filter((e) => root.find(`e-${ri}-${si}-${e}`));
   const press = (label, nth = 0) => root.buttons(label)[nth].fire("click");
   const rolesText = () => at("roles").textContent;
-  return { choose, tick, message, role, roleIndex, efforts, press, rolesText, has: (id) => Boolean(root.find(id)), click: (id) => at(id).fire("click"), next: () => parseMessage(message()).next };
+  const options = (id) => at(id).children.map((c) => c.text);
+  return { options, at, choose, tick, message, role, roleIndex, efforts, press, rolesText, has: (id) => Boolean(root.find(id)), click: (id) => at(id).fire("click"), next: () => parseMessage(message()).next };
 }
 
 test("the page writes an unchanged sheet back byte for byte", () => {
@@ -388,4 +390,60 @@ test("apply keeps a sheet's code fence and CRLF endings intact", () => {
   writeFileSync(file, `/pstack-effort apply\nsheet: ${sheetPath}\nscope: user\nconfig-dir: ${join(root, ".claude")}\n\n\`\`\`\`pstack-base\n${base}\n\`\`\`\`\n\`\`\`\`pstack-sheet\n${next.replace(/\n$/, "")}\n\`\`\`\`\n`);
   apply({ message: file, log: () => {} });
   expect(readFileSync(sheetPath, "utf8")).toBe(onDisk.replace("@high", "@low"));
+});
+
+const userPreset = `# pstack model configuration
+
+feature: claude-opus-5-5
+arena runners: codex:gpt-6-astra, claude-sonnet-5-5
+swarm workers: claude-sonnet-5-5@low
+bug-fix: claude-opus-5-5@low
+effort: claude-sonnet-5-5 = medium
+`;
+
+function presetTree(root = scratch()) {
+  const user = join(root, "home", ".agents", "pstack", "presets");
+  const project = join(root, "project", ".pstack", "presets");
+  mkdirSync(user, { recursive: true });
+  mkdirSync(project, { recursive: true });
+  writeFileSync(join(user, "mid.md"), userPreset);
+  writeFileSync(join(user, "empty.md"), "# nothing here\n");
+  writeFileSync(join(project, "solo.md"), "feature: codex:gpt-6.1-sol@ultra\n");
+  return root;
+}
+
+test("reads user and project presets with their roles and effort lines", () => {
+  const root = presetTree();
+  const presets = readPresets(join(root, "project"), join(root, "home"));
+  expect(presets.map((p) => `${p.scope}/${p.name}`)).toEqual(["user/mid", "project/solo"]);
+  expect(presets[0].defaults).toEqual({ "claude-sonnet-5-5": "medium" });
+  expect(presets[0].roles[1]).toEqual({ role: "arena runners", slots: [
+    { harness: "codex", model: "gpt-6-astra", effort: "" }, { harness: "", model: "claude-sonnet-5-5", effort: "" },
+  ] });
+});
+
+test("the preset select lists both scopes, and a page with none disables it", () => {
+  expect(mount(pageSheet, new Map(), presetTree()).options("preset")).toEqual(["Choose a preset", "user/mid", "project/solo"]);
+  const bare = mount(pageSheet);
+  expect(bare.options("preset")).toEqual(["No presets saved"]);
+  expect(bare.at("preset").attrs.disabled).toBe("");
+});
+
+test("loading a preset fills the roles it names and keeps the rest", () => {
+  const page = mount(sheet, new Map(), presetTree());
+  page.choose("preset", "0");
+  expect(page.role("feature")).toBe("feature: claude-opus-5-5@default");
+  expect(page.role("arena runners")).toBe("arena runners: codex:gpt-6-astra, claude-sonnet-5-5@medium");
+  expect(page.role("swarm workers")).toBe("swarm workers: claude-sonnet-5-5@low");
+  expect(page.role("why synthesizer")).toBe("why synthesizer: claude:claude-opus-5-5@medium");
+  expect(page.message()).toContain("changes: 3");
+  expect(page.at("preset-note").textContent).toBe(
+    "Loaded user/mid. Not in the preset, kept as is: why synthesizer. Not on this sheet, skipped: bug-fix.");
+  const pasted = parseMessage(page.message());
+  expect(planApply(sheet, pasted.next, pasted.base).changes.map((c) => c.role)).toEqual(["feature", "arena runners", "swarm workers"]);
+  page.choose("preset", "1");
+  expect(page.role("feature")).toBe("feature: codex:gpt-6.1-sol@ultra");
+  page.click("reset");
+  expect(page.next()).toBe(sheet);
+  expect(page.at("preset-note").textContent).toBe("");
 });

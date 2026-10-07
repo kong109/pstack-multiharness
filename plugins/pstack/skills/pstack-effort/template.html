@@ -115,7 +115,9 @@ select { font: inherit; font-size: 13.5px; font-family: var(--mono); color: var(
 button { font: inherit; cursor: pointer; }
 .ghost { font-size: 12.5px; color: var(--ink-2); background: transparent; border: 1px solid var(--line); border-radius: 4px; padding: 3px 9px; }
 .ghost:hover { color: var(--ink); border-color: var(--ink-3); }
-.toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+.preset { display: inline-flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--ink-2); }
+.preset-note { flex-basis: 100%; font-size: 13px; color: var(--ink-3); }
 
 .response { background: var(--surface); border: 2px solid var(--accent); border-radius: 6px; padding: 18px; display: grid; gap: 12px; }
 .response p { color: var(--ink-2); font-size: 14px; }
@@ -133,13 +135,15 @@ pre.out { margin: 0; font-family: var(--mono); font-size: 12.5px; white-space: p
   <header>
     <div class="eyebrow">pstack routing</div>
     <h1>Role to model map</h1>
-    <p>Each row is one pstack role. Pick the provider and model for each slot, then tick an effort level. Ticking a level clears the others in that slot. Clear every box to run at the session's own effort. Panel roles run one worker per slot, so you can add, remove or repeat slots. Changed rows are marked. The block at the bottom is a ready message to paste back into Claude Code.</p>
+    <p>Each row is one pstack role. Pick the provider and model for each slot, then tick an effort level. Ticking a level clears the others in that slot. Clear every box to run at the session's own effort. Panel roles run one worker per slot, so you can add, remove or repeat slots. Load a preset to fill every role it names. Changed rows are marked. The block at the bottom is a ready message to paste back into Claude Code.</p>
     <div class="meta" id="meta"></div>
     <div class="legend" id="legend"></div>
   </header>
 
   <div class="toolbar">
+    <label class="preset" for="preset">Load a preset <select id="preset"></select></label>
     <button class="ghost" type="button" id="reset">Reset to the current sheet</button>
+    <span class="preset-note" id="preset-note" aria-live="polite"></span>
   </div>
 
   <section class="roles" id="roles" aria-label="Roles"></section>
@@ -391,10 +395,43 @@ function renderResponse() {
 
 function commit() { save(); renderRoles(); renderResponse(); }
 
+function presetLabel(p) { return p.scope + "/" + p.name; }
+function presetSlot(p, s) {
+  const slot = { harness: s.harness || DATA.native, prefixed: Boolean(s.harness), model: s.model, effort: s.effort };
+  if (!slot.effort) {
+    const own = (s.harness && p.defaults[s.harness + ":" + s.model]) || p.defaults[s.model] || "";
+    slot.effort = own || (modelDefault(slot) ? "default" : "");
+  }
+  return slot;
+}
+function loadPreset(p) {
+  const kept = [];
+  state.forEach(r => {
+    const hit = p.roles.find(x => x.role === r.role);
+    if (hit) r.slots = hit.slots.map(s => presetSlot(p, s)); else kept.push(r.role);
+  });
+  const extra = p.roles.filter(x => !state.some(r => r.role === x.role)).map(x => x.role);
+  const notes = ["Loaded " + presetLabel(p) + "."];
+  if (kept.length) notes.push("Not in the preset, kept as is: " + kept.join("; ") + ".");
+  if (extra.length) notes.push("Not on this sheet, skipped: " + extra.join("; ") + ".");
+  document.getElementById("preset-note").textContent = notes.join(" ");
+  commit();
+}
+function renderPresets() {
+  const sel = document.getElementById("preset");
+  const presets = DATA.presets || [];
+  sel.append(el("option", { value: "", text: presets.length ? "Choose a preset" : "No presets saved" }));
+  presets.forEach((p, i) => sel.append(el("option", { value: String(i), text: presetLabel(p) })));
+  if (!presets.length) sel.setAttribute("disabled", "");
+  sel.addEventListener("change", () => { const p = presets[Number(sel.value)]; if (sel.value !== "" && p) loadPreset(p); });
+}
+
 document.getElementById("reset").addEventListener("click", () => {
   state = clone(original);
   try { localStorage.removeItem(STORE); } catch (e) {}
   renderRoles(); renderResponse();
+  document.getElementById("preset").value = "";
+  document.getElementById("preset-note").textContent = "";
   document.getElementById("status").textContent = "Reset to the sheet as read.";
 });
 document.getElementById("copy").addEventListener("click", () => {
@@ -409,6 +446,7 @@ document.getElementById("copy").addEventListener("click", () => {
 });
 
 renderMeta();
+renderPresets();
 renderRoles();
 renderResponse();
 </script>

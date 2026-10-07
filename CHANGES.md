@@ -2,6 +2,12 @@
 
 This port applies the Cursor → Claude Code substitutions in skill bodies. Earlier drafts left them flagged; this revision resolves them. A later pass added a Codex build that shares the same skills; see [Codex port](#codex-port) below.
 
+## 0.9.39 - load a preset into the effort map
+
+This is a deliberate local fork. Preserve it during upstream sync.
+
+The `pstack-effort` page has a preset select at the top. `render.mjs` reads the user presets in `~/.agents/pstack/presets/` and the project presets in `<project root>/.pstack/presets/` (`--project-root`, default the working directory) through `pstack-preset`'s helper, and embeds them. Choosing one fills each role the preset names and keeps the sheet's other roles. A preset role the sheet lacks is skipped and named, because apply refuses a sheet whose roles differ. A preset entry without effort takes the preset's `effort:` line, else `@default` when the sheet has an `effort:` line for that model, so the written sheet means what the preset meant.
+
 ## 0.9.38 - route roles to other CLI harnesses
 
 This is a deliberate local fork. Preserve it during upstream sync.

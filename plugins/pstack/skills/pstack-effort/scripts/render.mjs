@@ -5,6 +5,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import { parseSheet } from "./sheet.mjs";
+import { listPresets, presetDirectory } from "../../pstack-preset/scripts/presets.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const skillDir = join(here, "..");
@@ -38,11 +39,21 @@ export function buildProviders({ providers, available, codex }) {
   });
 }
 
-export function pageData({ sheetPath, scope, configDir, native, generated, text, catalog }) {
+export function readPresets(project = process.cwd(), home = homedir()) {
+  return ["user", "project"].flatMap((scope) => {
+    const directory = presetDirectory(scope, project, home);
+    return listPresets(directory).flatMap((name) => {
+      const { roles, defaults } = parseSheet(readFileSync(join(directory, `${name}.md`), "utf8"));
+      return roles.length ? [{ scope, name, roles: roles.map(({ role, slots }) => ({ role, slots })), defaults }] : [];
+    });
+  });
+}
+
+export function pageData({ sheetPath, scope, configDir, native, generated, text, catalog, presets = [] }) {
   const { lines, roles, defaults } = parseSheet(text);
   if (!roles.length) throw new Error(`no role lines found in ${sheetPath}`);
   return {
-    sheetPath, scope, configDir, native, generated, lines, roles, defaults,
+    sheetPath, scope, configDir, native, generated, lines, roles, defaults, presets,
     providers: buildProviders(catalog),
   };
 }
@@ -50,10 +61,10 @@ export function pageData({ sheetPath, scope, configDir, native, generated, text,
 function main(argv) {
   const { values } = parseArgs({ args: argv, options: {
     sheet: { type: "string" }, out: { type: "string" }, scope: { type: "string" },
-    "config-dir": { type: "string" }, native: { type: "string" },
+    "config-dir": { type: "string" }, native: { type: "string" }, "project-root": { type: "string" },
   } });
   if (!values.sheet || !values.out) {
-    throw new Error("usage: render.mjs --sheet <models.md> --out <page.html> [--scope project|user] [--config-dir <dir>] [--native claude|codex]");
+    throw new Error("usage: render.mjs --sheet <models.md> --out <page.html> [--scope project|user] [--config-dir <dir>] [--native claude|codex] [--project-root <dir>]");
   }
   const defaults = readJson(join(skillDir, "providers.json"));
   const modelsPath = join(skillDir, "..", "..", "models.json");
@@ -67,11 +78,12 @@ function main(argv) {
     generated: new Date().toISOString().slice(0, 16).replace("T", " "),
     text: readFileSync(sheetPath, "utf8"),
     catalog: { providers: defaults.providers, available, codex: codexModels() },
+    presets: readPresets(resolve(values["project-root"] ?? process.cwd())),
   });
   const template = readFileSync(join(skillDir, "template.html"), "utf8");
   const json = JSON.stringify(data).replace(/</g, "\\u003c");
   writeFileSync(values.out, template.replace("/*__PSTACK_DATA__*/null", () => json));
-  console.log(`rendered ${data.roles.length} roles from ${sheetPath} -> ${resolve(values.out)}`);
+  console.log(`rendered ${data.roles.length} roles and ${data.presets.length} presets from ${sheetPath} -> ${resolve(values.out)}`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(resolve(process.argv[1]))).href) {

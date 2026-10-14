@@ -195,6 +195,19 @@ test("wait resumes a blocked agent and peek reads its screen", () => {
   expect(peek("arena-a", { runner, env: herdrEnv() }).screen).toContain("screen line one");
 });
 
+test("a blocked full-screen TUI still shows its dialog through the visible screen", () => {
+  const { runner, calls } = scripted({
+    ...herdrBase,
+    "herdr agent prompt": failJson("agent_blocked"),
+    "herdr agent read": (args) => args.includes("visible")
+      ? text("Do you trust the contents of this project?\n> Yes, I trust this folder\n")
+      : failJson("agent_not_idle", "cannot read 60 lines while arena-a is blocked"),
+  });
+  const out = launch(options(), { runner, env: herdrEnv() });
+  expect(out).toMatchObject({ verdict: "blocked", screen: expect.stringContaining("trust the contents") });
+  expect(calls.filter((c) => c[2] === "read").map((c) => c[5])).toEqual(["recent-unwrapped", "visible"]);
+});
+
 test("send --keys maps key names, waits out the blocked state, then settles", () => {
   const { runner, calls } = scripted({
     ...herdrBase,

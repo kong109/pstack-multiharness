@@ -143,7 +143,10 @@ export function herdrMux(runner, env) {
       return this.wait(state, timeoutMs);
     },
     peek(state) {
-      const r = runner("herdr", ["agent", "read", state.name, "--source", "recent-unwrapped", "--lines", String(SCREEN_LINES)]);
+      const read = (source) => runner("herdr", ["agent", "read", state.name, "--source", source, "--lines", String(SCREEN_LINES)]);
+      // herdr cannot scroll an alternate-screen TUI's history while it is blocked, so fall back to what is on screen.
+      let r = read("recent-unwrapped");
+      if (r.status !== 0) r = read("visible");
       return r.status === 0 ? screenText(r.stdout) : `(unreadable: ${(r.stderr || r.stdout).trim().slice(0, 200)})`;
     },
     close(state) {

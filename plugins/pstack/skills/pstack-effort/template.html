@@ -240,7 +240,7 @@ function renderMeta() {
   m.append(el("span", { text: "read " + DATA.generated }));
   const lg = document.getElementById("legend");
   lg.textContent = "Providers: " + PROVIDERS.map(p => p.label + " runs on " + p.harness).join("; ") +
-    ". A slot on another harness opens its own herdr tab or tuios window.";
+    ". A slot on another harness runs as a T3 Code subagent inside T3 Code, otherwise in its own herdr tab or tuios window.";
 }
 
 function changeProvider(s, harness) {
@@ -306,6 +306,7 @@ function effortNote(s) {
   if (unsupportedEffort(s)) return `keeps effort ${s.effort}, which this model does not list`;
   if (s.effort === "default") return "no box ticked: writes @default, the harness's own effort";
   if (s.effort) return "";
+  if (!modelOf(s).efforts.length) return "this harness takes no effort setting; the effort is part of the model";
   const inherited = modelDefault(s);
   return inherited ? `no box ticked: the sheet's effort line sets ${inherited} for this model` : "no box ticked: harness default effort";
 }
@@ -335,7 +336,7 @@ function renderRoles() {
       } else if (!modelOf(s)) {
         row.append(el("span", { class: "session-note", text: "Current entry is preserved. Select a model to edit its effort." }));
       } else {
-        row.append(effortBoxes(r, s, si, ri));
+        if (modelOf(s).efforts.length) row.append(effortBoxes(r, s, si, ri));
         const note = effortNote(s);
         if (note) row.append(el("span", { class: "session-note", text: note }));
       }

@@ -27,7 +27,7 @@ node /path/to/poteto-mode/scripts/claude-agents.mjs --mapping /path/to/pstack-mo
 The helper fails if the installed agents do not match the current sheet. Each returned entry has `agent`, `model`, and `effort`:
 
 - `agent` set: call `Agent` with `subagent_type` set to that agent and **no** `model` parameter. A per-call `model` overrides the definition's `model:` frontmatter. Keep the calling skill's task, specialist prompt, file pointers, and background behavior in the brief, because the generated agent is a generic pstack worker.
-- `agent` null and `pane` true: the entry names another harness. Do not call `Agent`. Launch it through [foreign-harness subagents](foreign-harness.md), passing the returned `harness`, `model`, and `effort` to the launch helper.
+- `agent` null and `foreign` true: the entry names another harness. Do not call `Agent`. Launch it through [foreign-harness subagents](foreign-harness.md), passing the returned `harness`, `model`, and `effort` to the route it picks.
 - `agent` null otherwise: dispatch as the calling skill prescribes, passing `model` unless it is `inherit-parent`.
 
 For a panel, launch one worker per returned entry, duplicates included. For a cross-judge pool, choose one entry by the skill's selection rule.

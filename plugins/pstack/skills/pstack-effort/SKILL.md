@@ -50,7 +50,7 @@ The pasted message carries `sheet:`, `scope:`, an optional `config-dir:`, a chan
 3. Apply.
    `node <skill>/scripts/apply.mjs --message <message.txt>`
    The script backs up the sheet to `<sheet>.bak`, which the next apply replaces, writes the changed role lines, and installs the routed `pstack-<model>-<effort>` agents for every native entry. Entries on another harness install no agent. If the install fails, the script restores the sheet from the backup.
-4. Check the result. Run `node <poteto-mode>/scripts/claude-agents.mjs --mapping <sheet> [--config-dir <dir>] --role "<changed role>"` for each changed role. A native entry returns its agent, and an entry on another harness returns `pane` true with the harness, model, and effort.
+4. Check the result. Run `node <poteto-mode>/scripts/claude-agents.mjs --mapping <sheet> [--config-dir <dir>] --role "<changed role>"` for each changed role. A native entry returns its agent, and an entry on another harness returns `foreign` true with the harness, model, and effort.
 5. Re-render and republish the page to the same URL, so it shows the applied map.
 6. Reply with each changed role (old to new), the backup path, and the install result. Routed agents load when a session starts, so a newly created agent type may need a new session before it can launch. When the sheet routes any role to another harness and the session has neither herdr nor tuios, say so, because those roles have no pane to run in.
 

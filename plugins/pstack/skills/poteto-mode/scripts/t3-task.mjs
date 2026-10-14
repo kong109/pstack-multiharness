@@ -42,13 +42,14 @@ export function t3Task({ name, harness, model, effort = null, access = "read", b
       .map(([id, template]) => [id, fill([template], { model, effort })[0]]),
   );
   const task = taskText(brief, access);
-  const digest = createHash("sha256").update(task).digest("hex").slice(0, 12);
+  const target = { driverKind: t3.driver, model, ...(Object.keys(options).length > 0 && { options }) };
+  const digest = createHash("sha256").update(JSON.stringify([target, task])).digest("hex").slice(0, 12);
   return {
     title: name,
     clientRequestId: `pstack-${name}-${digest}`,
     mode: "async",
     role: ROLES[access],
-    target: { driverKind: t3.driver, model, ...(Object.keys(options).length > 0 && { options }) },
+    target,
     task,
   };
 }

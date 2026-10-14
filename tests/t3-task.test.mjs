@@ -68,12 +68,15 @@ test("the task is the brief followed by a protocol that makes the final message 
   expect(task).not.toContain("result.md");
 });
 
-test("the request id is stable for a retry and changes with the brief", () => {
+test("the request id is stable for a retry and changes with the brief or the target", () => {
   const first = t3Task(request());
   expect(t3Task(request()).clientRequestId).toBe(first.clientRequestId);
   const nextRound = t3Task(request({ brief: "Review the diff.\n\nPrior finding: the loop never exits.\n" }));
   expect(nextRound.clientRequestId).not.toBe(first.clientRequestId);
   expect(nextRound.clientRequestId.startsWith("pstack-review-a-")).toBe(true);
+  expect(t3Task(request({ effort: "low" })).clientRequestId).not.toBe(first.clientRequestId);
+  expect(t3Task(request({ harness: "muse", model: "muse-wonder-full-1.0", effort: "max" })).clientRequestId)
+    .not.toBe(first.clientRequestId);
 });
 
 test("an effort the harness cannot take is refused, and one it lists is accepted", () => {

@@ -22,6 +22,35 @@
         { "slug": "gpt-6-astra", "label": "GPT-6 Astra" },
         { "slug": "gpt-6.1-sol", "label": "GPT-6.1 Sol" }
       ]
+    },
+    {
+      "id": "xai",
+      "label": "xAI (Grok)",
+      "harness": "grok",
+      "efforts": ["low", "medium", "high", "xhigh"],
+      "models": [
+        { "slug": "grok-4.7", "label": "Grok 4.7" }
+      ]
+    },
+    {
+      "id": "google",
+      "label": "Google (Antigravity)",
+      "harness": "agy",
+      "efforts": [],
+      "models": [
+        { "slug": "gemini-3.8-flash-high", "label": "Gemini 3.8 Flash (High)" },
+        { "slug": "gemini-3.8-flash-medium", "label": "Gemini 3.8 Flash (Medium)" },
+        { "slug": "gemini-3.8-flash-low", "label": "Gemini 3.8 Flash (Low)" }
+      ]
+    },
+    {
+      "id": "meta",
+      "label": "Meta (Muse)",
+      "harness": "muse",
+      "efforts": ["minimal", "low", "medium", "high", "xhigh", "max"],
+      "models": [
+        { "slug": "muse-wonder-full-1.0", "label": "Muse Wonder Full 1.0" }
+      ]
     }
   ]
 }

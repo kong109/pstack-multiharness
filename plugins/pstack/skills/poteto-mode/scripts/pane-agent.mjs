@@ -6,17 +6,15 @@ import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 
-import { foreignTarget, skill } from "./agent-routes.mjs";
+import { NAME, fill, foreignRequest, protocolPointer } from "./agent-routes.mjs";
 import { harnesses } from "./resolve-models.mjs";
 
-const NAME = /^[a-z][a-z0-9_-]{0,31}$/;
 const START_MS = 60_000;
 const TURN_START_MS = 90_000;
 const DEFAULT_WAIT_MS = 1_800_000;
 const RESULT_TEXT_LIMIT = 200_000;
 const SCREEN_LINES = 60;
 const NONE_POLL_MS = 5_000;
-const TOKEN = /^[A-Za-z0-9][A-Za-z0-9_./:-]*$/;
 
 export const panesRoot = (env = process.env) => resolve(env.PSTACK_PANES_DIR ?? join(realpathSync(tmpdir()), "pstack-panes"));
 
@@ -35,9 +33,6 @@ function ownedPrivateDir(root) {
 }
 
 const pause = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
-
-const fill = (template, vars) =>
-  template.map((part) => part.replace(/\{(\w+)\}/g, (_, key) => vars[key]));
 
 export function harnessArgs(harness, { model, effort, access, run }) {
   const spec = harnesses[harness];
@@ -63,7 +58,7 @@ export function briefText(userBrief, { run, access }) {
 
 You run in a terminal pane that a person can watch. Your parent agent is not at the keyboard, so nothing can answer a prompt in this terminal.
 
-Read the poteto-mode instructions at ${skill} before working. If the task supplies a specialist prompt or reference, read it and preserve that specialty. Report evidence and limitations accurately.
+${protocolPointer}
 
 - Never ask a question in the terminal and never stop at an approval or confirmation prompt.
 - If a decision blocks you, write only the question to ${question}, do not write ${result}, and end your turn. Your parent replies in this terminal.
@@ -148,7 +143,10 @@ export function herdrMux(runner, env) {
       return this.wait(state, timeoutMs);
     },
     peek(state) {
-      const r = runner("herdr", ["agent", "read", state.name, "--source", "recent-unwrapped", "--lines", String(SCREEN_LINES)]);
+      const read = (source) => runner("herdr", ["agent", "read", state.name, "--source", source, "--lines", String(SCREEN_LINES)]);
+      // herdr cannot scroll an alternate-screen TUI's history while it is blocked, so fall back to what is on screen.
+      let r = read("recent-unwrapped");
+      if (r.status !== 0) r = read("visible");
       return r.status === 0 ? screenText(r.stdout) : `(unreadable: ${(r.stderr || r.stdout).trim().slice(0, 200)})`;
     },
     close(state) {
@@ -222,8 +220,8 @@ export function tuiosMux(runner, env) {
   };
   return {
     id: "tuios",
-    launch(state, { command, args, cwd, prompt, promptFirst }) {
-      const argv = promptFirst ? [command, prompt, ...args] : [command, ...args, prompt];
+    launch(state, { command, args, cwd, promptArgs, promptFirst }) {
+      const argv = promptFirst ? [command, ...promptArgs, ...args] : [command, ...args, ...promptArgs];
       const r = runner("tuios", ["new-window", "-s", session, state.name, "--cwd", cwd, "--no-focus", "--print-id", "--", ...argv]);
       if (r.status !== 0) throw new Error(`tuios new-window failed: ${(r.stderr || r.stdout).trim()}`);
       state.ids = { window: r.stdout.trim(), session };
@@ -331,10 +329,7 @@ const withBrief = (state, mux, settled, timeoutMs) =>
 export function launch(options, { runner = sh, env = process.env } = {}) {
   const { name, harness, model, effort = null, access = "read", brief, cwd = process.cwd(), wait = true } = options;
   const dir = statePath(name, env);
-  if (!Object.hasOwn(harnesses, harness ?? "")) throw new Error(`--harness must be one of ${Object.keys(harnesses).join(", ")}`);
-  if (!TOKEN.test(model ?? "")) throw new Error("--model is required and may hold only letters, digits, and . _ / : -");
-  if (effort !== null && !TOKEN.test(effort)) throw new Error("--effort may hold only letters, digits, and . _ / : -");
-  foreignTarget("launch", { harness, model, effort });
+  foreignRequest("launch", { harness, model, effort });
   if (!["read", "write"].includes(access)) throw new Error("--access is read or write");
   if (!brief || !existsSync(brief)) throw new Error("--brief must name an existing file");
   if (existsSync(join(dir, "state.json"))) throw new Error(`Pane agent ${name} already exists; close it first`);
@@ -351,10 +346,10 @@ export function launch(options, { runner = sh, env = process.env } = {}) {
   saveState(state);
 
   const spec = harnesses[harness];
-  const prompt = launchPrompt(run);
+  const promptArgs = fill(spec.prompt ?? ["{prompt}"], { prompt: launchPrompt(run) });
   try {
     const args = harnessArgs(harness, { model, effort, access, run });
-    const started = mux.launch(state, { command: spec.command, args, cwd: state.cwd, prompt, promptFirst: spec.promptFirst });
+    const started = mux.launch(state, { command: spec.command, args, cwd: state.cwd, promptArgs, promptFirst: spec.promptFirst });
     if (!wait) return { name, mux: muxId, run, launched: true };
     const settled = started ?? (muxId === "tuios" ? mux.initial(state, timeoutMs) : { kind: "rest" });
     return conclude(state, mux, withBrief(state, mux, settled, timeoutMs), { timeoutMs });

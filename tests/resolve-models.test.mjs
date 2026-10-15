@@ -72,3 +72,11 @@ test("a harness entry needs a concrete model", () => {
     expect(() => resolveRole(`role: ${entry}`, "role")).toThrow("Invalid model entry");
   }
 });
+
+test("grok, agy and muse are registered harnesses, and the model id keeps its dots and dashes", () => {
+  expect(resolveRole("role: grok:grok-4.7@xhigh, agy:gemini-3.8-flash-high, muse:muse-wonder-full-1.0@max", "role")).toEqual([
+    { harness: "grok", model: "grok-4.7", effort: "xhigh" },
+    { harness: "agy", model: "gemini-3.8-flash-high", effort: null },
+    { harness: "muse", model: "muse-wonder-full-1.0", effort: "max" },
+  ]);
+});

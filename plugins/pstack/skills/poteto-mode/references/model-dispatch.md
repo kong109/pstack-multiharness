@@ -29,7 +29,7 @@ An inline effort wins over `effort: model = value`, which supplies a model-wide 
 
 ## Apply the result
 
-A resolved entry with a `harness` other than the session's own is not dispatched through any of the controls below. Launch it in a visible pane through [foreign-harness subagents](foreign-harness.md). The registry decides which efforts that harness accepts, and the launch helper rejects the rest.
+A resolved entry with a `harness` other than the session's own is not dispatched through any of the controls below. Launch it through [foreign-harness subagents](foreign-harness.md), which picks the T3 Code route or a pane. The registry decides which efforts that harness accepts, and the launch helpers reject the rest.
 
 Pass resolved model and effort through actual runtime controls. A sentence in a worker brief does not configure reasoning effort.
 

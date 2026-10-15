@@ -119,10 +119,10 @@ test("effort changes make installed Muse profiles stale and reinstall selects th
   installProfiles(mapping, config, { check: true });
 });
 
-test("a claude: entry on an OpenCode sheet routes to a pane and a bare model stays native", () => {
+test("a claude: entry on an OpenCode sheet routes to a foreign target and a bare model stays native", () => {
   const { routes, profiles } = routesFromSheet("feature: claude:claude-opus-5-5@high\nbug-fix: openai/gpt-6-astra\n");
-  expect(routes.feature).toEqual([{ agent: null, harness: "claude", model: "claude-opus-5-5", effort: "high", pane: true }]);
+  expect(routes.feature).toEqual([{ agent: null, harness: "claude", model: "claude-opus-5-5", effort: "high", foreign: true }]);
   expect(routes["bug-fix"][0]).toMatchObject({ model: "openai/gpt-6-astra" });
-  expect(routes["bug-fix"][0].pane).toBeUndefined();
+  expect(routes["bug-fix"][0].foreign).toBeUndefined();
   expect([...profiles.keys()].every((agent) => !agent.includes("claude-opus"))).toBe(true);
 });

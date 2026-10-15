@@ -80,7 +80,7 @@ export function apply({ message, dryRun = false, env = process.env, log = consol
   log(`installed ${agents.length} routed agent${agents.length === 1 ? "" : "s"} in ${dir}`);
   const foreign = parseSheet(text).roles.some((r) => r.slots.some((s) => s.harness && s.harness !== "claude"));
   if (foreign && !env.HERDR_ENV && !env.HERDR_PANE_ID && env.TUIOS_ENV !== "1") {
-    log("note: this sheet routes roles to another harness, which needs herdr or tuios to show its pane; this session has neither");
+    log("note: this sheet routes roles to another harness. Inside T3 Code those roles run as T3 Code subagents. Elsewhere they need herdr or tuios, and this shell has neither multiplexer");
   }
   return { changes, backup, agents };
 }

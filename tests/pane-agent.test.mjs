@@ -195,6 +195,19 @@ test("wait resumes a blocked agent and peek reads its screen", () => {
   expect(peek("arena-a", { runner, env: herdrEnv() }).screen).toContain("screen line one");
 });
 
+test("a blocked full-screen TUI still shows its dialog through the visible screen", () => {
+  const { runner, calls } = scripted({
+    ...herdrBase,
+    "herdr agent prompt": failJson("agent_blocked"),
+    "herdr agent read": (args) => args.includes("visible")
+      ? text("Do you trust the contents of this project?\n> Yes, I trust this folder\n")
+      : failJson("agent_not_idle", "cannot read 60 lines while arena-a is blocked"),
+  });
+  const out = launch(options(), { runner, env: herdrEnv() });
+  expect(out).toMatchObject({ verdict: "blocked", screen: expect.stringContaining("trust the contents") });
+  expect(calls.filter((c) => c[2] === "read").map((c) => c[5])).toEqual(["recent-unwrapped", "visible"]);
+});
+
 test("send --keys maps key names, waits out the blocked state, then settles", () => {
   const { runner, calls } = scripted({
     ...herdrBase,
@@ -235,6 +248,7 @@ test("launch refuses bad input before touching a multiplexer", () => {
   expect(() => launch(options({ name: "Arena A" }), { runner, env })).toThrow("--name must match");
   expect(() => launch(options({ harness: "nope" }), { runner, env })).toThrow("--harness must be one of");
   expect(() => launch(options({ effort: "turbo", harness: "claude", model: "m" }), { runner, env })).toThrow("Unsupported claude effort");
+  expect(() => launch(options({ effort: "high", harness: "agy", model: "gemini-3.8-flash" }), { runner, env })).toThrow("name the effort in the model id (agy:gemini-3.8-flash-high)");
   expect(() => launch(options({ brief: join(root, "missing.md") }), { runner, env })).toThrow("--brief must name an existing file");
   expect(() => launch(options({ access: "root" }), { runner, env })).toThrow("--access is read or write");
   expect(calls).toEqual([]);
@@ -292,6 +306,34 @@ test("tuios puts the prompt before the flags for a harness with variadic tool fl
   expect(argv[0]).toBe("claude");
   expect(argv[1]).toContain("brief.md");
   expect(argv[2]).toBe("--model");
+});
+
+test("tuios hands a harness its prompt through the registry's prompt template, after the flags", () => {
+  const { runner, calls } = scripted({
+    ...tuiosBase,
+    "tuios get-agent-state": [tuiosState("working"), tuiosState("done")],
+    "tuios wait-for": () => { write("result.md", "r\n"); return text(""); },
+  });
+  launch(options({ harness: "agy", model: "gemini-3.8-flash-high", effort: null }), { runner, env: tuiosEnv() });
+  const argv = calls[0].slice(calls[0].indexOf("--", 3) + 1);
+  expect(argv.slice(0, 4)).toEqual(["agy", "--model", "gemini-3.8-flash-high", "--dangerously-skip-permissions"]);
+  expect(argv.slice(4, 6)).toEqual(["--add-dir", runDir()]);
+  expect(argv[6]).toBe("-i");
+  expect(argv[7]).toContain("brief.md");
+  expect(argv).toHaveLength(8);
+});
+
+test("tuios passes a bare prompt last to a harness with no prompt template", () => {
+  const { runner, calls } = scripted({
+    ...tuiosBase,
+    "tuios get-agent-state": [tuiosState("working"), tuiosState("done")],
+    "tuios wait-for": () => { write("result.md", "r\n"); return text(""); },
+  });
+  launch(options({ harness: "grok", model: "grok-4.7", effort: "high" }), { runner, env: tuiosEnv() });
+  const argv = calls[0].slice(calls[0].indexOf("--", 3) + 1);
+  expect(argv.slice(0, 6)).toEqual(["grok", "-m", "grok-4.7", "--reasoning-effort", "high", "--always-approve"]);
+  expect(argv).toHaveLength(7);
+  expect(argv[6]).toContain("brief.md");
 });
 
 test("tuios reports a needs_input agent as blocked using its own prompt reader", () => {

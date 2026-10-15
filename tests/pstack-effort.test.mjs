@@ -5,7 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { runInNewContext } from "node:vm";
-import { resolveRole } from "../plugins/pstack/skills/poteto-mode/scripts/resolve-models.mjs";
+import { foreignTarget } from "../plugins/pstack/skills/poteto-mode/scripts/agent-routes.mjs";
+import { harnesses, resolveRole } from "../plugins/pstack/skills/poteto-mode/scripts/resolve-models.mjs";
 import { apply, parseMessage, planApply } from "../plugins/pstack/skills/pstack-effort/scripts/apply.mjs";
 import { buildProviders, codexModels, readPresets } from "../plugins/pstack/skills/pstack-effort/scripts/render.mjs";
 import { parseSheet, slotText } from "../plugins/pstack/skills/pstack-effort/scripts/sheet.mjs";
@@ -264,13 +265,64 @@ test("dry run writes nothing", () => {
   expect(existsSync(`${sheetPath}.bak`)).toBe(false);
 });
 
-test("warns when the sheet routes to another harness and the session has no multiplexer", () => {
+test("warns when the sheet routes to another harness and the shell has no multiplexer", () => {
   const root = scratch();
   const sheetPath = join(root, "pstack-models.md");
   writeFileSync(sheetPath, twoNative);
   const logs = [];
   apply({ message: message(root, sheetPath, twoNative.replace("@high", "@low")), env: {}, log: (line) => logs.push(line) });
-  expect(logs.join("\n")).toContain("needs herdr or tuios");
+  expect(logs.join("\n")).toContain("run as T3 Code subagents");
+  expect(logs.join("\n")).toContain("need herdr or tuios, and this shell has neither multiplexer");
+});
+
+test("the registry and the provider catalog agree, so the page only offers what a launch accepts", () => {
+  for (const [id, spec] of Object.entries(harnesses)) {
+    expect(spec.kind, id).toBeTruthy();
+    expect(spec.command, id).toBeTruthy();
+    expect(spec.access?.read?.length, id).toBeGreaterThan(0);
+    expect(spec.access?.write?.length, id).toBeGreaterThan(0);
+    expect(spec.t3?.driver, id).toBeTruthy();
+  }
+  for (const provider of providersJson.providers) {
+    expect(Object.keys(harnesses), provider.id).toContain(provider.harness);
+    for (const model of provider.models) {
+      for (const effort of provider.efforts) {
+        expect(() => foreignTarget(provider.id, { harness: provider.harness, model: model.slug, effort }), `${provider.id} ${model.slug}@${effort}`).not.toThrow();
+      }
+      expect(() => foreignTarget(provider.id, { harness: provider.harness, model: model.slug, effort: null })).not.toThrow();
+    }
+  }
+});
+
+test("a slot on Antigravity offers no effort levels and writes an entry the resolver and routing accept", () => {
+  const page = mount(sheet);
+  const ri = page.roleIndex("feature");
+  page.choose(`p-${ri}-0`, "agy");
+  expect(page.role("feature")).toBe("feature: agy:gemini-3.8-flash-high");
+  expect(page.efforts(ri, 0)).toEqual([]);
+  expect(page.options(`m-${ri}-0`)).toEqual(["Gemini 3.8 Flash (High)", "Gemini 3.8 Flash (Medium)", "Gemini 3.8 Flash (Low)", "inherit-parent (parent session's model)", "auto (parent session's model)"]);
+  expect(page.rolesText()).toContain("this harness takes no effort setting; the effort is part of the model");
+  page.choose(`m-${ri}-0`, "gemini-3.8-flash-low");
+  expect(page.role("feature")).toBe("feature: agy:gemini-3.8-flash-low");
+  const pasted = parseMessage(page.message());
+  expect(resolveRole(pasted.next, "feature")).toEqual([{ harness: "agy", model: "gemini-3.8-flash-low", effort: null }]);
+  expect(planApply(sheet, pasted.next, pasted.base).changes.map((c) => c.role)).toEqual(["feature"]);
+});
+
+test("apply writes an Antigravity slot that replaced an effort-bearing one", () => {
+  const root = scratch();
+  const sheetPath = join(root, "pstack-models.md");
+  writeFileSync(sheetPath, twoNative);
+  const next = twoNative.replace("codex:gpt-6.1-sol@xhigh", "agy:gemini-3.8-flash-high");
+  apply({ message: message(root, sheetPath, next), env: { TUIOS_ENV: "1" }, log: () => {} });
+  expect(resolveRole(readFileSync(sheetPath, "utf8"), "arena runners")).toEqual([
+    { model: "claude-opus-5-5", effort: "xhigh" },
+    { harness: "agy", model: "gemini-3.8-flash-high", effort: null },
+  ]);
+  const stuck = twoNative.replace("codex:gpt-6.1-sol@xhigh", "agy:gemini-3.8-flash-high@xhigh");
+  expect(() => apply({ message: message(root, sheetPath, stuck, next), env: {}, log: () => {} }))
+    .toThrow("name the effort in the model id (agy:gemini-3.8-flash-high-xhigh)");
+  expect(readFileSync(sheetPath, "utf8")).toBe(next);
 });
 
 test("restores the sheet when the agent install fails", () => {

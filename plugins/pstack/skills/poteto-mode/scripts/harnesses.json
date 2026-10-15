@@ -10,7 +10,8 @@
     "access": {
       "read": ["--permission-mode", "dontAsk", "--allowedTools", "Read,Grep,Glob,Edit(/{run}/**),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git status:*),Bash(git blame:*),Bash(git rev-parse:*),Bash(git ls-files:*),Bash(git grep:*),Bash(rg:*),Bash(ls:*),Bash(wc:*)", "--disallowedTools", "AskUserQuestion"],
       "write": ["--permission-mode", "dontAsk", "--allowedTools", "Read,Grep,Glob,Edit,Write,Bash", "--disallowedTools", "AskUserQuestion"]
-    }
+    },
+    "t3": { "driver": "claudeAgent", "options": { "effort": "{effort}" } }
   },
   "codex": {
     "command": "codex",
@@ -23,6 +24,50 @@
     "access": {
       "read": ["-a", "never", "-s", "workspace-write"],
       "write": ["-a", "never", "-s", "workspace-write"]
-    }
+    },
+    "t3": { "driver": "codex", "options": { "reasoningEffort": "{effort}" } }
+  },
+  "grok": {
+    "command": "grok",
+    "kind": "grok",
+    "promptFirst": false,
+    "model": ["-m", "{model}"],
+    "effort": ["--reasoning-effort", "{effort}"],
+    "efforts": ["low", "medium", "high", "xhigh"],
+    "runDir": [],
+    "access": {
+      "read": ["--always-approve"],
+      "write": ["--always-approve"]
+    },
+    "t3": { "driver": "grok", "options": { "reasoningEffort": "{effort}" } }
+  },
+  "agy": {
+    "command": "agy",
+    "kind": "agy",
+    "promptFirst": false,
+    "prompt": ["-i", "{prompt}"],
+    "model": ["--model", "{model}"],
+    "effort": null,
+    "efforts": null,
+    "runDir": ["--add-dir", "{run}"],
+    "access": {
+      "read": ["--dangerously-skip-permissions"],
+      "write": ["--dangerously-skip-permissions"]
+    },
+    "t3": { "driver": "antigravity" }
+  },
+  "muse": {
+    "command": "muse",
+    "kind": "muse",
+    "promptFirst": false,
+    "model": ["--model", "{model}"],
+    "effort": ["--reasoning-effort", "{effort}"],
+    "efforts": ["minimal", "low", "medium", "high", "xhigh", "max"],
+    "runDir": [],
+    "access": {
+      "read": ["--approval-mode", "never", "--trust-workspace"],
+      "write": ["--yolo"]
+    },
+    "t3": { "driver": "muse", "options": { "reasoningEffort": "{effort}" } }
   }
 }

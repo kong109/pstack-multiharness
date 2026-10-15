@@ -2,6 +2,12 @@
 
 This port applies the Cursor → Claude Code substitutions in skill bodies. Earlier drafts left them flagged; this revision resolves them. A later pass added a Codex build that shares the same skills; see [Codex port](#codex-port) below.
 
+## 0.9.42 - accept dotted preset names
+
+This is a deliberate local fork. Preserve it during upstream sync.
+
+The preset helper accepts names such as `openai-6.1` for save, show, and apply. Names allow single hyphen or dot separators between lowercase alphanumeric segments. Device basenames remain invalid with dotted suffixes, so `con.1` cannot bypass the portable filename guard. The preset skill now describes the accepted names. CLI regression tests cover list, show, and apply for an existing dotted preset.
+
 ## 0.9.41 - watch unattended runs for agents that stop without a notice
 
 This is a deliberate local fork. Preserve it during upstream sync.

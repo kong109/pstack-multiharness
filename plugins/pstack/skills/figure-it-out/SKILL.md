@@ -39,6 +39,7 @@ Apply the **sequence-verifiable-units** principle skill, verifying each unit bef
 
 - Verify by inspecting the artifact, never a self-report. When something passes too easily, suspect the observation method before the system.
 - Pair delegated work with a judge and audit the delegates' artifacts yourself before trusting them. If a worker games the gate, reset and harden the contract. If the gate itself is wrong, fix the gate in its own change rather than routing around it.
+- When delegates run in the background while nobody watches, arm the [watchdog](../poteto-mode/references/watchdog.md) before the first launch and disarm it in Phase E.
 - A verdict is VERIFIED, NOT VERIFIED, or INCONCLUSIVE. Inconclusive is not a pass. Don't hide a negative.
 
 ## Phase D: Keep the audit trail

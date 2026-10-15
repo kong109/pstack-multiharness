@@ -2,6 +2,18 @@
 
 This port applies the Cursor → Claude Code substitutions in skill bodies. Earlier drafts left them flagged; this revision resolves them. A later pass added a Codex build that shares the same skills; see [Codex port](#codex-port) below.
 
+## 0.9.41 - watch unattended runs for agents that stop without a notice
+
+This is a deliberate local fork. Preserve it during upstream sync.
+
+An unattended run on 2026-10-14 lost two agents and no notice reported either loss. A delegate started a background subagent and ended its turn to wait for it. The child's notice went to the top-level session, the delegate never resumed, and six hours passed before the user noticed. Later a Claude Code restart killed a fix agent in the middle of a test run, and it sat dead for 50 minutes. Both times the coordinator was waiting for a notice that could not come.
+
+`poteto-mode/references/watchdog.md` and `poteto-mode/scripts/liveness.mjs` close that gap. The coordinator registers each background agent with `liveness.mjs start` and clears it with `done`. `check` reads each agent's transcript and the processes in its worktree, and reports `OK`, `ENDED` or `STALLED`. `schedule` prints the arguments for a T3 Code scheduled task that posts a tick into the thread every 20 minutes. The timer lives in T3 Code, so it survives a Claude Code restart. Outside T3 Code the reference arms a `loop` heartbeat instead, which catches the waiting delegate but dies in a restart. The tick also launches queued `delegate_task` calls, because T3 Code refuses that tool with `parent_not_active` in a turn that a Claude Code background-task notice woke. poteto-mode's Non-negotiables, orchestrate's Liveness section and figure-it-out's Phase C point at the reference, and the T3 Code route in `foreign-harness.md` names the refusal.
+
+poteto-mode's Subagents section now has a subagent run its own children and commands in the foreground. The existing note from #58 says an agent with live background children reports completed and then resumes, which a run on 2026-09-07 observed. The 2026-10-14 run saw no resume at all. The rule holds either way. On Claude Code, orchestrate's sub-coordinator therefore runs its workers as foreground batches, and only the coordinator keeps a rolling window. orchestrate also names `SendMessage` as the resume tool, which is how Claude Code continues an agent.
+
+The first version of the checker watched a ZovaChart run for about 17 hours. It caught one notice lost in a restart, and raised one false `ENDED` on a thinking entry. That run fixed the false alarm, and the fix is carried over here. `tests/liveness.test.mjs` covers each verdict. Eight planted defects each failed at least one test: a shell counted as work, a thinking entry read as an end, a running tool ignored, no settle window, only the last entry of a message read, a turn read across a user entry, a final message counted as an end while work runs, and paths in double quotes.
+
 ## 0.9.40 - run foreign roles as T3 Code subagents and register Grok, Antigravity and Muse
 
 This is a deliberate local fork. Preserve it during upstream sync.

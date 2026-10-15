@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { check, done, schedule, start } from "../plugins/pstack/skills/poteto-mode/scripts/liveness.mjs";
 
 const script = fileURLToPath(new URL("../plugins/pstack/skills/poteto-mode/scripts/liveness.mjs", import.meta.url));
-const unix = process.platform !== "win32";
+const lsof = process.platform !== "win32" && !spawnSync("lsof", ["-v"]).error;
 
 let root, run, worktree, children;
 beforeEach(() => {
@@ -58,18 +58,27 @@ test("an empty registry reports nothing in flight", () => {
 
 test("a final message left for three minutes is ENDED, a fresh one is still settling", () => {
   start(run, "fin", "deslop");
-  transcript("fin", 5, entry("user", "tool_result"), entry("assistant", "text"));
+  transcript("fin", 3.5, entry("user", "tool_result"), entry("assistant", "text"));
   start(run, "new", "review");
-  transcript("new", 1, entry("assistant", "text"));
+  transcript("new", 2.5, entry("assistant", "text"));
   expect(verdicts()).toEqual(["ENDED fin deslop", "OK new review"]);
 });
 
 test("a thinking entry is mid-generation, not an end, until it goes quiet for the stall window", () => {
   start(run, "think", "fix");
-  transcript("think", 5, entry("assistant", "thinking"));
+  transcript("think", 14, entry("assistant", "thinking"));
   expect(verdicts()).toEqual(["OK think fix"]);
-  transcript("think", 20, entry("assistant", "thinking"));
+  transcript("think", 16, entry("assistant", "thinking"));
   expect(verdicts()).toEqual(["STALLED think fix"]);
+});
+
+test("the last turn spans every entry of the last assistant message, and no earlier turn", () => {
+  start(run, "split", "implement");
+  transcript("split", 5, entry("user", "tool_result"), entry("assistant", "thinking"), entry("assistant", "tool_use"),
+    entry("assistant", "text"));
+  start(run, "after", "implement");
+  transcript("after", 5, entry("assistant", "tool_use"), entry("user", "tool_result"), entry("assistant", "text"));
+  expect(verdicts()).toEqual(["OK split implement", "ENDED after implement"]);
 });
 
 test("an agent with no transcript is STALLED", () => {
@@ -77,7 +86,7 @@ test("an agent with no transcript is STALLED", () => {
   expect(check(run)).toEqual(["STALLED ghost worker: no transcript found"]);
 });
 
-test.skipIf(!unix)("a quiet agent is OK while a tool runs in its worktree and STALLED once it stops", async () => {
+test.skipIf(!lsof)("a quiet agent is OK while a tool runs in its worktree and STALLED once it stops", async () => {
   start(run, "build", "implement", worktree);
   transcript("build", 20, entry("assistant", "text", "tool_use"));
   await hold("sleep", ["30"]);
@@ -87,11 +96,18 @@ test.skipIf(!unix)("a quiet agent is OK while a tool runs in its worktree and ST
   expect(verdicts()).toEqual(["STALLED build implement"]);
 });
 
-test.skipIf(!unix)("an idle shell left in the worktree does not keep a dead agent alive", async () => {
+test.skipIf(!lsof)("an idle shell left in the worktree does not keep a dead agent alive", async () => {
   start(run, "dead", "implement", worktree);
   transcript("dead", 20, entry("assistant", "tool_use"));
   await hold("bash", ["-c", "read line"]);
   expect(check(run)[0]).toMatch(/^STALLED dead implement: .*running in worktree: nothing,/);
+});
+
+test.skipIf(!lsof)("a final message is not an end while work still runs in the worktree", async () => {
+  start(run, "parent", "deslop", worktree);
+  transcript("parent", 10, entry("assistant", "text"));
+  await hold("sleep", ["30"]);
+  expect(verdicts()).toEqual(["OK parent deslop"]);
 });
 
 test("each queued delegate_task file is PENDING, and nothing else in the wake folder is", () => {
@@ -105,10 +121,16 @@ test("schedule prints schedule_task arguments that run this script on this run",
   const args = schedule(run, { title: "prefs watchdog", every: "20" });
   expect(Object.keys(args)).toEqual(["title", "schedule", "prompt"]);
   expect(args.schedule).toEqual({ type: "interval", everyMs: 1_200_000 });
-  expect(args.prompt).toContain(`node "${script}" check "${run}"`);
-  expect(args.prompt).toContain(`node "${script}" done "${run}" <agent id>`);
+  expect(args.prompt).toContain(`node '${script}' check '${run}'`);
+  expect(args.prompt).toContain(`node '${script}' done '${run}' <agent id>`);
   expect(existsSync(join(run, "wake"))).toBe(true);
   expect(() => schedule(run, { every: "0" })).toThrow("--every");
+});
+
+test("the tick prompt keeps a $ in the run directory literal and refuses a single quote", () => {
+  const dollar = join(root, "watch $UNSET run");
+  expect(schedule(dollar).prompt).toContain(` check '${dollar}'`);
+  expect(() => schedule(join(root, "it's"))).toThrow("single quote");
 });
 
 test("the command line checks the registry it is given", () => {

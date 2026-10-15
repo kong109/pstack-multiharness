@@ -27,12 +27,12 @@ The tick runs `liveness.mjs check <run-dir>` and acts on each line.
 
 | line | meaning | you do |
 | --- | --- | --- |
-| `OK` | the transcript changed in the last 15 minutes, or a process other than a shell runs in the agent's worktree | Nothing. |
-| `ENDED` | the last entry is a final message, unchanged for 3 minutes. The agent finished, or it waits on something that will not wake it | Read the final message, then audit the work or take over the steps it left. Run `done`. |
-| `STALLED` | no transcript write for 15 minutes and nothing running in the worktree | Read the end of the transcript, then resume the agent with `SendMessage`. Say what stopped it and what is on disk. |
+| `OK` | a process other than a shell runs in the agent's worktree, or the transcript changed in the last 15 minutes | Nothing. |
+| `ENDED` | the agent's last message is final text with no tool call, unchanged for 3 minutes, and nothing runs in its worktree. It finished, or it waits on something that will not wake it | Read the final message. Unless it waits on work still running elsewhere, audit the work or take over the steps it left. Run `done`. |
+| `STALLED` | no transcript write for 15 minutes and nothing running in the worktree | Read the end of the transcript, then resume the agent with `SendMessage`. Say what stopped it and what is on disk, and paste the run's standing orders if it has them. |
 | `PENDING` | a queued `delegate_task` call | Launch it as [Launch T3 Code tasks from a tick](#launch-t3-code-tasks-from-a-tick) says. |
 
-A verdict is a reason to look, not proof. Without `lsof`, as on Windows, the checker cannot see processes, so a long build reads `STALLED`. Read the transcript before you resume anything. Under the orchestrate playbook, `ENDED` and `STALLED` agents are silent deaths, handled by its Liveness and failure rules.
+A verdict is a reason to look, not proof. A process the agent left behind, such as a dev server, keeps it `OK`. A tool that works outside the worktree, or any tool where `lsof` is missing, as on Windows, reads `STALLED` after 15 minutes. Read the transcript before you resume anything. Under the orchestrate playbook, `ENDED` and `STALLED` agents are silent deaths, handled by its Liveness and failure rules.
 
 ## After a restart
 

@@ -52,20 +52,24 @@ function transcript(id) {
   return found.sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs)[0] ?? null;
 }
 
+// Claude Code writes one assistant message as one entry per content block, so the last turn is every
+// assistant entry after the last user entry.
 function lastTurn(path) {
-  const lines = readFileSync(path, "utf8").split("\n");
-  for (let i = lines.length - 1; i >= 0; i--) {
+  const turn = { who: "none", kinds: [] };
+  for (const line of readFileSync(path, "utf8").split("\n").reverse()) {
     let entry;
     try {
-      entry = JSON.parse(lines[i]);
+      entry = JSON.parse(line);
     } catch {
       continue;
     }
     if (entry.type !== "assistant" && entry.type !== "user") continue;
+    if (turn.who === "user" || (turn.who === "assistant" && entry.type === "user")) break;
+    turn.who = entry.type;
     const content = entry.message?.content;
-    return { who: entry.type, kinds: Array.isArray(content) ? content.map((part) => part.type) : ["text"] };
+    turn.kinds.unshift(...(Array.isArray(content) ? content.map((part) => part.type) : ["text"]));
   }
-  return { who: "none", kinds: [] };
+  return turn;
 }
 
 // Processes whose working directory is inside the worktree, or null when lsof is unavailable.
@@ -89,9 +93,15 @@ function processesIn(worktree) {
 }
 
 function verdict({ who, kinds }, minutes, processes) {
+  if (processes?.length) return "OK";
   if (who === "assistant" && kinds.includes("text") && !kinds.includes("tool_use") && minutes >= SETTLE_MINUTES) return "ENDED";
-  if (minutes >= STALL_MINUTES && !processes?.length) return "STALLED";
-  return "OK";
+  return minutes >= STALL_MINUTES ? "STALLED" : "OK";
+}
+
+// Single quotes keep $ and backticks literal in Bash, zsh and PowerShell alike.
+function quote(path) {
+  if (path.includes("'")) throw new Error(`${path} holds a single quote, which the tick prompt cannot quote`);
+  return `'${path}'`;
 }
 
 export function check(dir) {
@@ -114,14 +124,14 @@ export function schedule(dir, { title = `${basename(dir)} watchdog`, every = "20
   const minutes = Number(every);
   if (!Number.isInteger(minutes) || minutes < 1) throw new Error("--every is a whole number of minutes, at least 1");
   mkdirSync(wake(dir), { recursive: true });
-  const run = `node "${script}"`;
+  const run = `node ${quote(script)}`;
   return {
     title,
     schedule: { type: "interval", everyMs: minutes * 60_000 },
     prompt: `Watchdog tick: ${title}.
-1. Run \`${run} check "${dir}"\`.
-2. For each ENDED line, the agent has stopped and its notice may be lost. Read its final message, then audit its work or take over the steps it left. Then run \`${run} done "${dir}" <agent id>\`.
-3. For each STALLED line, the agent has written nothing for ${STALL_MINUTES} minutes and nothing runs in its worktree. Read the end of its transcript, then resume it with SendMessage, saying what stopped it and what is on disk.
+1. Run \`${run} check ${quote(dir)}\`.
+2. For each ENDED line, the agent ended its turn, nothing runs in its worktree, and its notice may be lost. Read its final message. Unless it waits on work still running elsewhere, audit its work or take over the steps it left, then run \`${run} done ${quote(dir)} <agent id>\`.
+3. For each STALLED line, the agent has written nothing for ${STALL_MINUTES} minutes and nothing runs in its worktree. Read the end of its transcript, then resume it with SendMessage, saying what stopped it and what is on disk. Paste the run's standing orders into that message if it has them.
 4. For each PENDING line, pass that file's JSON fields to delegate_task unchanged, then delete the file once T3 Code accepts the task.
 5. Record each action in the run's decision trail. If every line is OK and none is PENDING, reply in one line and end the turn.`,
   };

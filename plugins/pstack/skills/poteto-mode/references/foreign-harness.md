@@ -131,7 +131,7 @@ A verdict that follows a classification carries `screenLabel` with the label and
 
 - **Opt in.** Set `TYPESAFE_API_KEY`. Export it in `~/.zshenv` so every pane and every Bash call sees it. The helper passes the key to `curl` on stdin, never on the command line.
 - **Opt out.** Set `PSTACK_SCREEN_CLASSIFIER=off`.
-- **Privacy.** Each classification sends up to 60 lines of the pane's visible text to TypeSafe. Leave the key unset where that text must stay local.
+- **Privacy.** Each classification of an agent's pane sends up to its last 60 lines to TypeSafe, including scrollback above the visible screen. Wrapped rows are joined, so one line can span several screen rows. The `ask-parent` check sends up to 60 lines of the parent pane's visible screen. Leave the key unset where that text must stay local.
 - **Fallback.** A missing key, a failed or slow call (five-second limit), an unreadable answer, or a confidence below the minimum keeps the wait as it was. The 15-second `idle` still applies, and a classifier failure never ends a wait on its own. With the classifier on, the same failures make `ask-parent` skip typing. With it off, `ask-parent` on tmux types blind.
 
 `tools/eval-screen-classifier.mjs` runs the captured screens in `tests/fixtures/screens/` through the classifier and prints each label, confidence, and latency. It needs the key and is not run in CI.

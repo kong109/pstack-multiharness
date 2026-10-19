@@ -1031,6 +1031,18 @@ test("a finished turn below 0.9 confidence types nothing, is classified once, an
   expect(calls.some((c) => c[1] === "paste-buffer" || c[1] === "send-keys")).toBe(false);
 });
 
+test("Jev receives only the last 60 lines of a longer tmux capture", () => {
+  const lines = Array.from({ length: 100 }, (_, i) => `line ${i + 1}`);
+  const sent = [];
+  const { runner } = scripted({
+    ...tmuxBase,
+    "tmux capture-pane": [text("a"), text(lines.join("\n"))],
+    curl: (args, opts) => { sent.push(sentBody(opts.input).state); return jev("dialog_open", 0.9)(); },
+  });
+  launch(options(), { runner, env: classifiedEnv(), clock: fakeClock() });
+  expect(sent).toEqual([lines.slice(-60).join("\n")]);
+});
+
 test("a tmux welcome banner Jev reads as not started returns stalled within seconds and types nothing", () => {
   const { runner, calls } = scripted({ ...tmuxBase, "tmux capture-pane": [text("a"), text("Claude Code v2")], curl: jev("not_started", 0.8) });
   const clock = fakeClock();

@@ -354,6 +354,7 @@ export function tmuxMux({ runner, clock }) {
       state.ids = { ...state.ids, pane, window };
       state.prompted = true;
       state.awaitTurn = true;
+      state.turnAt = clock.now();
       saveState(state);
       return null;
     },
@@ -370,10 +371,12 @@ export function tmuxMux({ runner, clock }) {
       clock.sleep(PASTE_SETTLE_MS);
       press(state, ["Enter"]);
       state.awaitTurn = true;
+      state.turnAt = clock.now();
       saveState(state);
       return settle(state, { fresh: true, timeoutMs });
     },
-    wait: (state, timeoutMs) => settle(state, { fresh: Boolean(state.awaitTurn), timeoutMs }),
+    // A turn that began unwatched, as after launch --no-wait, has had TURN_START_MS to change the screen already.
+    wait: (state, timeoutMs) => settle(state, { fresh: Boolean(state.awaitTurn) && !(clock.now() - state.turnAt >= TURN_START_MS), timeoutMs }),
     keys(state, keys, timeoutMs) {
       press(state, keys.map((k) => TMUX_KEYS[k.toLowerCase()] ?? k));
       return settle(state, { fresh: Boolean(state.awaitTurn), timeoutMs });

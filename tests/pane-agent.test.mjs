@@ -952,3 +952,16 @@ test("a tmux turn whose screen never changes after a submit is stalled", () => {
   expect(paste).toEqual(["tmux", "paste-buffer", "-p", "-d", "-b", buffer[3], "-t", "%5"]);
   expect(calls[calls.indexOf(paste) + 1]).toEqual(["tmux", "send-keys", "-t", "%5", "Enter"]);
 });
+
+test("a tmux wait that starts long after launch --no-wait reads a static screen as idle, while an early wait still reads it as stalled", () => {
+  const { runner } = scripted({ ...tmuxBase, "tmux capture-pane": text("Allow Bash: git push?\n> 1. Yes\n  2. No") });
+  const clock = fakeClock();
+  launch(options({ wait: false }), { runner, env: tmuxEnv(), clock });
+  clock.sleep(120_000);
+  expect(waitFor("arena-a", {}, { runner, env: tmuxEnv(), clock })).toMatchObject({ verdict: "idle", screen: expect.stringContaining("git push") });
+
+  close("arena-a", {}, { runner, env: tmuxEnv() });
+  launch(options({ wait: false }), { runner, env: tmuxEnv(), clock });
+  clock.sleep(5_000);
+  expect(waitFor("arena-a", {}, { runner, env: tmuxEnv(), clock }).verdict).toBe("stalled");
+});

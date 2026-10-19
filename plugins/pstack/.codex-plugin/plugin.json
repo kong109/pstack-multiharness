@@ -7,8 +7,8 @@
     "email": "mdenyer@gmail.com",
     "url": "https://github.com/michael-denyer"
   },
-  "homepage": "https://github.com/michael-denyer/pstack-claude",
-  "repository": "https://github.com/michael-denyer/pstack-claude",
+  "homepage": "https://github.com/kong109/pstack-multiharness",
+  "repository": "https://github.com/kong109/pstack-multiharness",
   "license": "MIT",
   "keywords": [
     "pstack",
@@ -45,7 +45,7 @@
       "Work on this in poteto-mode.",
       "Interrogate this diff with multiple models."
     ],
-    "websiteURL": "https://github.com/michael-denyer/pstack-claude",
+    "websiteURL": "https://github.com/kong109/pstack-multiharness",
     "brandColor": "#7C3AED"
   }
 }

@@ -11,7 +11,7 @@ Tell `poteto-mode` your goal and it will invoke the correct workflow for the tas
 Run in Claude Code:
 
 ```text
-/plugin marketplace add michael-denyer/pstack-claude
+/plugin marketplace add kong109/pstack-multiharness
 /plugin install pstack@pstack-claude
 ```
 
@@ -20,7 +20,7 @@ Run in Claude Code:
 Run in your terminal:
 
 ```shell
-codex plugin marketplace add michael-denyer/pstack-claude
+codex plugin marketplace add kong109/pstack-multiharness
 codex plugin add pstack@pstack-claude
 ```
 

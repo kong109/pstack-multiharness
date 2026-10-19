@@ -85,7 +85,7 @@ The agent writes its report to `result.md` in its run directory and a blocking q
 | `question` | the agent needs a decision. `questionId` names it | Answer with `send --text ... --answer QUESTION_ID`, run in the background, and treat its verdict the same way. If the human answers in the pane instead, run `wait --name NAME`. It blocks while the agent works, and a `result.md` written after the question reads as `done`. |
 | `blocked` | a TUI dialog is open, such as an approval, a trust prompt, or a login. A `question` field appears when a question is still unanswered. On tmux it needs the [screen classifier](#screen-classification) | Read `screen`. Answer a routine dialog with `send --keys`. Ask the user when it wants authority the brief did not grant. |
 | `no_result` | the turn ended with no report, even after one automatic reminder | Run `peek`, then send a correction or close the agent. |
-| `stalled` | the turn never started, or herdr saw no activity after the prompt. The text may still have arrived | Run `peek` before resending. The helper never types a second prompt on its own. |
+| `stalled` | the turn never started, or herdr saw no activity after the prompt. On tmux the screen classifier also reads a screen with only a welcome banner as not started. The text may still have arrived | Run `peek` before resending. The helper never types a second prompt on its own. |
 | `idle` | tmux only. The screen classifier read a question asked on screen, or the screen stopped changing for 15 seconds with no report and no confident label. The turn may have ended, or a dialog may be open. `screenLabel` names the classifier's read when it made one | Read `screen`. Answer a question or a dialog with `send --text` or `send --keys`, or send a correction. |
 | `stale` | `send --answer` named a question that was already answered or that a newer question replaced. Nothing was typed | Ignore it. Another route already answered that question. |
 | `timeout` | the wait ran out | Run `peek`. Extend with `wait --name NAME`, or close it. |
@@ -122,6 +122,7 @@ On tmux the helper can send the pane's visible text to TypeSafe's Jev model, whi
 | label | minimum confidence | verdict |
 | --- | --- | --- |
 | `turn_finished` | 0.9 | the one reminder, then `no_result` |
+| `not_started` | 0.7 | `stalled` with the screen, nothing typed |
 | `dialog_open` | 0.7 | `blocked` with the screen |
 | `asked_in_terminal` | 0.7 | `idle` at once with the screen |
 | `still_working` | none | keep waiting |

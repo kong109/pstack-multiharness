@@ -1016,7 +1016,7 @@ test("a tmux screen Jev reads as a finished turn gets one reminder within second
   expect(clock.now()).toBeLessThan(15_000);
   expect(inputs.map((i) => sentBody(i).state)).toEqual(["b", "c"]);
   expect(sentBody(inputs[0])).toMatchObject({ model: "jev-latest", questions: { screen: { type: "choice" } } });
-  expect(Object.keys(sentBody(inputs[0]).questions.screen.criteria)).toEqual(["turn_finished", "dialog_open", "asked_in_terminal", "still_working"]);
+  expect(Object.keys(sentBody(inputs[0]).questions.screen.criteria)).toEqual(["turn_finished", "not_started", "dialog_open", "asked_in_terminal", "still_working"]);
   expect(inputs[0]).toContain(`header = "Authorization: Bearer ${KEY}"`);
   expect(calls.flat().some((a) => String(a).includes(KEY))).toBe(false);
 });
@@ -1028,6 +1028,15 @@ test("a finished turn below 0.9 confidence types nothing, is classified once, an
     .toMatchObject({ verdict: "idle", screen: "b", screenLabel: { label: "turn_finished", confidence: 0.85 } });
   expect(clock.now()).toBeGreaterThanOrEqual(15_000);
   expect(curls(calls)).toHaveLength(1);
+  expect(calls.some((c) => c[1] === "paste-buffer" || c[1] === "send-keys")).toBe(false);
+});
+
+test("a tmux welcome banner Jev reads as not started returns stalled within seconds and types nothing", () => {
+  const { runner, calls } = scripted({ ...tmuxBase, "tmux capture-pane": [text("a"), text("Claude Code v2")], curl: jev("not_started", 0.8) });
+  const clock = fakeClock();
+  expect(launch(options(), { runner, env: classifiedEnv(), clock }))
+    .toMatchObject({ verdict: "stalled", screen: "Claude Code v2", screenLabel: { label: "not_started", confidence: 0.8 } });
+  expect(clock.now()).toBeLessThan(15_000);
   expect(calls.some((c) => c[1] === "paste-buffer" || c[1] === "send-keys")).toBe(false);
 });
 

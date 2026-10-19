@@ -379,12 +379,14 @@ const muxes = {
   herdr: {
     detect: (env) => Boolean(env.HERDR_ENV || env.HERDR_PANE_ID),
     paneEnv: "HERDR_PANE_ID",
+    paneId: /^w[0-9A-Za-z]+:p[0-9A-Za-z]+$/,
     backend: herdrMux,
     typeInto: ({ runner }, parent, line) => [runner("herdr", ["pane", "run", parent.pane, line])],
   },
   tuios: {
     detect: (env) => env.TUIOS_ENV === "1",
     paneEnv: "TUIOS_PANE_ID",
+    paneId: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
     sessionEnv: "TUIOS_SESSION",
     backend: tuiosMux,
     typeInto: ({ runner }, parent, line) => [
@@ -395,6 +397,7 @@ const muxes = {
   tmux: {
     detect: (env) => Boolean(env.TMUX && env.TMUX_PANE),
     paneEnv: "TMUX_PANE",
+    paneId: /^%\d+$/,
     backend: tmuxMux,
     typeInto({ runner, clock }, parent, line) {
       const text = runner("tmux", ["send-keys", "-t", parent.pane, "-l", "--", line]);
@@ -582,9 +585,14 @@ export function askParent(run, deps) {
   if (!run || !existsSync(path)) throw new Error("--run must name a pane agent's run directory");
   const state = JSON.parse(readFileSync(path, "utf8"));
   if (state.run !== dir) throw new Error(`state.json in ${dir} names a different run directory; refusing to use it`);
+  if (!NAME.test(state.name ?? "")) throw new Error(`state.json in ${dir} names an invalid agent; refusing to use it`);
   const questionId = pendingQuestion(dir);
   if (questionId === null) throw new Error(`No pending question; write it to ${join(dir, "question.md")} first`);
   if (!state.parent) throw new Error(`${state.name} has no parent pane to ask; end your turn and your parent reads question.md`);
+  const { mux: parentMux, pane: parentPane } = state.parent;
+  if (!Object.hasOwn(muxes, parentMux) || typeof parentPane !== "string" || !muxes[parentMux].paneId.test(parentPane)) {
+    throw new Error(`state.json in ${dir} names an invalid parent pane; refusing to type into it`);
+  }
   const line = `[pane-agent ${state.name}] question ${questionId}: ${join(dir, "question.md")}`;
   const failed = muxes[state.parent.mux].typeInto(deps, state.parent, line).find((r) => r.status !== 0);
   if (failed) throw new Error(`Typing into the parent pane failed: ${(failed.stderr || failed.stdout).trim().slice(0, 300)}`);

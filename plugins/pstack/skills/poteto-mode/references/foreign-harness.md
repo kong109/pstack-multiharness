@@ -117,7 +117,7 @@ tuios reports blocked and working states only for harnesses whose hooks are wire
 
 ### Access
 
-- **`read`.** Claude Code may read, search, run a fixed set of read-only git and search commands, and run `pane-agent.mjs ask-parent`. It may write only inside its run directory. Codex has no read-only sandbox that can also write the report, so its `read` profile is a workspace-write sandbox held to read-only by the brief. Run `git status` when a Codex reader finishes. Grok and Antigravity readers run with every tool approved and are held to read-only the same way. A Muse reader keeps its shell sandbox.
+- **`read`.** Claude Code may read, search, run a fixed set of read-only git and search commands, and run `pane-agent.mjs ask-parent`. It may write only `result.md` and `question.md` in its run directory, so it cannot edit the `state.json` that names its parent pane. `ask-parent` also refuses an agent name or a parent pane id that does not have its multiplexer's shape. Codex has no read-only sandbox that can also write the report, so its `read` profile is a workspace-write sandbox held to read-only by the brief. Run `git status` when a Codex reader finishes. Grok and Antigravity readers run with every tool approved and are held to read-only the same way. A Muse reader keeps its shell sandbox.
 - **`write`.** Claude Code may edit files and run commands without prompts. Codex runs in its workspace-write sandbox. Hand `write` only to work you would give a native worker with full tools. The Claude Code `read` profile writes its report through a path rule that has been checked on macOS only.
 
 ### Clean up

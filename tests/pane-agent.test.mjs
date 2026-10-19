@@ -5,7 +5,7 @@ import {
 import { tmpdir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import {
-  askParent, briefText, close, detectMux, harnessArgs, launch, launchPrompt, list, nudgePrompt, panesRoot, peek, script, send, sh, waitFor,
+  askParent, briefText, close, detectMux, harnessArgs, launch, launchPrompt, list, main, nudgePrompt, panesRoot, peek, script, send, sh, waitFor,
 } from "../plugins/pstack/skills/poteto-mode/scripts/pane-agent.mjs";
 
 let root;
@@ -831,6 +831,29 @@ test("ask-parent types the line into the parent tmux pane literally, then Enter 
     ["tmux", "send-keys", "-t", "%0", "-l", "--", questionLine(asked.questionId)],
     ["tmux", "send-keys", "-t", "%0", "Enter"],
   ]);
+});
+
+test("ask-parent types nothing into a parent pane that is blocked on a dialog, and still exits cleanly", () => {
+  const herdr = askedHerdr({ "herdr pane get": okJson({ pane: { agent_status: "blocked" } }), "herdr pane run": text("") });
+  launch(options(), { runner: herdr.runner, env: { ...herdrEnv(), HERDR_PANE_ID: "wP:p1" } });
+  expect(askParent(runDir(), { runner: herdr.runner, env: {} }))
+    .toEqual({ sent: false, reason: "parent pane is blocked", name: "arena-a", parent: { mux: "herdr", pane: "wP:p1" } });
+  expect(herdr.calls.at(-1)).toEqual(["herdr", "pane", "get", "wP:p1"]);
+  expect(herdr.calls.some((c) => c[2] === "run")).toBe(false);
+  close("arena-a", {}, { runner: herdr.runner, env: herdrEnv() });
+
+  const childStates = ["working", "done"];
+  const tuios = scripted({
+    ...tuiosBase,
+    "tuios get-agent-state": (args) => tuiosState(args.includes(tuiosSelf) ? "needs_input" : childStates.shift() ?? "done"),
+    "tuios wait-for": () => { write("question.md", "Which branch?\n"); return text(""); },
+    "tuios send-text": text(""),
+    "tuios send-keys": text(""),
+  });
+  launch(options(), { runner: tuios.runner, env: tuiosEnv() });
+  expect(askParent(runDir(), { runner: tuios.runner, env: {} })).toMatchObject({ sent: false, reason: "parent pane is blocked" });
+  expect(main(["ask-parent", "--run", runDir()], { runner: tuios.runner, env: {} })).toBe(0);
+  expect(tuios.calls.some((c) => c[1] === "send-text" || c[1] === "send-keys")).toBe(false);
 });
 
 test("ask-parent refuses with no pending question or no parent pane, and types nothing", () => {

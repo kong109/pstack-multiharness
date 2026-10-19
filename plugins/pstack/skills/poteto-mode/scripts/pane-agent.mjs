@@ -400,6 +400,10 @@ const muxes = {
     paneId: /^w[0-9A-Za-z]+:p[0-9A-Za-z]+$/,
     server: (env) => env.HERDR_SOCKET_PATH ?? env.HERDR_WORKSPACE_ID,
     backend: herdrMux,
+    blocked: ({ runner }, parent) => {
+      const r = herdrJson(runner, ["pane", "get", parent.pane]);
+      return r.ok && r.result.pane?.agent_status === "blocked";
+    },
     typeInto: ({ runner }, parent, line) => [runner("herdr", ["pane", "run", parent.pane, line])],
   },
   tuios: {
@@ -409,6 +413,10 @@ const muxes = {
     sessionEnv: "TUIOS_SESSION",
     server: (env) => env.TUIOS_SESSION,
     backend: tuiosMux,
+    blocked: ({ runner }, parent) => {
+      const r = runner("tuios", ["get-agent-state", "-s", parent.session, "-w", parent.pane, "--json"]);
+      try { return r.status === 0 && JSON.parse(r.stdout).state === "needs_input"; } catch { return false; }
+    },
     typeInto: ({ runner }, parent, line) => [
       runner("tuios", ["send-text", "-s", parent.session, "-w", parent.pane, line]),
       runner("tuios", ["send-keys", "-s", parent.session, "-w", parent.pane, "Enter"]),
@@ -420,6 +428,7 @@ const muxes = {
     paneId: /^%\d+$/,
     server: (env) => env.TMUX,
     backend: tmuxMux,
+    blocked: () => false,
     typeInto({ runner, clock }, parent, line) {
       const text = runner("tmux", ["send-keys", "-t", parent.pane, "-l", "--", line]);
       if (text.status !== 0) return [text];
@@ -627,6 +636,7 @@ export function askParent(run, deps) {
   if (!Object.hasOwn(muxes, parentMux) || typeof parentPane !== "string" || !muxes[parentMux].paneId.test(parentPane)) {
     throw new Error(`state.json in ${dir} names an invalid parent pane; refusing to type into it`);
   }
+  if (muxes[parentMux].blocked(deps, state.parent)) return { sent: false, reason: "parent pane is blocked", name: state.name, parent: state.parent };
   const line = `[pane-agent ${state.name}] question ${questionId}: ${join(dir, "question.md")}`;
   const failed = muxes[state.parent.mux].typeInto(deps, state.parent, line).find((r) => r.status !== 0);
   if (failed) throw new Error(`Typing into the parent pane failed: ${(failed.stderr || failed.stdout).trim().slice(0, 300)}`);

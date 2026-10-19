@@ -518,6 +518,7 @@ export function launch(options, deps) {
   const mux = muxFor(muxId, deps);
   const run = dir;
   if (/[,()\s]/.test(run)) throw new Error(`Run directory ${run} contains a comma, parenthesis, or space; set PSTACK_PANES_DIR to a plain path`);
+  if (/[,()\s]/.test(script)) throw new Error(`Helper path ${script} contains a comma, parenthesis, or space, which breaks the agent's ask-parent command; install pstack under a plain path`);
 
   ownedPrivateDir(panesRoot(env));
   mkdirSync(run, { recursive: true });

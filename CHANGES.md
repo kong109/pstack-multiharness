@@ -2,6 +2,18 @@
 
 This port applies the Cursor → Claude Code substitutions in skill bodies. Earlier drafts left them flagged; this revision resolves them. A later pass added a Codex build that shares the same skills; see [Codex port](#codex-port) below.
 
+## 0.9.43 - pane agents ask their parent pane, nest, and run in tmux
+
+This is a deliberate local fork. Preserve it during upstream sync.
+
+A pane agent used to ask a question only by writing `question.md` and ending its turn. A parent learned of it only when the background `launch` or `wait` returned. `pane-agent.mjs` now records the pane it was launched from as the agent's parent. The brief tells the agent to run `pane-agent.mjs ask-parent --run <run>` after it writes the question. That command types one line, `[pane-agent <name>] question <questionId>: <path>`, into the parent pane. The Claude Code `read` profile allows that one command and nothing broader. `questionId` is the question file's modification stamp, and the `question` verdict carries it. `send --answer <questionId>` types only while that question is pending and otherwise returns the new `stale` verdict, so a parent that hears about one question twice answers it once.
+
+A pane agent with `write` access may launch its own pane agents. The helper finds the caller's own state by its pane id, prefixes the new agent's name with the caller's name, and uses the caller's multiplexer. A child that cannot answer its own child's question escalates through its own `question.md`.
+
+The multiplexers now live in one registry. Each entry holds its detection test, the variable that carries the caller's pane id, its backend, and the way it types a line into another pane. tmux is a new entry. Each agent gets a detached window, and the helper addresses it by pane and window id because tmux matches window names by prefix. tmux reports no agent state, so the helper reads the screen every two seconds. A screen that stays unchanged for 15 seconds with no report returns the new `idle` verdict. The helper never types a reminder into a tmux pane, because it cannot tell a finished turn from an open permission menu. When more than one multiplexer is set and the caller is not a pane agent, the helper refuses and names them.
+
+`foreign-harness.md` documents tmux, the parent pane line, nesting, and the new verdicts. setup-pstack detects tmux through `TMUX`. Live checks ran a Claude Code child at `read` access in herdr, tmux, and a headless tuios session. In each, the question line reached a scratch parent pane, `send --answer` returned `done`, and the same answer again returned `stale`.
+
 ## 0.9.42 - accept dotted preset names
 
 This is a deliberate local fork. Preserve it during upstream sync.

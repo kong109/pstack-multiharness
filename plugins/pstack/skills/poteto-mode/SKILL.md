@@ -11,7 +11,7 @@ On OpenCode V2, read [OpenCode model routing](references/opencode-tools.md) befo
 
 On Claude Code, a role entry with explicit effort launches the generated agent that [Claude Code effort routing](references/claude-routing.md) returns, with no per-call `model`. Entries without effort use the `subagent_type` and `model` instructions below unchanged.
 
-A role entry that names a harness other than this session's, such as a `codex:` entry on Claude Code, runs through [foreign-harness subagents](references/foreign-harness.md). Inside T3 Code that is a T3 Code subagent, and otherwise a visible herdr tab or tuios window. Never run it as a hidden process or an `Agent` call.
+A role entry that names a harness other than this session's, such as a `codex:` entry on Claude Code, runs through [foreign-harness subagents](references/foreign-harness.md). Inside T3 Code that is a T3 Code subagent, and otherwise a visible herdr tab, tuios window, or tmux window. Never run it as a hidden process or an `Agent` call.
 
 Follow [operating-system guidance](references/operating-systems.md) for shell commands, temporary paths, and bundled helpers.
 

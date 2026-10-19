@@ -8,7 +8,7 @@
     "efforts": ["low", "medium", "high", "xhigh", "max"],
     "runDir": ["--add-dir", "{run}"],
     "access": {
-      "read": ["--permission-mode", "dontAsk", "--allowedTools", "Read,Grep,Glob,Edit(/{run}/**),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git status:*),Bash(git blame:*),Bash(git rev-parse:*),Bash(git ls-files:*),Bash(git grep:*),Bash(rg:*),Bash(ls:*),Bash(wc:*)", "--disallowedTools", "AskUserQuestion"],
+      "read": ["--permission-mode", "dontAsk", "--allowedTools", "Read,Grep,Glob,Edit(/{run}/question.md),Edit(/{run}/result.md),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git status:*),Bash(git blame:*),Bash(git rev-parse:*),Bash(git ls-files:*),Bash(git grep:*),Bash(rg:*),Bash(ls:*),Bash(wc:*),Bash(node {script} ask-parent:*)", "--disallowedTools", "AskUserQuestion"],
       "write": ["--permission-mode", "dontAsk", "--allowedTools", "Read,Grep,Glob,Edit,Write,Bash", "--disallowedTools", "AskUserQuestion"]
     },
     "t3": { "driver": "claudeAgent", "options": { "effort": "{effort}" } }

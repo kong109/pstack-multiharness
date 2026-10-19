@@ -92,7 +92,8 @@ test("a brief with a parent names the agent and tells it to ask the parent pane,
   expect(out).toContain("You are pane agent arena-a.");
   expect(out).toContain(`run \`node ${script} ask-parent --run ${run}\`, and end your turn. If that command fails, end your turn anyway`);
   expect(out).toContain("## Launching your own pane agents");
-  expect(out).toContain(`node ${script} send --name <agent> --text <answer> --answer <questionId>`);
+  expect(out).toContain("so `--name fix` launches `arena-a-fix`. Every later `send`, `wait`, `peek`, and `close` takes the full name the launch printed.");
+  expect(out).toContain(`node ${script} send --name <full-name> --text <answer> --answer <questionId>`);
   expect(briefText("x", { run, access: "read", name: "arena-a", parent: null })).not.toContain("ask-parent");
 });
 

@@ -65,7 +65,7 @@ export function briefText(userBrief, { run, access, name, parent }) {
   const nesting = access === "write" ? `
 ## Launching your own pane agents
 
-You may launch pane agents of your own with \`node ${script} launch ...\`. Your name prefix and multiplexer are applied for you. When one of your agents asks a question you cannot answer from this brief, write your own question to ${question} that quotes it and names the agent, ask your parent as above, and end your turn. When the answer arrives, pass it down with \`node ${script} send --name <agent> --text <answer> --answer <questionId>\`.
+You may launch pane agents of your own with \`node ${script} launch ...\`. Your name prefix and multiplexer are applied for you, so \`--name fix\` launches \`${name}-fix\`. Every later \`send\`, \`wait\`, \`peek\`, and \`close\` takes the full name the launch printed. When one of your agents asks a question you cannot answer from this brief, write your own question to ${question} that quotes it and names the agent, ask your parent as above, and end your turn. When the answer arrives, pass it down with \`node ${script} send --name <full-name> --text <answer> --answer <questionId>\`.
 ` : "";
   return `${userBrief.trimEnd()}
 

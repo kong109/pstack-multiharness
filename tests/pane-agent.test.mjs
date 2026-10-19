@@ -1084,3 +1084,30 @@ test("the classifier runs only with a key and without PSTACK_SCREEN_CLASSIFIER=o
   expect(curlCount(tmuxEnv())).toBe(0);
   expect(curlCount(classifiedEnv({ PSTACK_SCREEN_CLASSIFIER: "off" }))).toBe(0);
 });
+
+test("ask-parent types nothing into a tmux parent pane that Jev reads as an open dialog", () => {
+  const parentScreen = "Do you want to proceed?\n❯ 1. Yes\n  2. No";
+  const askWith = (curl) => {
+    const { runner, calls } = scripted({
+      ...tmuxBase,
+      "tmux capture-pane": (args) => {
+        if (args.includes("%0")) return text(parentScreen);
+        if (!existsSync(join(runDir(), "question.md"))) write("question.md", "Which branch?\n");
+        return text(`agent ${calls.length}`);
+      },
+      curl,
+    });
+    launch(options(), { runner, env: tmuxEnv(), clock: fakeClock() });
+    const out = askParent(runDir(), { runner, env: classifiedEnv(), clock: fakeClock() });
+    close("arena-a", {}, { runner, env: tmuxEnv() });
+    return { out, typed: calls.filter((c) => c[1] === "send-keys" && c.includes("%0")) };
+  };
+  const skipped = askWith(jev("dialog_open", 0.55));
+  expect(skipped.out).toMatchObject({ sent: false, reason: "parent pane is blocked" });
+  expect(skipped.typed).toEqual([]);
+  for (const curl of [jev("dialog_open", 0.45), jev("turn_finished", 1), () => ({ status: 28, stdout: "", stderr: "timeout" })]) {
+    const typed = askWith(curl);
+    expect(typed.out).toMatchObject({ sent: true });
+    expect(typed.typed).toHaveLength(2);
+  }
+});

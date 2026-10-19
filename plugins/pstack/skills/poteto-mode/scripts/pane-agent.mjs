@@ -19,6 +19,8 @@ const NONE_POLL_MS = 5_000;
 const SCREEN_POLL_MS = 2_000;
 const QUIET_MS = 15_000;
 const PASTE_SETTLE_MS = 200;
+// Lower than the settle thresholds: a wrong skip only delays the parent, while digits typed into a permission menu can approve it.
+const PARENT_DIALOG_MIN_CONFIDENCE = 0.5;
 
 export const script = fileURLToPath(import.meta.url);
 
@@ -438,7 +440,12 @@ const muxes = {
     paneId: /^%\d+$/,
     server: (env) => env.TMUX,
     backend: tmuxMux,
-    blocked: () => false,
+    blocked({ runner, env }, parent) {
+      const r = runner("tmux", ["capture-pane", "-p", "-t", parent.pane]);
+      if (r.status !== 0) return false;
+      const classified = classifyScreen(screenText(r.stdout), { runner, env });
+      return classified?.label === "dialog_open" && classified.confidence >= PARENT_DIALOG_MIN_CONFIDENCE;
+    },
     typeInto({ runner, clock }, parent, line) {
       const text = runner("tmux", ["send-keys", "-t", parent.pane, "-l", "--", line]);
       if (text.status !== 0) return [text];
@@ -648,7 +655,7 @@ export function askParent(run, deps) {
   }
   if (muxes[parentMux].blocked(deps, state.parent)) return { sent: false, reason: "parent pane is blocked", name: state.name, parent: state.parent };
   const line = `[pane-agent ${state.name}] question ${questionId}: ${join(dir, "question.md")}`;
-  const failed = muxes[state.parent.mux].typeInto(deps, state.parent, line).find((r) => r.status !== 0);
+  const failed = muxes[parentMux].typeInto(deps, state.parent, line).find((r) => r.status !== 0);
   if (failed) throw new Error(`Typing into the parent pane failed: ${(failed.stderr || failed.stdout).trim().slice(0, 300)}`);
   return { sent: true, name: state.name, parent: state.parent };
 }

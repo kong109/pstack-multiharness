@@ -101,7 +101,19 @@ function loadState(name, env) {
   return state;
 }
 
-const saveState = (state) => writeFileSync(join(state.run, "state.json"), JSON.stringify(state, null, 2) + "\n");
+function saveState(state) {
+  const path = join(state.run, "state.json");
+  const temp = `${path}.${process.pid}.tmp`;
+  writeFileSync(temp, JSON.stringify(state, null, 2) + "\n");
+  renameSync(temp, path);
+}
+
+function readStates(root) {
+  if (!existsSync(root)) return [];
+  return readdirSync(root).flatMap((entry) => {
+    try { return [JSON.parse(readFileSync(join(root, entry, "state.json"), "utf8"))]; } catch { return []; }
+  });
+}
 
 function herdrJson(runner, args, timeoutMs) {
   const r = runner("herdr", args, { timeoutMs: timeoutMs && timeoutMs + 15_000 });
@@ -428,12 +440,7 @@ function parentOf(muxId, env) {
 }
 
 export function selfState(env = process.env) {
-  const root = panesRoot(env);
-  if (!existsSync(root)) return null;
-  for (const entry of readdirSync(root)) {
-    const path = join(root, entry, "state.json");
-    if (!existsSync(path)) continue;
-    const state = JSON.parse(readFileSync(path, "utf8"));
+  for (const state of readStates(panesRoot(env))) {
     const own = Object.hasOwn(muxes, state.mux) && env[muxes[state.mux].paneEnv];
     if (own && state.ids?.pane === own) return state;
   }
@@ -615,14 +622,7 @@ export function close(name, { keep = false } = {}, deps) {
 }
 
 export function list({ env = process.env } = {}) {
-  const root = panesRoot(env);
-  if (!existsSync(root)) return [];
-  return readdirSync(root)
-    .filter((entry) => existsSync(join(root, entry, "state.json")))
-    .map((entry) => {
-      const { name, mux, harness, model, effort, run, startedAt } = JSON.parse(readFileSync(join(root, entry, "state.json"), "utf8"));
-      return { name, mux, harness, model, effort, run, startedAt };
-    });
+  return readStates(panesRoot(env)).map(({ name, mux, harness, model, effort, run, startedAt }) => ({ name, mux, harness, model, effort, run, startedAt }));
 }
 
 const exitCodes = { done: 0 };

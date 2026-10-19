@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
+import {
+  chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import {
@@ -486,6 +488,32 @@ test("a state file that names another run directory is refused", () => {
   const path = join(runDir(), "state.json");
   writeFileSync(path, JSON.stringify({ ...JSON.parse(readFileSync(path, "utf8")), run: join(root, "elsewhere") }));
   expect(() => close("arena-a", {}, { runner, env: herdrEnv() })).toThrow("different run directory");
+});
+
+test("an empty or corrupt state.json elsewhere is skipped by launch and list", () => {
+  for (const [entry, body] of [["empty", ""], ["torn", '{"name": "torn", "mux": "her']]) {
+    mkdirSync(join(root, "panes", entry), { recursive: true, mode: 0o700 });
+    writeFileSync(join(root, "panes", entry, "state.json"), body);
+  }
+  const { runner } = doneHerdr();
+  const env = { ...herdrEnv(), HERDR_PANE_ID: "wP:p1" };
+  expect(launch(options(), { runner, env })).toMatchObject({ name: "arena-a", verdict: "done" });
+  expect(list({ env }).map((a) => a.name)).toEqual(["arena-a"]);
+});
+
+test("state is saved by replacing state.json, never by writing through it", () => {
+  const { runner } = scripted({ ...herdrBase, "herdr agent prompt": failJson("agent_blocked") });
+  launch(options(), { runner, env: herdrEnv() });
+  const path = join(runDir(), "state.json");
+  const outside = join(root, "outside.json");
+  const before = readFileSync(path, "utf8");
+  writeFileSync(outside, before);
+  rmSync(path);
+  symlinkSync(outside, path);
+  send("arena-a", { text: "go on" }, { runner, env: herdrEnv() });
+  expect(readFileSync(outside, "utf8")).toBe(before);
+  expect(lstatSync(path).isSymbolicLink()).toBe(false);
+  expect(readdirSync(runDir()).filter((f) => f.endsWith(".tmp"))).toEqual([]);
 });
 
 test.skipIf(typeof process.getuid !== "function")("a shared, world-writable panes directory is refused", () => {

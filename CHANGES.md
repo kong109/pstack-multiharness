@@ -2,6 +2,16 @@
 
 This port applies the Cursor → Claude Code substitutions in skill bodies. Earlier drafts left them flagged; this revision resolves them. A later pass added a Codex build that shares the same skills; see [Codex port](#codex-port) below.
 
+## 0.9.44 - tmux pane agents classify a still screen with Jev
+
+This is a deliberate local fork. Preserve it during upstream sync.
+
+tmux reports no agent state, so a tmux pane that stopped changing used to wait 15 seconds and return `idle`, whether the turn had ended or a dialog was open. The new `screen-classifier.mjs` sends a screen that held still for one two-second read to TypeSafe's Jev model through `curl`, once per distinct screen. One registry maps each label to its criteria, its minimum confidence, and how it settles. `turn_finished` at 0.9 or more settles as a finished turn and gets the one reminder. `not_started` at 0.7, a screen with only a welcome banner and no message sent, returns `stalled` and types nothing, because on tmux the brief travels in argv and such a screen means the harness has not read it yet. `dialog_open` at 0.7 returns `blocked`. `asked_in_terminal` at 0.7 returns `idle` at once. `still_working`, a low confidence, a failed call, or a missing key keeps waiting, and the 15-second `idle` still applies. A verdict that follows a classification carries `screenLabel`.
+
+`ask-parent` on tmux classifies the parent pane first, because the line ends with Enter and Enter confirms a Claude Code menu's highlighted option. It types only when it reads a label other than `dialog_open` at 0.7 or more. Any other read, a failed call, or an unreadable parent pane types nothing and returns `sent: false` with `reason: "parent pane is blocked"`. Without the classifier, tmux types into the parent blind, as 0.9.43 did.
+
+The classifier is on when `TYPESAFE_API_KEY` is set and `PSTACK_SCREEN_CLASSIFIER` is not `off`. The key and the screen reach `curl` on stdin, never in argv. `foreign-harness.md` documents the labels, the opt-in and opt-out, and that up to the last 60 lines of the pane, scrollback included, go to TypeSafe. `tools/eval-screen-classifier.mjs` runs ten captured Claude Code and Codex screens through the live API. Live tmux checks: a Claude Code child that ended its turn without `result.md` got the reminder 3.7 seconds later and returned `done`, a folder trust dialog returned `blocked` 4.5 seconds after launch, and `ask-parent` into a parent pane showing a permission menu returned `sent: false` and left the menu open. The repo `.gitignore` now ignores `.env` and `.env.*`.
+
 ## 0.9.43 - pane agents ask their parent pane, nest, and run in tmux
 
 This is a deliberate local fork. Preserve it during upstream sync.

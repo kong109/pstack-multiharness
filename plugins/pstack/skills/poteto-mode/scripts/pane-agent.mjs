@@ -8,6 +8,7 @@ import { parseArgs } from "node:util";
 
 import { NAME, fill, foreignRequest, protocolPointer } from "./agent-routes.mjs";
 import { harnesses } from "./resolve-models.mjs";
+import { classifierEnabled, classifyScreen, screenSettle } from "./screen-classifier.mjs";
 
 const START_MS = 60_000;
 const TURN_START_MS = 90_000;
@@ -18,13 +19,15 @@ const NONE_POLL_MS = 5_000;
 const SCREEN_POLL_MS = 2_000;
 const QUIET_MS = 15_000;
 const PASTE_SETTLE_MS = 200;
+// The line ends with Enter, which confirms a menu's highlighted option, so typing waits for a confident read that no dialog is open.
+const PARENT_CLEAR_MIN_CONFIDENCE = 0.7;
 
 export const script = fileURLToPath(import.meta.url);
 
 export const panesRoot = (env = process.env) => resolve(env.PSTACK_PANES_DIR ?? join(realpathSync(tmpdir()), "pstack-panes"));
 
-export function sh(cmd, args, { timeoutMs } = {}) {
-  const r = spawnSync(cmd, args, { encoding: "utf8", timeout: timeoutMs, maxBuffer: 32 * 1024 * 1024 });
+export function sh(cmd, args, { timeoutMs, input } = {}) {
+  const r = spawnSync(cmd, args, { encoding: "utf8", timeout: timeoutMs, input, maxBuffer: 32 * 1024 * 1024 });
   return { status: r.status, stdout: r.stdout ?? "", stderr: r.stderr || r.error?.message || "", timedOut: r.error?.code === "ETIMEDOUT" };
 }
 
@@ -298,7 +301,7 @@ export function tuiosMux({ runner, env }) {
 
 const TMUX_KEYS = { esc: "Escape", escape: "Escape" };
 
-export function tmuxMux({ runner, clock }) {
+export function tmuxMux({ runner, env, clock }) {
   const tmux = (args) => runner("tmux", args);
   const failure = (r) => (r.stderr || r.stdout).trim().slice(0, 300);
   const capture = (state) => tmux(["capture-pane", "-p", "-J", "-t", state.ids.pane, "-S", `-${SCREEN_LINES}`]);
@@ -321,6 +324,7 @@ export function tmuxMux({ runner, clock }) {
     let starting = fresh;
     let last = screen(state);
     let changedAt = clock.now();
+    const labels = new Map();
     for (;;) {
       if (reported(state)) {
         begun(state);
@@ -337,7 +341,15 @@ export function tmuxMux({ runner, clock }) {
       }
       if (now >= deadline) return { kind: starting ? "stalled" : "timeout" };
       if (starting && now >= startBy) return { kind: "stalled" };
-      if (!starting && now - changedAt >= QUIET_MS) return { kind: "quiet" };
+      if (!starting && current !== null && now - changedAt >= SCREEN_POLL_MS && !labels.has(current)) {
+        labels.set(current, classifyScreen(current, { runner, env }));
+        const kind = screenSettle(labels.get(current));
+        if (kind) return { kind, screenLabel: labels.get(current) };
+      }
+      if (!starting && now - changedAt >= QUIET_MS) {
+        const screenLabel = labels.get(current);
+        return screenLabel ? { kind: "quiet", screenLabel } : { kind: "quiet" };
+      }
       clock.sleep(SCREEN_POLL_MS);
     }
   };
@@ -428,7 +440,13 @@ const muxes = {
     paneId: /^%\d+$/,
     server: (env) => env.TMUX,
     backend: tmuxMux,
-    blocked: () => false,
+    blocked({ runner, env }, parent) {
+      if (!classifierEnabled(env)) return false;
+      const r = runner("tmux", ["capture-pane", "-p", "-t", parent.pane]);
+      if (r.status !== 0) return true;
+      const classified = classifyScreen(screenText(r.stdout), { runner, env });
+      return !classified || classified.label === "dialog_open" || classified.confidence < PARENT_CLEAR_MIN_CONFIDENCE;
+    },
     typeInto({ runner, clock }, parent, line) {
       const text = runner("tmux", ["send-keys", "-t", parent.pane, "-l", "--", line]);
       if (text.status !== 0) return [text];
@@ -484,7 +502,7 @@ function pendingQuestion(run) {
 }
 
 function conclude(state, mux, settled, { timeoutMs }) {
-  const base = { name: state.name, mux: mux.id, harness: state.harness, model: state.model };
+  const base = { name: state.name, mux: mux.id, harness: state.harness, model: state.model, ...(settled.screenLabel && { screenLabel: settled.screenLabel }) };
   const questionFile = join(state.run, "question.md");
   const resultFile = join(state.run, "result.md");
   const result = readIfPresent(resultFile);
@@ -638,7 +656,7 @@ export function askParent(run, deps) {
   }
   if (muxes[parentMux].blocked(deps, state.parent)) return { sent: false, reason: "parent pane is blocked", name: state.name, parent: state.parent };
   const line = `[pane-agent ${state.name}] question ${questionId}: ${join(dir, "question.md")}`;
-  const failed = muxes[state.parent.mux].typeInto(deps, state.parent, line).find((r) => r.status !== 0);
+  const failed = muxes[parentMux].typeInto(deps, state.parent, line).find((r) => r.status !== 0);
   if (failed) throw new Error(`Typing into the parent pane failed: ${(failed.stderr || failed.stdout).trim().slice(0, 300)}`);
   return { sent: true, name: state.name, parent: state.parent };
 }

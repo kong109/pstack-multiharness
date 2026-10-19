@@ -1,11 +1,11 @@
 const ENDPOINT = "https://api.typesafe.ai/v1/systemone";
 const TIMEOUT_S = 5;
 
-const INSTRUCTIONS = "The state is the visible text of a terminal pane that runs an AI coding agent's TUI, such as Claude Code or Codex. Classify what the pane is waiting for right now.";
+const INSTRUCTIONS = "The state is the visible text of a terminal pane that runs an AI coding agent's TUI, such as Claude Code or Codex. Classify what the pane is waiting for right now. The input box is drawn in every state, so its presence alone says nothing. Judge by the status line just above the input box: a present-tense activity with a running timer means working, and a past-tense summary or no status line means the turn is over.";
 
 export const SCREEN_LABELS = {
   turn_finished: {
-    criteria: "The agent's turn is over. Its last output is complete and the screen ends at an empty input prompt that waits for the user's next message. No spinner, elapsed-time counter, or interrupt hint shows, no menu of options is open, and the last message does not ask the user anything.",
+    criteria: "The agent's turn is over, or no turn has started. The screen ends at an empty input prompt that waits for the user's next message. Any status line is a past-tense summary such as 'Cooked for 10s', 'Worked for 5s', or 'done', or there is only a welcome banner. No menu of options is open, and the last message does not ask the user anything.",
     minConfidence: 0.9,
     settle: "rest",
   },
@@ -20,7 +20,7 @@ export const SCREEN_LABELS = {
     settle: "quiet",
   },
   still_working: {
-    criteria: "The agent is still busy: a spinner, an elapsed-time or token counter, an interrupt hint such as 'esc to interrupt', a running tool, or streaming output shows the turn is in progress.",
+    criteria: "The agent is still busy. A status line names an activity in progress with a running timer, such as '✢ Bootstrapping… (2s · thinking)' or '• Working (2s • esc to interrupt)', or a tool is running or output is streaming.",
     minConfidence: null,
     settle: null,
   },

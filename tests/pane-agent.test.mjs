@@ -1088,6 +1088,7 @@ test("the classifier runs only with a key and without PSTACK_SCREEN_CLASSIFIER=o
 test("ask-parent types into a tmux parent pane only when Jev confidently reads no open dialog there", () => {
   const parentScreen = "Do you want to proceed?\n❯ 1. Yes\n  2. No";
   const askWith = (curl, { env = classifiedEnv(), parent = text(parentScreen) } = {}) => {
+    const classified = [];
     const { runner, calls } = scripted({
       ...tmuxBase,
       "tmux capture-pane": (args) => {
@@ -1095,12 +1096,14 @@ test("ask-parent types into a tmux parent pane only when Jev confidently reads n
         if (!existsSync(join(runDir(), "question.md"))) write("question.md", "Which branch?\n");
         return text(`agent ${calls.length}`);
       },
-      curl,
+      curl: (args, opts) => { classified.push(sentBody(opts.input).state); return curl(args, opts); },
     });
     launch(options(), { runner, env: tmuxEnv(), clock: fakeClock() });
+    const before = calls.length;
     const out = askParent(runDir(), { runner, env, clock: fakeClock() });
+    const captured = calls.slice(before).filter((c) => c[1] === "capture-pane").map((c) => c[c.indexOf("-t") + 1]);
     close("arena-a", {}, { runner, env: tmuxEnv() });
-    return { out, curl: curls(calls).length, typed: calls.filter((c) => c[1] === "send-keys" && c.includes("%0")) };
+    return { out, captured, classified, typed: calls.filter((c) => c[1] === "send-keys" && c.includes("%0")) };
   };
   const unconfirmed = [
     jev("dialog_open", 0.99),
@@ -1112,15 +1115,20 @@ test("ask-parent types into a tmux parent pane only when Jev confidently reads n
   for (const curl of unconfirmed) {
     const skipped = askWith(curl);
     expect(skipped.out).toMatchObject({ sent: false, reason: "parent pane is blocked" });
+    expect(skipped.captured).toEqual(["%0"]);
+    expect(skipped.classified).toEqual([parentScreen]);
     expect(skipped.typed).toEqual([]);
   }
   const unreadable = askWith(jev("turn_finished", 1), { parent: { status: 1, stdout: "", stderr: "can't find pane: %0" } });
   expect(unreadable.out).toMatchObject({ sent: false, reason: "parent pane is blocked" });
-  expect(unreadable.curl).toBe(0);
+  expect(unreadable.captured).toEqual(["%0"]);
+  expect(unreadable.classified).toEqual([]);
   expect(unreadable.typed).toEqual([]);
   for (const curl of [jev("turn_finished", 0.7), jev("still_working", 0.95)]) {
     const typed = askWith(curl);
     expect(typed.out).toMatchObject({ sent: true });
+    expect(typed.captured).toEqual(["%0"]);
+    expect(typed.classified).toEqual([parentScreen]);
     expect(typed.typed).toHaveLength(2);
   }
   const noCurl = () => { throw new Error("curl without the classifier"); };

@@ -580,10 +580,13 @@ export function send(name, { text, keys, answer, timeoutMs = DEFAULT_WAIT_MS }, 
   if (Boolean(text) === Boolean(keys)) throw new Error("send takes exactly one of --text or --keys");
   if (answer !== undefined && !text) throw new Error("--answer goes with --text");
   const state = loadState(name, deps.env);
-  if (answer !== undefined) {
-    const pending = pendingQuestion(state.run);
-    if (pending !== answer) {
-      const detail = pending === null ? "no question is pending" : `the pending question is ${pending}, not ${answer}`;
+  const pending = pendingQuestion(state.run);
+  if (answer !== undefined && pending !== answer) {
+    // A failed submit already moved the question aside, so a retry is matched against question.md.prev.
+    const undelivered = pending === null && state.answered !== answer && String(stamp(join(state.run, "question.md.prev"))) === answer;
+    if (!undelivered) {
+      const detail = pending !== null ? `the pending question is ${pending}, not ${answer}`
+        : state.answered === answer ? `question ${answer} was already answered` : "no question is pending";
       return { name, verdict: "stale", detail };
     }
   }
@@ -598,6 +601,11 @@ export function send(name, { text, keys, answer, timeoutMs = DEFAULT_WAIT_MS }, 
   const settled = keys
     ? withBrief(state, mux, mux.keys(state, keys.split(/\s+/).filter(Boolean), timeoutMs), timeoutMs)
     : mux.submit(state, /^\s*-/.test(text) ? ` ${text}` : text, timeoutMs);
+  const answering = answer ?? pending;
+  if (text && answering !== null && settled.kind !== "error") {
+    state.answered = answering;
+    saveState(state);
+  }
   return conclude(state, mux, settled, { timeoutMs });
 }
 

@@ -886,8 +886,29 @@ test("send --answer types only for the pending question it names", () => {
   expect(prompts(calls).at(-1)[4]).toBe("main");
   const after = calls.length;
   expect(send("arena-a", { text: "main", answer: asked.questionId }, { runner, env: herdrEnv() }))
-    .toEqual({ name: "arena-a", verdict: "stale", detail: "no question is pending" });
+    .toEqual({ name: "arena-a", verdict: "stale", detail: `question ${asked.questionId} was already answered` });
   expect(calls).toHaveLength(after);
+});
+
+test("an answer whose submit failed can be sent again with the same id, and only until it is delivered", () => {
+  let pasteFails = true;
+  const { runner, calls } = scripted({
+    ...tmuxBase,
+    "tmux paste-buffer": () => (pasteFails ? { status: 1, stdout: "", stderr: "no current client" } : text("")),
+    "tmux capture-pane": [text("a"), () => { write("question.md", "Which branch?\n"); return text("b"); }, text("b"), () => { write("result.md", "final\n"); return text("c"); }],
+  });
+  const clock = fakeClock();
+  const asked = launch(options(), { runner, env: tmuxEnv(), clock });
+  const pastes = () => calls.filter((c) => c[1] === "paste-buffer").length;
+  expect(send("arena-a", { text: "main", answer: asked.questionId }, { runner, env: tmuxEnv(), clock }))
+    .toMatchObject({ verdict: "error", detail: expect.stringContaining("tmux paste failed") });
+  pasteFails = false;
+  expect(send("arena-a", { text: "main", answer: asked.questionId }, { runner, env: tmuxEnv(), clock })).toMatchObject({ verdict: "done" });
+  expect(pastes()).toBe(2);
+  expect(calls.filter((c) => c[1] === "set-buffer").map((c) => c.at(-1))).toEqual(["main", "main"]);
+  expect(send("arena-a", { text: "main", answer: asked.questionId }, { runner, env: tmuxEnv(), clock }))
+    .toEqual({ name: "arena-a", verdict: "stale", detail: `question ${asked.questionId} was already answered` });
+  expect(pastes()).toBe(2);
 });
 
 test("tmux launch opens a detached named window and addresses it by pane and window id from then on", () => {

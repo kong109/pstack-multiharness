@@ -8,7 +8,7 @@ import { parseArgs } from "node:util";
 
 import { NAME, fill, foreignRequest, protocolPointer } from "./agent-routes.mjs";
 import { harnesses } from "./resolve-models.mjs";
-import { classifyScreen, screenSettle } from "./screen-classifier.mjs";
+import { classifierEnabled, classifyScreen, screenSettle } from "./screen-classifier.mjs";
 
 const START_MS = 60_000;
 const TURN_START_MS = 90_000;
@@ -19,8 +19,8 @@ const NONE_POLL_MS = 5_000;
 const SCREEN_POLL_MS = 2_000;
 const QUIET_MS = 15_000;
 const PASTE_SETTLE_MS = 200;
-// Lower than the settle thresholds: a wrong skip only delays the parent, while digits typed into a permission menu can approve it.
-const PARENT_DIALOG_MIN_CONFIDENCE = 0.5;
+// The line ends with Enter, which confirms a menu's highlighted option, so typing waits for a confident read that no dialog is open.
+const PARENT_CLEAR_MIN_CONFIDENCE = 0.7;
 
 export const script = fileURLToPath(import.meta.url);
 
@@ -441,10 +441,11 @@ const muxes = {
     server: (env) => env.TMUX,
     backend: tmuxMux,
     blocked({ runner, env }, parent) {
+      if (!classifierEnabled(env)) return false;
       const r = runner("tmux", ["capture-pane", "-p", "-t", parent.pane]);
-      if (r.status !== 0) return false;
+      if (r.status !== 0) return true;
       const classified = classifyScreen(screenText(r.stdout), { runner, env });
-      return classified?.label === "dialog_open" && classified.confidence >= PARENT_DIALOG_MIN_CONFIDENCE;
+      return !classified || classified.label === "dialog_open" || classified.confidence < PARENT_CLEAR_MIN_CONFIDENCE;
     },
     typeInto({ runner, clock }, parent, line) {
       const text = runner("tmux", ["send-keys", "-t", parent.pane, "-l", "--", line]);

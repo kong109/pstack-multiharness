@@ -1085,29 +1085,48 @@ test("the classifier runs only with a key and without PSTACK_SCREEN_CLASSIFIER=o
   expect(curlCount(classifiedEnv({ PSTACK_SCREEN_CLASSIFIER: "off" }))).toBe(0);
 });
 
-test("ask-parent types nothing into a tmux parent pane that Jev reads as an open dialog", () => {
+test("ask-parent types into a tmux parent pane only when Jev confidently reads no open dialog there", () => {
   const parentScreen = "Do you want to proceed?\n❯ 1. Yes\n  2. No";
-  const askWith = (curl) => {
+  const askWith = (curl, { env = classifiedEnv(), parent = text(parentScreen) } = {}) => {
     const { runner, calls } = scripted({
       ...tmuxBase,
       "tmux capture-pane": (args) => {
-        if (args.includes("%0")) return text(parentScreen);
+        if (args.includes("%0")) return typeof parent === "function" ? parent() : parent;
         if (!existsSync(join(runDir(), "question.md"))) write("question.md", "Which branch?\n");
         return text(`agent ${calls.length}`);
       },
       curl,
     });
     launch(options(), { runner, env: tmuxEnv(), clock: fakeClock() });
-    const out = askParent(runDir(), { runner, env: classifiedEnv(), clock: fakeClock() });
+    const out = askParent(runDir(), { runner, env, clock: fakeClock() });
     close("arena-a", {}, { runner, env: tmuxEnv() });
-    return { out, typed: calls.filter((c) => c[1] === "send-keys" && c.includes("%0")) };
+    return { out, curl: curls(calls).length, typed: calls.filter((c) => c[1] === "send-keys" && c.includes("%0")) };
   };
-  const skipped = askWith(jev("dialog_open", 0.55));
-  expect(skipped.out).toMatchObject({ sent: false, reason: "parent pane is blocked" });
-  expect(skipped.typed).toEqual([]);
-  for (const curl of [jev("dialog_open", 0.45), jev("turn_finished", 1), () => ({ status: 28, stdout: "", stderr: "timeout" })]) {
+  const unconfirmed = [
+    jev("dialog_open", 0.99),
+    jev("dialog_open", 0.55),
+    jev("turn_finished", 0.69),
+    () => ({ status: 28, stdout: "", stderr: "timeout" }),
+    () => text("<html>bad gateway</html>"),
+  ];
+  for (const curl of unconfirmed) {
+    const skipped = askWith(curl);
+    expect(skipped.out).toMatchObject({ sent: false, reason: "parent pane is blocked" });
+    expect(skipped.typed).toEqual([]);
+  }
+  const unreadable = askWith(jev("turn_finished", 1), { parent: { status: 1, stdout: "", stderr: "can't find pane: %0" } });
+  expect(unreadable.out).toMatchObject({ sent: false, reason: "parent pane is blocked" });
+  expect(unreadable.curl).toBe(0);
+  expect(unreadable.typed).toEqual([]);
+  for (const curl of [jev("turn_finished", 0.7), jev("still_working", 0.95)]) {
     const typed = askWith(curl);
     expect(typed.out).toMatchObject({ sent: true });
     expect(typed.typed).toHaveLength(2);
+  }
+  const noCurl = () => { throw new Error("curl without the classifier"); };
+  for (const env of [tmuxEnv(), classifiedEnv({ PSTACK_SCREEN_CLASSIFIER: "off" })]) {
+    const blind = askWith(noCurl, { env });
+    expect(blind.out).toMatchObject({ sent: true });
+    expect(blind.typed).toHaveLength(2);
   }
 });

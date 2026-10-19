@@ -8,6 +8,7 @@ import { parseArgs } from "node:util";
 
 import { NAME, fill, foreignRequest, protocolPointer } from "./agent-routes.mjs";
 import { harnesses } from "./resolve-models.mjs";
+import { classifyScreen, screenSettle } from "./screen-classifier.mjs";
 
 const START_MS = 60_000;
 const TURN_START_MS = 90_000;
@@ -23,8 +24,8 @@ export const script = fileURLToPath(import.meta.url);
 
 export const panesRoot = (env = process.env) => resolve(env.PSTACK_PANES_DIR ?? join(realpathSync(tmpdir()), "pstack-panes"));
 
-export function sh(cmd, args, { timeoutMs } = {}) {
-  const r = spawnSync(cmd, args, { encoding: "utf8", timeout: timeoutMs, maxBuffer: 32 * 1024 * 1024 });
+export function sh(cmd, args, { timeoutMs, input } = {}) {
+  const r = spawnSync(cmd, args, { encoding: "utf8", timeout: timeoutMs, input, maxBuffer: 32 * 1024 * 1024 });
   return { status: r.status, stdout: r.stdout ?? "", stderr: r.stderr || r.error?.message || "", timedOut: r.error?.code === "ETIMEDOUT" };
 }
 
@@ -298,7 +299,7 @@ export function tuiosMux({ runner, env }) {
 
 const TMUX_KEYS = { esc: "Escape", escape: "Escape" };
 
-export function tmuxMux({ runner, clock }) {
+export function tmuxMux({ runner, env, clock }) {
   const tmux = (args) => runner("tmux", args);
   const failure = (r) => (r.stderr || r.stdout).trim().slice(0, 300);
   const capture = (state) => tmux(["capture-pane", "-p", "-J", "-t", state.ids.pane, "-S", `-${SCREEN_LINES}`]);
@@ -321,6 +322,7 @@ export function tmuxMux({ runner, clock }) {
     let starting = fresh;
     let last = screen(state);
     let changedAt = clock.now();
+    const labels = new Map();
     for (;;) {
       if (reported(state)) {
         begun(state);
@@ -337,7 +339,15 @@ export function tmuxMux({ runner, clock }) {
       }
       if (now >= deadline) return { kind: starting ? "stalled" : "timeout" };
       if (starting && now >= startBy) return { kind: "stalled" };
-      if (!starting && now - changedAt >= QUIET_MS) return { kind: "quiet" };
+      if (!starting && current !== null && now - changedAt >= SCREEN_POLL_MS && !labels.has(current)) {
+        labels.set(current, classifyScreen(current, { runner, env }));
+        const kind = screenSettle(labels.get(current));
+        if (kind) return { kind, screenLabel: labels.get(current) };
+      }
+      if (!starting && now - changedAt >= QUIET_MS) {
+        const screenLabel = labels.get(current);
+        return screenLabel ? { kind: "quiet", screenLabel } : { kind: "quiet" };
+      }
       clock.sleep(SCREEN_POLL_MS);
     }
   };
@@ -484,7 +494,7 @@ function pendingQuestion(run) {
 }
 
 function conclude(state, mux, settled, { timeoutMs }) {
-  const base = { name: state.name, mux: mux.id, harness: state.harness, model: state.model };
+  const base = { name: state.name, mux: mux.id, harness: state.harness, model: state.model, ...(settled.screenLabel && { screenLabel: settled.screenLabel }) };
   const questionFile = join(state.run, "question.md");
   const resultFile = join(state.run, "result.md");
   const result = readIfPresent(resultFile);

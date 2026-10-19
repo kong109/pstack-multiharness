@@ -35,7 +35,7 @@ const age = (file, seconds) => {
 function scripted(rules) {
   const calls = [];
   const counters = new Map();
-  const runner = (cmd, args) => {
+  const runner = (cmd, args, opts) => {
     calls.push([cmd, ...args]);
     const key = Object.keys(rules).find((k) => `${cmd} ${args.join(" ")}`.startsWith(k));
     if (!key) throw new Error(`unscripted call: ${cmd} ${args.join(" ")}`);
@@ -45,7 +45,7 @@ function scripted(rules) {
       counters.set(key, n + 1);
       rule = rule[Math.min(n, rule.length - 1)];
     }
-    return typeof rule === "function" ? rule(args) : rule;
+    return typeof rule === "function" ? rule(args, opts) : rule;
   };
   return { runner, calls };
 }
@@ -988,4 +988,99 @@ test("a tmux wait that starts long after launch --no-wait reads a static screen 
   launch(options({ wait: false }), { runner, env: tmuxEnv(), clock });
   clock.sleep(5_000);
   expect(waitFor("arena-a", {}, { runner, env: tmuxEnv(), clock }).verdict).toBe("stalled");
+});
+
+const KEY = "ts-test-key-7f3a";
+const classifiedEnv = (extra = {}) => ({ ...tmuxEnv(), TYPESAFE_API_KEY: KEY, ...extra });
+const jev = (choice, confidence) => () =>
+  text(JSON.stringify({ model: "jev-1.13.0", answers: { screen: { type: "choice", choice, confidence, probabilities: {} } }, usage: {} }));
+const curls = (calls) => calls.filter((c) => c[0] === "curl");
+const pastes = (calls) => calls.filter((c) => c[1] === "paste-buffer");
+const sentBody = (input) => {
+  const line = input.split("\n").find((l) => l.startsWith("data-binary = "));
+  return JSON.parse(JSON.parse(line.slice("data-binary = ".length)));
+};
+
+test("a tmux screen Jev reads as a finished turn gets one reminder within seconds, then no_result", () => {
+  const inputs = [];
+  const { runner, calls } = scripted({
+    ...tmuxBase,
+    "tmux capture-pane": [text("a"), text("b"), text("b"), text("b"), text("c")],
+    curl: (args, opts) => { inputs.push(opts.input); return jev("turn_finished", 0.95)(); },
+  });
+  const clock = fakeClock();
+  const out = launch(options(), { runner, env: classifiedEnv(), clock });
+  expect(out).toMatchObject({ verdict: "no_result", screen: "c", screenLabel: { label: "turn_finished", confidence: 0.95 } });
+  expect(pastes(calls)).toHaveLength(1);
+  expect(calls.find((c) => c[1] === "set-buffer").at(-1)).toBe(nudgePrompt(runDir()));
+  expect(clock.now()).toBeLessThan(15_000);
+  expect(inputs.map((i) => sentBody(i).state)).toEqual(["b", "c"]);
+  expect(sentBody(inputs[0])).toMatchObject({ model: "jev-latest", questions: { screen: { type: "choice" } } });
+  expect(Object.keys(sentBody(inputs[0]).questions.screen.criteria)).toEqual(["turn_finished", "dialog_open", "asked_in_terminal", "still_working"]);
+  expect(inputs[0]).toContain(`header = "Authorization: Bearer ${KEY}"`);
+  expect(calls.flat().some((a) => String(a).includes(KEY))).toBe(false);
+});
+
+test("a finished turn below 0.9 confidence types nothing, is classified once, and falls through to idle", () => {
+  const { runner, calls } = scripted({ ...tmuxBase, "tmux capture-pane": [text("a"), text("b")], curl: jev("turn_finished", 0.85) });
+  const clock = fakeClock();
+  expect(launch(options(), { runner, env: classifiedEnv(), clock }))
+    .toMatchObject({ verdict: "idle", screen: "b", screenLabel: { label: "turn_finished", confidence: 0.85 } });
+  expect(clock.now()).toBeGreaterThanOrEqual(15_000);
+  expect(curls(calls)).toHaveLength(1);
+  expect(calls.some((c) => c[1] === "paste-buffer" || c[1] === "send-keys")).toBe(false);
+});
+
+test("a tmux dialog Jev recognizes returns blocked with the screen and its label", () => {
+  const { runner, calls } = scripted({ ...tmuxBase, "tmux capture-pane": [text("a"), text("Trust this folder?")], curl: jev("dialog_open", 0.8) });
+  const clock = fakeClock();
+  expect(launch(options(), { runner, env: classifiedEnv(), clock }))
+    .toMatchObject({ verdict: "blocked", screen: "Trust this folder?", screenLabel: { label: "dialog_open", confidence: 0.8 } });
+  expect(clock.now()).toBeLessThan(15_000);
+  expect(calls.some((c) => c[1] === "paste-buffer" || c[1] === "send-keys")).toBe(false);
+});
+
+test("a question asked on the tmux screen returns idle before the quiet fallback", () => {
+  const { runner, calls } = scripted({ ...tmuxBase, "tmux capture-pane": [text("a"), text("Which branch?")], curl: jev("asked_in_terminal", 0.75) });
+  const clock = fakeClock();
+  expect(launch(options(), { runner, env: classifiedEnv(), clock }))
+    .toMatchObject({ verdict: "idle", screen: "Which branch?", screenLabel: { label: "asked_in_terminal", confidence: 0.75 } });
+  expect(clock.now()).toBeLessThan(15_000);
+  expect(calls.some((c) => c[1] === "paste-buffer" || c[1] === "send-keys")).toBe(false);
+});
+
+test("a failed or unreadable Jev call leaves the tmux wait exactly as it is without a key", () => {
+  const failures = [
+    { status: 7, stdout: "", stderr: "curl: (7) Failed to connect" },
+    text("<html>bad gateway</html>"),
+    text(JSON.stringify({ error: { message: "unauthorized" } })),
+    jev("no_such_label", 1)(),
+  ];
+  const run = (env, curl) => {
+    const { runner, calls } = scripted({ ...tmuxBase, "tmux capture-pane": [text("a"), text("b")], curl });
+    const clock = fakeClock();
+    const out = launch(options(), { runner, env, clock });
+    close("arena-a", {}, { runner, env });
+    return { out, at: clock.now(), tmux: calls.filter((c) => c[0] === "tmux"), curl: curls(calls).length };
+  };
+  const plain = run(tmuxEnv(), () => { throw new Error("curl without a key"); });
+  for (const failure of failures) {
+    const failed = run(classifiedEnv(), () => failure);
+    expect(failed.curl).toBe(1);
+    expect(failed.out).toEqual(plain.out);
+    expect(failed.at).toBe(plain.at);
+    expect(failed.tmux).toEqual(plain.tmux);
+  }
+});
+
+test("the classifier runs only with a key and without PSTACK_SCREEN_CLASSIFIER=off", () => {
+  const curlCount = (env) => {
+    const { runner, calls } = scripted({ ...tmuxBase, "tmux capture-pane": [text("a"), text("b")], curl: jev("still_working", 0.9) });
+    expect(launch(options(), { runner, env, clock: fakeClock() })).toMatchObject({ verdict: "idle" });
+    close("arena-a", {}, { runner, env });
+    return curls(calls).length;
+  };
+  expect(curlCount(classifiedEnv())).toBe(1);
+  expect(curlCount(tmuxEnv())).toBe(0);
+  expect(curlCount(classifiedEnv({ PSTACK_SCREEN_CLASSIFIER: "off" }))).toBe(0);
 });

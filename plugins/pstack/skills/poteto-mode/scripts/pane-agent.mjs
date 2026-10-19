@@ -149,7 +149,7 @@ export function herdrMux({ runner, env }) {
       const tabArgs = ["tab", "create", "--cwd", cwd, "--label", state.name, "--no-focus"];
       if (env.HERDR_WORKSPACE_ID) tabArgs.splice(2, 0, "--workspace", env.HERDR_WORKSPACE_ID);
       const opened = need(call(tabArgs), "tab create");
-      state.ids = { tab: opened.tab.tab_id, pane: opened.root_pane.pane_id };
+      state.ids = { ...state.ids, tab: opened.tab.tab_id, pane: opened.root_pane.pane_id };
       saveState(state);
       const started = call(["agent", "start", state.name, "--kind", harnesses[state.harness].kind, "--pane", state.ids.pane,
         "--timeout", String(START_MS), "--", ...args]);
@@ -169,6 +169,7 @@ export function herdrMux({ runner, env }) {
       for (let i = 0; i < 20 && status(state) === "blocked"; i++) pause(250);
       return this.wait(state, timeoutMs);
     },
+    alive: (state) => call(["pane", "get", state.ids.pane]).ok,
     peek(state) {
       const read = (source) => runner("herdr", ["agent", "read", state.name, "--source", source, "--lines", String(SCREEN_LINES)]);
       // herdr cannot scroll an alternate-screen TUI's history while it is blocked, so fall back to what is on screen.
@@ -255,7 +256,7 @@ export function tuiosMux({ runner, env }) {
       const r = runner("tuios", ["new-window", "-s", session, state.name, "--cwd", cwd, "--no-focus", "--print-id", "--", ...harnessArgv(launchArgs)]);
       if (r.status !== 0) throw new Error(`tuios new-window failed: ${(r.stderr || r.stdout).trim()}`);
       const id = r.stdout.trim();
-      state.ids = { window: id, pane: id, session };
+      state.ids = { ...state.ids, window: id, pane: id, session };
       state.prompted = true;
       state.awaitTurn = true;
       saveState(state);
@@ -282,6 +283,7 @@ export function tuiosMux({ runner, env }) {
       for (let i = 0; i < 20 && agentState(state) === "needs_input"; i++) pause(250);
       return settle(state, { fresh: Boolean(state.awaitTurn), timeoutMs });
     },
+    alive: (state) => agentState(state) !== "gone",
     peek(state) {
       const blocked = agentState(state) === "needs_input";
       const r = blocked ? call("peek-prompt", ["-w", state.name]) : call("capture-pane", ["-w", state.name]);
@@ -349,7 +351,7 @@ export function tmuxMux({ runner, clock }) {
       const r = tmux(["new-window", "-d", "-P", "-F", "#{pane_id} #{window_id}", "-n", state.name, "-c", cwd, "--", ...harnessArgv(launchArgs)]);
       if (r.status !== 0) throw new Error(`tmux new-window failed: ${failure(r)}`);
       const [pane, window] = r.stdout.trim().split(" ");
-      state.ids = { pane, window };
+      state.ids = { ...state.ids, pane, window };
       state.prompted = true;
       state.awaitTurn = true;
       saveState(state);
@@ -376,6 +378,7 @@ export function tmuxMux({ runner, clock }) {
       press(state, keys.map((k) => TMUX_KEYS[k.toLowerCase()] ?? k));
       return settle(state, { fresh: Boolean(state.awaitTurn), timeoutMs });
     },
+    alive: (state) => !gone(state),
     peek(state) {
       const r = capture(state);
       return r.status === 0 ? screenText(r.stdout) : `(unreadable: ${failure(r).slice(0, 200)})`;
@@ -392,6 +395,7 @@ const muxes = {
     detect: (env) => Boolean(env.HERDR_ENV || env.HERDR_PANE_ID),
     paneEnv: "HERDR_PANE_ID",
     paneId: /^w[0-9A-Za-z]+:p[0-9A-Za-z]+$/,
+    server: (env) => env.HERDR_SOCKET_PATH ?? env.HERDR_WORKSPACE_ID,
     backend: herdrMux,
     typeInto: ({ runner }, parent, line) => [runner("herdr", ["pane", "run", parent.pane, line])],
   },
@@ -400,6 +404,7 @@ const muxes = {
     paneEnv: "TUIOS_PANE_ID",
     paneId: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
     sessionEnv: "TUIOS_SESSION",
+    server: (env) => env.TUIOS_SESSION,
     backend: tuiosMux,
     typeInto: ({ runner }, parent, line) => [
       runner("tuios", ["send-text", "-s", parent.session, "-w", parent.pane, line]),
@@ -410,6 +415,7 @@ const muxes = {
     detect: (env) => Boolean(env.TMUX && env.TMUX_PANE),
     paneEnv: "TMUX_PANE",
     paneId: /^%\d+$/,
+    server: (env) => env.TMUX,
     backend: tmuxMux,
     typeInto({ runner, clock }, parent, line) {
       const text = runner("tmux", ["send-keys", "-t", parent.pane, "-l", "--", line]);
@@ -439,12 +445,19 @@ function parentOf(muxId, env) {
   return { mux: muxId, pane: env[paneEnv], ...(sessionEnv ? { session: env[sessionEnv] } : {}) };
 }
 
-export function selfState(env = process.env) {
-  for (const state of readStates(panesRoot(env))) {
-    const own = Object.hasOwn(muxes, state.mux) && env[muxes[state.mux].paneEnv];
-    if (own && state.ids?.pane === own) return state;
+export function selfState(deps) {
+  const { env } = deps;
+  const matches = readStates(panesRoot(env)).filter((state) => {
+    if (!Object.hasOwn(muxes, state.mux) || state.closed) return false;
+    const { paneEnv, server } = muxes[state.mux];
+    const pane = env[paneEnv];
+    const here = server(env);
+    return Boolean(pane && here) && state.ids?.pane === pane && state.ids.server === here && muxFor(state.mux, deps).alive(state);
+  });
+  if (matches.length > 1) {
+    throw new Error(`More than one live pane agent claims this pane (${matches.map((s) => s.name).join(", ")}); close the stale one`);
   }
-  return null;
+  return matches[0] ?? null;
 }
 
 const readIfPresent = (path) => (existsSync(path) ? readFileSync(path, "utf8") : null);
@@ -516,7 +529,7 @@ export function launch(options, deps) {
   deps = resolveDeps(deps);
   const { env } = deps;
   const { harness, model, effort = null, access = "read", brief, cwd = process.cwd(), wait = true } = options;
-  const self = selfState(env);
+  const self = selfState(deps);
   const name = nestedName(self, options.name);
   const dir = statePath(name, env);
   foreignRequest("launch", { harness, model, effort });
@@ -534,7 +547,10 @@ export function launch(options, deps) {
   mkdirSync(run, { recursive: true });
   const parent = parentOf(muxId, env);
   writeFileSync(join(run, "brief.md"), briefText(readFileSync(brief, "utf8"), { run, access, name, parent }));
-  const state = { name, mux: muxId, harness, model, effort, access, run, cwd: resolve(cwd), parent, startedAt: new Date().toISOString() };
+  const state = {
+    name, mux: muxId, harness, model, effort, access, run, cwd: resolve(cwd), parent,
+    ids: { server: muxes[muxId].server(env) ?? null }, startedAt: new Date().toISOString(),
+  };
   saveState(state);
 
   const spec = harnesses[harness];
@@ -618,6 +634,10 @@ export function close(name, { keep = false } = {}, deps) {
   const mux = muxFor(state.mux, deps);
   const closed = mux.close(state);
   if (closed && !keep) rmSync(state.run, { recursive: true, force: true });
+  if (closed && keep) {
+    state.closed = true;
+    saveState(state);
+  }
   return { name, mux: state.mux, closed, kept: closed ? (keep ? state.run : null) : state.run };
 }
 

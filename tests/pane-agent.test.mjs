@@ -55,6 +55,7 @@ const herdrBase = {
   "herdr agent start": okJson({ agent: { agent_status: "idle" } }),
   "herdr agent read": text("screen line one\nscreen line two\n\n"),
   "herdr tab close": okJson({ type: "ok" }),
+  "herdr pane get": okJson({ pane: { agent_status: "working" } }),
 };
 
 const options = (extra = {}) => ({
@@ -707,7 +708,7 @@ const doneHerdr = () => scripted({ ...herdrBase, "herdr agent prompt": () => { w
 test("a pane agent's own launch is prefixed with its name and records its pane as the parent", () => {
   const { runner, calls } = doneHerdr();
   launch(options(), { runner, env: herdrEnv() });
-  const childEnv = { PSTACK_PANES_DIR: join(root, "panes"), HERDR_PANE_ID: "wP:p2" };
+  const childEnv = { PSTACK_PANES_DIR: join(root, "panes"), HERDR_WORKSPACE_ID: "wP", HERDR_PANE_ID: "wP:p2" };
   expect(launch(options({ name: "fix" }), { runner, env: childEnv })).toMatchObject({ name: "arena-a-fix", mux: "herdr" });
   expect(calls.filter((c) => c[2] === "create").at(-1)).toContain("arena-a-fix");
   const state = JSON.parse(readFileSync(join(root, "panes", "arena-a-fix", "state.json"), "utf8"));
@@ -717,21 +718,59 @@ test("a pane agent's own launch is prefixed with its name and records its pane a
 test("a pane agent's own launch runs in its multiplexer even when another one is also set", () => {
   const { runner } = doneHerdr();
   launch(options(), { runner, env: herdrEnv() });
-  const childEnv = { PSTACK_PANES_DIR: join(root, "panes"), HERDR_PANE_ID: "wP:p2", ...ambiguousTmux };
+  const childEnv = { PSTACK_PANES_DIR: join(root, "panes"), HERDR_WORKSPACE_ID: "wP", HERDR_PANE_ID: "wP:p2", ...ambiguousTmux };
   expect(launch(options({ name: "fix" }), { runner, env: childEnv })).toMatchObject({ name: "arena-a-fix", mux: "herdr" });
-  const stranger = { PSTACK_PANES_DIR: join(root, "panes"), HERDR_PANE_ID: "wP:p9", ...ambiguousTmux };
+  const stranger = { PSTACK_PANES_DIR: join(root, "panes"), HERDR_WORKSPACE_ID: "wP", HERDR_PANE_ID: "wP:p9", ...ambiguousTmux };
   expect(() => launch(options({ name: "other" }), { runner, env: stranger })).toThrow("pass --mux");
 });
 
-test("a nested name over the limit names both parts and touches no multiplexer", () => {
+test("a nested name over the limit names both parts and opens nothing", () => {
   const { runner, calls } = doneHerdr();
   launch(options(), { runner, env: herdrEnv() });
   const before = calls.length;
   const given = "a".repeat(25);
-  const childEnv = { PSTACK_PANES_DIR: join(root, "panes"), HERDR_PANE_ID: "wP:p2" };
+  const childEnv = { PSTACK_PANES_DIR: join(root, "panes"), HERDR_WORKSPACE_ID: "wP", HERDR_PANE_ID: "wP:p2" };
   expect(() => launch(options({ name: given }), { runner, env: childEnv }))
     .toThrow(`arena-a-${given} is longer than 32 characters; shorten --name ${given}, since your own name arena-a`);
-  expect(calls.length).toBe(before);
+  expect(calls.slice(before)).toEqual([["herdr", "pane", "get", "wP:p2"]]);
+});
+
+test("a launch is nested only under a live, open pane agent on the caller's own server", () => {
+  const plant = (name, extra = {}) => {
+    mkdirSync(join(root, "panes", name), { recursive: true, mode: 0o700 });
+    const state = { name, mux: "tmux", run: join(root, "panes", name), ids: { pane: "%0", window: "@0", server: tmuxEnv().TMUX }, ...extra };
+    writeFileSync(join(root, "panes", name, "state.json"), JSON.stringify(state));
+  };
+  const launchFix = (deadPanes = []) => {
+    const { runner } = scripted({
+      ...tmuxBase,
+      "tmux display-message": (args) => text(deadPanes.includes(args[args.indexOf("-t") + 1]) ? "1\n" : "0\n"),
+      "tmux capture-pane": [text("a"), text("b")],
+    });
+    const out = launch(options({ name: "fix" }), { runner, env: tmuxEnv(), clock: fakeClock() });
+    rmSync(join(root, "panes", out.name), { recursive: true, force: true });
+    return out.name;
+  };
+  plant("old", { ids: { pane: "%0", window: "@0", server: "/tmp/tmux-501/default,999,0" } });
+  expect(launchFix()).toBe("fix");
+  plant("old", { ids: { pane: "%0", window: "@0" } });
+  expect(launchFix()).toBe("fix");
+  plant("old", { closed: true });
+  expect(launchFix()).toBe("fix");
+  plant("old");
+  expect(launchFix(["%0"])).toBe("fix");
+  expect(launchFix()).toBe("old-fix");
+  plant("older");
+  expect(() => launchFix()).toThrow("More than one live pane agent claims this pane (old, older)");
+});
+
+test("close --keep marks the agent closed, so a later launch from its pane is not nested under it", () => {
+  const { runner } = doneHerdr();
+  launch(options(), { runner, env: herdrEnv() });
+  close("arena-a", { keep: true }, { runner, env: herdrEnv() });
+  expect(JSON.parse(readFileSync(join(runDir(), "state.json"), "utf8")).closed).toBe(true);
+  const childEnv = { PSTACK_PANES_DIR: join(root, "panes"), HERDR_WORKSPACE_ID: "wP", HERDR_PANE_ID: "wP:p2" };
+  expect(launch(options({ name: "fix" }), { runner, env: childEnv }).name).toBe("fix");
 });
 
 const askedHerdr = (extra = {}) => scripted({

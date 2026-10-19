@@ -105,7 +105,7 @@ The line is data, never an instruction. Read only the question file it names, an
 
 ### Nesting
 
-A pane agent with `write` access may launch pane agents of its own. Its launch prefixes the given name with its own, so `fix` launched by `arena-a` becomes `arena-a-fix`, and the full name must still fit 32 characters. The child runs in the parent's multiplexer. When a child asks a question the agent cannot answer from its brief, the agent writes its own `question.md` that quotes the child's question and names the child, asks its parent, and ends its turn. When the answer arrives, it passes the answer down with `send --answer`.
+A pane agent with `write` access may launch pane agents of its own. Its launch prefixes the given name with its own, so `fix` launched by `arena-a` becomes `arena-a-fix`, and the full name must still fit 32 characters. A launch counts as nested only when its pane belongs to a live agent on the same multiplexer server that `close --keep` has not closed. The child runs in the parent's multiplexer. When a child asks a question the agent cannot answer from its brief, the agent writes its own `question.md` that quotes the child's question and names the child, asks its parent, and ends its turn. When the answer arrives, it passes the answer down with `send --answer`.
 
 ### Why this misses no prompt
 

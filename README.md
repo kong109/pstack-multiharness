@@ -12,7 +12,7 @@ Run in Claude Code:
 
 ```text
 /plugin marketplace add kong109/pstack-multiharness
-/plugin install pstack@pstack-claude
+/plugin install pstack@pstack-multiharness
 ```
 
 ### Codex
@@ -21,7 +21,7 @@ Run in your terminal:
 
 ```shell
 codex plugin marketplace add kong109/pstack-multiharness
-codex plugin add pstack@pstack-claude
+codex plugin add pstack@pstack-multiharness
 ```
 
 Run `setup-pstack` to change model defaults or turn automatic routing off. The plugin installs the routing hook on Claude Code and Codex; Codex asks you to trust it through `/hooks` before it runs. In Claude Code, use `/pstack:setup-pstack`.

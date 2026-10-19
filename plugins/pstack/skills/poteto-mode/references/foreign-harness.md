@@ -83,10 +83,10 @@ The agent writes its report to `result.md` in its run directory and a blocking q
 | --- | --- | --- |
 | `done` | `result` holds the final report | Review it as you would a native worker's, then close the agent. |
 | `question` | the agent needs a decision. `questionId` names it | Answer with `send --text ... --answer QUESTION_ID`, run in the background, and treat its verdict the same way. If the human answers in the pane instead, run `wait --name NAME`. It blocks while the agent works, and a `result.md` written after the question reads as `done`. |
-| `blocked` | a TUI dialog is open, such as an approval, a trust prompt, or a login. A `question` field appears when a question is still unanswered | Read `screen`. Answer a routine dialog with `send --keys`. Ask the user when it wants authority the brief did not grant. |
+| `blocked` | a TUI dialog is open, such as an approval, a trust prompt, or a login. A `question` field appears when a question is still unanswered. On tmux it needs the [screen classifier](#screen-classification) | Read `screen`. Answer a routine dialog with `send --keys`. Ask the user when it wants authority the brief did not grant. |
 | `no_result` | the turn ended with no report, even after one automatic reminder | Run `peek`, then send a correction or close the agent. |
 | `stalled` | the turn never started, or herdr saw no activity after the prompt. The text may still have arrived | Run `peek` before resending. The helper never types a second prompt on its own. |
-| `idle` | tmux only. The screen stopped changing for 15 seconds with no report. The turn may have ended, or a dialog may be open | Read `screen`. Answer a dialog with `send --keys`, or send a correction. The helper never types a reminder into a tmux pane. |
+| `idle` | tmux only. The screen classifier read a question asked on screen, or the screen stopped changing for 15 seconds with no report and no confident label. The turn may have ended, or a dialog may be open. `screenLabel` names the classifier's read when it made one | Read `screen`. Answer a question or a dialog with `send --text` or `send --keys`, or send a correction. |
 | `stale` | `send --answer` named a question that was already answered or that a newer question replaced. Nothing was typed | Ignore it. Another route already answered that question. |
 | `timeout` | the wait ran out | Run `peek`. Extend with `wait --name NAME`, or close it. |
 | `error` | the pane or harness is gone, or the text could not be typed | Report it and relaunch if the work still matters. A `send --answer` that failed counts as undelivered, so the same command can be run again. |
@@ -113,7 +113,27 @@ A pane agent with `write` access may launch pane agents of its own. Its launch p
 
 The launch flags remove the prompts that can be removed. Codex runs with `-a never`. Grok runs with `--always-approve`, Antigravity with `--dangerously-skip-permissions`, and Muse with `--approval-mode never` for `read` and `--yolo` for `write`. Antigravity still asks once to trust a folder it has not opened, which reads as `blocked`, and `send --keys Enter` accepts it. Claude Code runs in `dontAsk` mode with an explicit allow list and without `AskUserQuestion`, so a denied action becomes a `question` instead of a dialog. The brief tells the agent to ask through `question.md` and never in the terminal. Whatever dialog is left, such as a folder trust prompt or an expired login, makes the multiplexer report a blocked state, and the blocking call returns `blocked` at once with the screen. The person watching the pane sees the same state in herdr's status badge or the tuios Inbox and may answer it there, after which `wait` resumes. A turn that ends without a report is reminded once and then reported, and each `send --text` starts a new turn with its own reminder. This holds for a `launch --no-wait` followed by `wait` as well. Every wait has a timeout.
 
-tmux reports no agent state. The helper reads the screen every two seconds instead. A turn whose screen does not change within 90 seconds of a launch or a send is `stalled`. A `wait` that starts 90 seconds or more after the launch or send treats the turn as already started. A screen that then stays unchanged for 15 seconds with no report is `idle`. tmux cannot tell a finished turn from an open dialog, so a tmux dialog surfaces as `idle`, or as `stalled` when it opened before the screen first changed, never as `blocked`, and the helper never types a reminder into it. A key typed into a permission menu can select an option.
+tmux reports no agent state. The helper reads the screen every two seconds instead. A turn whose screen does not change within 90 seconds of a launch or a send is `stalled`. A `wait` that starts 90 seconds or more after the launch or send treats the turn as already started. With the [screen classifier](#screen-classification) on, a screen that holds still for one read is classified once, so a finished turn gets its reminder and a dialog returns `blocked` within seconds. A screen that stays unchanged for 15 seconds with no report and no confident label is `idle`. Without the classifier, tmux cannot tell a finished turn from an open dialog, so a tmux dialog surfaces as `idle`, or as `stalled` when it opened before the screen first changed, and the helper never types a reminder into it. A key typed into a permission menu can select an option, which is why only a finished turn read at 0.9 or more triggers typing.
+
+### Screen classification
+
+On tmux the helper can send the pane's visible text to TypeSafe's Jev model, which returns one label with a confidence in about 150 milliseconds.
+
+| label | minimum confidence | verdict |
+| --- | --- | --- |
+| `turn_finished` | 0.9 | the one reminder, then `no_result` |
+| `dialog_open` | 0.7 | `blocked` with the screen |
+| `asked_in_terminal` | 0.7 | `idle` at once with the screen |
+| `still_working` | none | keep waiting |
+
+A verdict that follows a classification carries `screenLabel` with the label and its confidence. `ask-parent` on tmux also classifies the parent pane and types nothing when it reads `dialog_open` at 0.5 or more, because the line holds digits that a permission menu acts on. It then returns `sent: false` with `reason: "parent pane is blocked"`, and the parent still sees `question.md` through its background wait.
+
+- **Opt in.** Set `TYPESAFE_API_KEY`. Export it in `~/.zshenv` so every pane and every Bash call sees it. The helper passes the key to `curl` on stdin, never on the command line.
+- **Opt out.** Set `PSTACK_SCREEN_CLASSIFIER=off`.
+- **Privacy.** Each classification sends up to 60 lines of the pane's visible text to TypeSafe. Leave the key unset where that text must stay local.
+- **Fallback.** A missing key, a failed or slow call (five-second limit), an unreadable answer, or a confidence below the minimum keeps the wait as it was. The 15-second `idle` still applies, and a classifier failure never ends a wait on its own.
+
+`tools/eval-screen-classifier.mjs` runs the captured screens in `tests/fixtures/screens/` through the classifier and prints each label, confidence, and latency. It needs the key and is not run in CI.
 
 tuios reports blocked and working states only for harnesses whose hooks are wired to it. Run `tuios integration install --all` once and check it with `tuios doctor agents`. Without the hooks a pane reads `none`. The helper then treats it as running until it sees activity or a report file. In every state it checks for the files every five seconds, so a report ends the wait even when a hook was lost, and a dialog goes unnoticed until the timeout.
 

@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 
 import { NAME, fill, foreignRequest, protocolPointer } from "./agent-routes.mjs";
@@ -15,6 +15,11 @@ const DEFAULT_WAIT_MS = 1_800_000;
 const RESULT_TEXT_LIMIT = 200_000;
 const SCREEN_LINES = 60;
 const NONE_POLL_MS = 5_000;
+const SCREEN_POLL_MS = 2_000;
+const QUIET_MS = 15_000;
+const PASTE_SETTLE_MS = 200;
+
+export const script = fileURLToPath(import.meta.url);
 
 export const panesRoot = (env = process.env) => resolve(env.PSTACK_PANES_DIR ?? join(realpathSync(tmpdir()), "pstack-panes"));
 
@@ -33,11 +38,12 @@ function ownedPrivateDir(root) {
 }
 
 const pause = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+const systemClock = { now: Date.now, sleep: pause };
 
 export function harnessArgs(harness, { model, effort, access, run }) {
   const spec = harnesses[harness];
   if (!spec.access[access]) throw new Error(`${harness} has no ${access} access profile`);
-  const vars = { model, effort: effort ?? "", run };
+  const vars = { model, effort: effort ?? "", run, script };
   return [
     ...fill(spec.model, vars),
     ...(effort ? fill(spec.effort, vars) : []),
@@ -46,25 +52,34 @@ export function harnessArgs(harness, { model, effort, access, run }) {
   ];
 }
 
-export function briefText(userBrief, { run, access }) {
+export function briefText(userBrief, { run, access, name, parent }) {
   const result = join(run, "result.md");
   const question = join(run, "question.md");
+  const askParent = `node ${script} ask-parent --run ${run}`;
   const scope = access === "read"
     ? `Do not modify any file except ${result} and ${question}.`
     : `Change only what the task assigns, plus ${result} and ${question}.`;
+  const ask = parent
+    ? `If a decision blocks you, write only the question to ${question}, do not write ${result}, run \`${askParent}\`, and end your turn. If that command fails, end your turn anyway, because your parent also sees ${question}. Your parent replies in this terminal.`
+    : `If a decision blocks you, write only the question to ${question}, do not write ${result}, and end your turn. Your parent replies in this terminal.`;
+  const nesting = access === "write" ? `
+## Launching your own pane agents
+
+You may launch pane agents of your own with \`node ${script} launch ...\`. Your name prefix and multiplexer are applied for you. When one of your agents asks a question you cannot answer from this brief, write your own question to ${question} that quotes it and names the agent, ask your parent as above, and end your turn. When the answer arrives, pass it down with \`node ${script} send --name <agent> --text <answer> --answer <questionId>\`.
+` : "";
   return `${userBrief.trimEnd()}
 
 ## Pane protocol
 
-You run in a terminal pane that a person can watch. Your parent agent is not at the keyboard, so nothing can answer a prompt in this terminal.
+You are pane agent ${name}. You run in a terminal pane that a person can watch. Your parent agent is not at the keyboard, so nothing can answer a prompt in this terminal.
 
 ${protocolPointer}
 
 - Never ask a question in the terminal and never stop at an approval or confirmation prompt.
-- If a decision blocks you, write only the question to ${question}, do not write ${result}, and end your turn. Your parent replies in this terminal.
+- ${ask}
 - When the work is complete, your last action is to write your complete final report to ${result}. Never write ${result} as a status note or before the work is done. Text after that file is not read.
 - ${scope}
-`;
+${nesting}`;
 }
 
 export const launchPrompt = (run) =>
@@ -104,7 +119,7 @@ function herdrJson(runner, args, timeoutMs) {
 const HERDR_KEYS = { escape: "esc" };
 const TUIOS_KEYS = { esc: "Escape" };
 
-export function herdrMux(runner, env) {
+export function herdrMux({ runner, env }) {
   const call = (args, timeoutMs) => herdrJson(runner, args, timeoutMs);
   const need = (r, what) => { if (!r.ok) throw new Error(`herdr ${what} failed: ${r.code}: ${r.message}`); return r.result; };
   const settled = (r) => {
@@ -157,6 +172,15 @@ export function herdrMux(runner, env) {
   };
 }
 
+const harnessArgv = ({ command, args, promptArgs, promptFirst }) =>
+  promptFirst ? [command, ...promptArgs, ...args] : [command, ...args, ...promptArgs];
+
+function reported(state) {
+  if (existsSync(join(state.run, "result.md"))) return true;
+  const asked = stamp(join(state.run, "question.md"));
+  return asked !== null && asked !== state.questionSeen;
+}
+
 function screenText(text) {
   const lines = text.split("\n").map((l) => l.trimEnd());
   while (lines.length && !lines[0].trim()) lines.shift();
@@ -164,7 +188,7 @@ function screenText(text) {
   return lines.slice(-SCREEN_LINES).join("\n");
 }
 
-export function tuiosMux(runner, env) {
+export function tuiosMux({ runner, env }) {
   const session = env.TUIOS_SESSION;
   const call = (verb, args, timeoutMs) => runner("tuios", [verb, "-s", session, ...args], { timeoutMs: timeoutMs && timeoutMs + 15_000 });
   const agentState = (state) => {
@@ -174,11 +198,6 @@ export function tuiosMux(runner, env) {
   };
   const waitFor = (state, until, timeoutMs) =>
     call("wait-for", ["agent-state", "-w", state.name, "--until", until, "--timeout", String(timeoutMs)], timeoutMs).status === 0;
-  const reported = (state) => {
-    if (existsSync(join(state.run, "result.md"))) return true;
-    const asked = stamp(join(state.run, "question.md"));
-    return asked !== null && asked !== state.questionSeen;
-  };
   const settle = (state, { fresh, timeoutMs }) => {
     const deadline = Date.now() + timeoutMs;
     const startBy = Math.min(deadline, Date.now() + TURN_START_MS);
@@ -220,11 +239,11 @@ export function tuiosMux(runner, env) {
   };
   return {
     id: "tuios",
-    launch(state, { command, args, cwd, promptArgs, promptFirst }) {
-      const argv = promptFirst ? [command, ...promptArgs, ...args] : [command, ...args, ...promptArgs];
-      const r = runner("tuios", ["new-window", "-s", session, state.name, "--cwd", cwd, "--no-focus", "--print-id", "--", ...argv]);
+    launch(state, { cwd, ...launchArgs }) {
+      const r = runner("tuios", ["new-window", "-s", session, state.name, "--cwd", cwd, "--no-focus", "--print-id", "--", ...harnessArgv(launchArgs)]);
       if (r.status !== 0) throw new Error(`tuios new-window failed: ${(r.stderr || r.stdout).trim()}`);
-      state.ids = { window: r.stdout.trim(), session };
+      const id = r.stdout.trim();
+      state.ids = { window: id, pane: id, session };
       state.prompted = true;
       state.awaitTurn = true;
       saveState(state);
@@ -263,21 +282,160 @@ export function tuiosMux(runner, env) {
   };
 }
 
-export function detectMux(env, requested) {
-  if (requested) return requested;
-  const herdr = Boolean(env.HERDR_ENV || env.HERDR_PANE_ID);
-  const tuios = env.TUIOS_ENV === "1";
-  if (herdr && tuios) throw new Error("Both herdr and tuios are set in this environment; pass --mux herdr or --mux tuios");
-  if (herdr) return "herdr";
-  if (tuios) return "tuios";
-  throw new Error("Not running inside herdr or tuios, so there is no pane to show the agent in. Run it as a native subagent, or ask the user to start herdr or tuios.");
+const TMUX_KEYS = { esc: "Escape", escape: "Escape" };
+
+export function tmuxMux({ runner, clock }) {
+  const tmux = (args) => runner("tmux", args);
+  const failure = (r) => (r.stderr || r.stdout).trim().slice(0, 300);
+  const capture = (state) => tmux(["capture-pane", "-p", "-J", "-t", state.ids.pane, "-S", `-${SCREEN_LINES}`]);
+  const screen = (state) => {
+    const r = capture(state);
+    return r.status === 0 ? screenText(r.stdout) : null;
+  };
+  const begun = (state) => {
+    if (!state.awaitTurn) return;
+    state.awaitTurn = false;
+    saveState(state);
+  };
+  const gone = (state) => {
+    const r = tmux(["display-message", "-p", "-t", state.ids.pane, "#{pane_dead}"]);
+    return r.status !== 0 || r.stdout.trim() === "1";
+  };
+  const settle = (state, { fresh, timeoutMs }) => {
+    const deadline = clock.now() + timeoutMs;
+    const startBy = Math.min(deadline, clock.now() + TURN_START_MS);
+    let starting = fresh;
+    let last = screen(state);
+    let changedAt = clock.now();
+    for (;;) {
+      if (reported(state)) {
+        begun(state);
+        return { kind: "rest" };
+      }
+      if (gone(state)) return { kind: "gone" };
+      const now = clock.now();
+      const current = screen(state);
+      if (current !== last) {
+        last = current;
+        changedAt = now;
+        starting = false;
+        begun(state);
+      }
+      if (now >= deadline) return { kind: starting ? "stalled" : "timeout" };
+      if (starting && now >= startBy) return { kind: "stalled" };
+      if (!starting && now - changedAt >= QUIET_MS) return { kind: "quiet" };
+      clock.sleep(SCREEN_POLL_MS);
+    }
+  };
+  const press = (state, keys) => {
+    const r = tmux(["send-keys", "-t", state.ids.pane, ...keys]);
+    if (r.status !== 0) throw new Error(`tmux send-keys failed: ${failure(r)}`);
+  };
+  return {
+    id: "tmux",
+    launch(state, { cwd, ...launchArgs }) {
+      const r = tmux(["new-window", "-d", "-P", "-F", "#{pane_id} #{window_id}", "-n", state.name, "-c", cwd, "--", ...harnessArgv(launchArgs)]);
+      if (r.status !== 0) throw new Error(`tmux new-window failed: ${failure(r)}`);
+      const [pane, window] = r.stdout.trim().split(" ");
+      state.ids = { pane, window };
+      state.prompted = true;
+      state.awaitTurn = true;
+      saveState(state);
+      return null;
+    },
+    initial: (state, timeoutMs) => settle(state, { fresh: true, timeoutMs }),
+    submit(state, text, timeoutMs) {
+      const buffer = `pstack-${state.name}-${process.pid}-${clock.now()}`;
+      const loaded = tmux(["set-buffer", "-b", buffer, "--", text]);
+      const pasted = loaded.status === 0 && tmux(["paste-buffer", "-p", "-d", "-b", buffer, "-t", state.ids.pane]);
+      if (!pasted || pasted.status !== 0) {
+        if (gone(state)) return { kind: "gone" };
+        return { kind: "error", detail: `tmux paste failed: ${failure(pasted || loaded)}` };
+      }
+      // The pause keeps a TUI from reading the paste and its Enter as one paste.
+      clock.sleep(PASTE_SETTLE_MS);
+      press(state, ["Enter"]);
+      state.awaitTurn = true;
+      saveState(state);
+      return settle(state, { fresh: true, timeoutMs });
+    },
+    wait: (state, timeoutMs) => settle(state, { fresh: Boolean(state.awaitTurn), timeoutMs }),
+    keys(state, keys, timeoutMs) {
+      press(state, keys.map((k) => TMUX_KEYS[k.toLowerCase()] ?? k));
+      return settle(state, { fresh: Boolean(state.awaitTurn), timeoutMs });
+    },
+    peek(state) {
+      const r = capture(state);
+      return r.status === 0 ? screenText(r.stdout) : `(unreadable: ${failure(r).slice(0, 200)})`;
+    },
+    close(state) {
+      if (!state.ids?.window) return true;
+      return tmux(["kill-window", "-t", state.ids.window]).status === 0 || gone(state);
+    },
+  };
 }
 
-const muxFor = (id, runner, env) => {
-  if (id === "herdr") return herdrMux(runner, env);
-  if (id === "tuios") return tuiosMux(runner, env);
-  throw new Error(`Unknown mux: ${id} (use herdr or tuios)`);
+const muxes = {
+  herdr: {
+    detect: (env) => Boolean(env.HERDR_ENV || env.HERDR_PANE_ID),
+    paneEnv: "HERDR_PANE_ID",
+    backend: herdrMux,
+    typeInto: ({ runner }, parent, line) => [runner("herdr", ["pane", "run", parent.pane, line])],
+  },
+  tuios: {
+    detect: (env) => env.TUIOS_ENV === "1",
+    paneEnv: "TUIOS_PANE_ID",
+    sessionEnv: "TUIOS_SESSION",
+    backend: tuiosMux,
+    typeInto: ({ runner }, parent, line) => [
+      runner("tuios", ["send-text", "-s", parent.session, "-w", parent.pane, line]),
+      runner("tuios", ["send-keys", "-s", parent.session, "-w", parent.pane, "Enter"]),
+    ],
+  },
+  tmux: {
+    detect: (env) => Boolean(env.TMUX && env.TMUX_PANE),
+    paneEnv: "TMUX_PANE",
+    backend: tmuxMux,
+    typeInto({ runner, clock }, parent, line) {
+      const text = runner("tmux", ["send-keys", "-t", parent.pane, "-l", "--", line]);
+      if (text.status !== 0) return [text];
+      clock.sleep(PASTE_SETTLE_MS);
+      return [text, runner("tmux", ["send-keys", "-t", parent.pane, "Enter"])];
+    },
+  },
 };
+
+export function detectMux(env, requested) {
+  if (requested) return requested;
+  const found = Object.keys(muxes).filter((id) => muxes[id].detect(env));
+  if (found.length > 1) throw new Error(`More than one multiplexer is set in this environment (${found.join(", ")}); pass --mux ${found.join(" or --mux ")}`);
+  if (found.length === 1) return found[0];
+  throw new Error("Not running inside herdr, tuios, or tmux, so there is no pane to show the agent in. Run it as a native subagent, or ask the user to start herdr, tuios, or tmux.");
+}
+
+const muxFor = (id, deps) => {
+  if (!Object.hasOwn(muxes, id)) throw new Error(`Unknown mux: ${id} (use ${Object.keys(muxes).join(", ")})`);
+  return muxes[id].backend(deps);
+};
+
+function parentOf(muxId, env) {
+  const { paneEnv, sessionEnv } = muxes[muxId];
+  if (!env[paneEnv]) return null;
+  return { mux: muxId, pane: env[paneEnv], ...(sessionEnv ? { session: env[sessionEnv] } : {}) };
+}
+
+export function selfState(env = process.env) {
+  const root = panesRoot(env);
+  if (!existsSync(root)) return null;
+  for (const entry of readdirSync(root)) {
+    const path = join(root, entry, "state.json");
+    if (!existsSync(path)) continue;
+    const state = JSON.parse(readFileSync(path, "utf8"));
+    const own = Object.hasOwn(muxes, state.mux) && env[muxes[state.mux].paneEnv];
+    if (own && state.ids?.pane === own) return state;
+  }
+  return null;
+}
 
 const readIfPresent = (path) => (existsSync(path) ? readFileSync(path, "utf8") : null);
 
@@ -285,18 +443,23 @@ function stamp(path) {
   try { return statSync(path).mtimeMs; } catch { return null; }
 }
 
+function pendingQuestion(run) {
+  const asked = stamp(join(run, "question.md"));
+  return asked !== null && (stamp(join(run, "result.md")) ?? 0) < asked ? String(asked) : null;
+}
+
 function conclude(state, mux, settled, { timeoutMs }) {
   const base = { name: state.name, mux: mux.id, harness: state.harness, model: state.model };
   const questionFile = join(state.run, "question.md");
   const resultFile = join(state.run, "result.md");
-  const question = readIfPresent(questionFile);
   const result = readIfPresent(resultFile);
-  const pending = question !== null && (stamp(resultFile) ?? 0) < (stamp(questionFile) ?? 0);
-  if (pending) {
-    state.questionSeen = stamp(questionFile);
+  const questionId = pendingQuestion(state.run);
+  if (questionId !== null) {
+    const asked = { question: readFileSync(questionFile, "utf8"), questionFile, questionId };
+    state.questionSeen = Number(questionId);
     saveState(state);
-    if (settled.kind === "blocked") return { ...base, verdict: "blocked", screen: mux.peek(state), question, questionFile };
-    return { ...base, verdict: "question", question, questionFile };
+    if (settled.kind === "blocked") return { ...base, verdict: "blocked", screen: mux.peek(state), ...asked };
+    return { ...base, verdict: "question", ...asked };
   }
   if (result !== null) {
     const big = result.length > RESULT_TEXT_LIMIT;
@@ -306,6 +469,7 @@ function conclude(state, mux, settled, { timeoutMs }) {
   if (settled.kind === "gone") return { ...base, verdict: "error", detail: "the pane or its agent is gone (the harness exited)" };
   if (settled.kind === "error") return { ...base, verdict: "error", detail: settled.detail };
   if (settled.kind === "timeout") return { ...base, verdict: "timeout", screen: mux.peek(state) };
+  if (settled.kind === "quiet") return { ...base, verdict: "idle", screen: mux.peek(state) };
   if (settled.kind === "rest" && !state.nudged) {
     state.nudged = true;
     saveState(state);
@@ -326,23 +490,40 @@ function deliverBrief(state, mux, timeoutMs) {
 const withBrief = (state, mux, settled, timeoutMs) =>
   settled.kind === "rest" && !state.prompted ? deliverBrief(state, mux, timeoutMs) : settled;
 
-export function launch(options, { runner = sh, env = process.env } = {}) {
-  const { name, harness, model, effort = null, access = "read", brief, cwd = process.cwd(), wait = true } = options;
+const resolveDeps = ({ runner = sh, env = process.env, clock = systemClock } = {}) => ({ runner, env, clock });
+
+function nestedName(self, given) {
+  if (!self) return given;
+  if (!NAME.test(given ?? "")) throw new Error(`--name must match ${NAME} (herdr and tuios name limits)`);
+  const full = `${self.name}-${given}`;
+  if (!NAME.test(full)) {
+    throw new Error(`The nested name ${full} is longer than 32 characters; shorten --name ${given}, since your own name ${self.name} is its prefix`);
+  }
+  return full;
+}
+
+export function launch(options, deps) {
+  deps = resolveDeps(deps);
+  const { env } = deps;
+  const { harness, model, effort = null, access = "read", brief, cwd = process.cwd(), wait = true } = options;
+  const self = selfState(env);
+  const name = nestedName(self, options.name);
   const dir = statePath(name, env);
   foreignRequest("launch", { harness, model, effort });
   if (!["read", "write"].includes(access)) throw new Error("--access is read or write");
   if (!brief || !existsSync(brief)) throw new Error("--brief must name an existing file");
   if (existsSync(join(dir, "state.json"))) throw new Error(`Pane agent ${name} already exists; close it first`);
   const timeoutMs = options.timeoutMs ?? DEFAULT_WAIT_MS;
-  const muxId = detectMux(env, options.mux);
-  const mux = muxFor(muxId, runner, env);
+  const muxId = detectMux(env, options.mux ?? self?.mux);
+  const mux = muxFor(muxId, deps);
   const run = dir;
   if (/[,()\s]/.test(run)) throw new Error(`Run directory ${run} contains a comma, parenthesis, or space; set PSTACK_PANES_DIR to a plain path`);
 
   ownedPrivateDir(panesRoot(env));
   mkdirSync(run, { recursive: true });
-  writeFileSync(join(run, "brief.md"), briefText(readFileSync(brief, "utf8"), { run, access }));
-  const state = { name, mux: muxId, harness, model, effort, access, run, cwd: resolve(cwd), startedAt: new Date().toISOString() };
+  const parent = parentOf(muxId, env);
+  writeFileSync(join(run, "brief.md"), briefText(readFileSync(brief, "utf8"), { run, access, name, parent }));
+  const state = { name, mux: muxId, harness, model, effort, access, run, cwd: resolve(cwd), parent, startedAt: new Date().toISOString() };
   saveState(state);
 
   const spec = harnesses[harness];
@@ -351,7 +532,7 @@ export function launch(options, { runner = sh, env = process.env } = {}) {
     const args = harnessArgs(harness, { model, effort, access, run });
     const started = mux.launch(state, { command: spec.command, args, cwd: state.cwd, promptArgs, promptFirst: spec.promptFirst });
     if (!wait) return { name, mux: muxId, run, launched: true };
-    const settled = started ?? (muxId === "tuios" ? mux.initial(state, timeoutMs) : { kind: "rest" });
+    const settled = started ?? (mux.initial ? mux.initial(state, timeoutMs) : { kind: "rest" });
     return conclude(state, mux, withBrief(state, mux, settled, timeoutMs), { timeoutMs });
   } catch (error) {
     try { mux.close?.(state); } finally { rmSync(run, { recursive: true, force: true }); }
@@ -359,17 +540,27 @@ export function launch(options, { runner = sh, env = process.env } = {}) {
   }
 }
 
-export function waitFor(name, options = {}, { runner = sh, env = process.env } = {}) {
-  const state = loadState(name, env);
-  const mux = muxFor(state.mux, runner, env);
+export function waitFor(name, options = {}, deps) {
+  deps = resolveDeps(deps);
+  const state = loadState(name, deps.env);
+  const mux = muxFor(state.mux, deps);
   const timeoutMs = options.timeoutMs ?? DEFAULT_WAIT_MS;
   return conclude(state, mux, withBrief(state, mux, mux.wait(state, timeoutMs), timeoutMs), { timeoutMs });
 }
 
-export function send(name, { text, keys, timeoutMs = DEFAULT_WAIT_MS }, { runner = sh, env = process.env } = {}) {
+export function send(name, { text, keys, answer, timeoutMs = DEFAULT_WAIT_MS }, deps) {
+  deps = resolveDeps(deps);
   if (Boolean(text) === Boolean(keys)) throw new Error("send takes exactly one of --text or --keys");
-  const state = loadState(name, env);
-  const mux = muxFor(state.mux, runner, env);
+  if (answer !== undefined && !text) throw new Error("--answer goes with --text");
+  const state = loadState(name, deps.env);
+  if (answer !== undefined) {
+    const pending = pendingQuestion(state.run);
+    if (pending !== answer) {
+      const detail = pending === null ? "no question is pending" : `the pending question is ${pending}, not ${answer}`;
+      return { name, verdict: "stale", detail };
+    }
+  }
+  const mux = muxFor(state.mux, deps);
   for (const file of ["question.md", "result.md"]) {
     if (existsSync(join(state.run, file))) renameSync(join(state.run, file), join(state.run, `${file}.prev`));
   }
@@ -383,14 +574,32 @@ export function send(name, { text, keys, timeoutMs = DEFAULT_WAIT_MS }, { runner
   return conclude(state, mux, settled, { timeoutMs });
 }
 
-export function peek(name, { runner = sh, env = process.env } = {}) {
-  const state = loadState(name, env);
-  return { name, screen: muxFor(state.mux, runner, env).peek(state) };
+export function askParent(run, deps) {
+  deps = resolveDeps(deps);
+  const dir = resolve(run ?? "");
+  const path = join(dir, "state.json");
+  if (!run || !existsSync(path)) throw new Error("--run must name a pane agent's run directory");
+  const state = JSON.parse(readFileSync(path, "utf8"));
+  if (state.run !== dir) throw new Error(`state.json in ${dir} names a different run directory; refusing to use it`);
+  const questionId = pendingQuestion(dir);
+  if (questionId === null) throw new Error(`No pending question; write it to ${join(dir, "question.md")} first`);
+  if (!state.parent) throw new Error(`${state.name} has no parent pane to ask; end your turn and your parent reads question.md`);
+  const line = `[pane-agent ${state.name}] question ${questionId}: ${join(dir, "question.md")}`;
+  const failed = muxes[state.parent.mux].typeInto(deps, state.parent, line).find((r) => r.status !== 0);
+  if (failed) throw new Error(`Typing into the parent pane failed: ${(failed.stderr || failed.stdout).trim().slice(0, 300)}`);
+  return { sent: true, name: state.name, parent: state.parent };
 }
 
-export function close(name, { keep = false } = {}, { runner = sh, env = process.env } = {}) {
-  const state = loadState(name, env);
-  const mux = muxFor(state.mux, runner, env);
+export function peek(name, deps) {
+  deps = resolveDeps(deps);
+  const state = loadState(name, deps.env);
+  return { name, screen: muxFor(state.mux, deps).peek(state) };
+}
+
+export function close(name, { keep = false } = {}, deps) {
+  deps = resolveDeps(deps);
+  const state = loadState(name, deps.env);
+  const mux = muxFor(state.mux, deps);
   const closed = mux.close(state);
   if (closed && !keep) rmSync(state.run, { recursive: true, force: true });
   return { name, mux: state.mux, closed, kept: closed ? (keep ? state.run : null) : state.run };
@@ -417,7 +626,7 @@ export function main(argv, deps = {}) {
       name: { type: "string" }, harness: { type: "string" }, model: { type: "string" }, effort: { type: "string" },
       brief: { type: "string" }, cwd: { type: "string" }, access: { type: "string" }, mux: { type: "string" },
       "timeout-ms": { type: "string" }, "no-wait": { type: "boolean" }, text: { type: "string" },
-      keys: { type: "string" }, keep: { type: "boolean" },
+      keys: { type: "string" }, keep: { type: "boolean" }, answer: { type: "string" }, run: { type: "string" },
     },
   });
   const timeoutMs = values["timeout-ms"] === undefined ? undefined : Number(values["timeout-ms"]);
@@ -428,7 +637,9 @@ export function main(argv, deps = {}) {
   } else if (command === "wait") {
     out = waitFor(values.name, { timeoutMs }, deps);
   } else if (command === "send") {
-    out = send(values.name, { text: values.text, keys: values.keys, timeoutMs }, deps);
+    out = send(values.name, { text: values.text, keys: values.keys, answer: values.answer, timeoutMs }, deps);
+  } else if (command === "ask-parent") {
+    out = askParent(values.run, deps);
   } else if (command === "peek") {
     out = peek(values.name, deps);
   } else if (command === "close") {
@@ -436,7 +647,7 @@ export function main(argv, deps = {}) {
   } else if (command === "list") {
     out = list(deps);
   } else {
-    throw new Error("Usage: pane-agent.mjs launch|wait|send|peek|close|list [--name NAME] ...");
+    throw new Error("Usage: pane-agent.mjs launch|wait|send|ask-parent|peek|close|list [--name NAME] ...");
   }
   console.log(JSON.stringify(out, null, 2));
   return out.verdict ? (exitCodes[out.verdict] ?? 2) : 0;

@@ -138,6 +138,9 @@ A harness can show its banner for a minute while it loads before it reads the pr
 
 `tools/eval-screen-classifier.mjs` runs the captured screens in `tests/fixtures/screens/` through the classifier and prints each label, confidence, and latency. It needs the key and is not run in CI.
 
+- **Verified harnesses.** The fixtures cover Claude Code, Codex, Grok, Antigravity, and Muse. Each has a welcome screen, a working screen, a finished turn, a question asked on screen, and a dialog, except Grok, which approved every command it was asked to run and never opened a dialog. Live tmux runs on macOS launched each of the five, and Codex and Muse under WSL, and each run ended in `done` or in `blocked` at a folder trust prompt.
+- **Known misreads.** A Muse welcome screen with its answered trust prompt still in scrollback reads as `dialog_open`, which returns `blocked`, not `stalled`. The pane route passes `--trust-workspace` or `--yolo` to Muse, so that prompt does not appear there. A Codex question asked on screen reads as `not_started` below 0.7, so it falls through to `idle`.
+- **Sandboxed children.** `ask-parent` runs inside the child's shell. The Codex sandbox, and Muse's at `read` access, block the network, so the classifier call fails and `ask-parent` returns `sent: false` even when the parent is idle. The parent still gets the question through `question.md` and the `question` verdict.
 
 tuios reports blocked and working states only for harnesses whose hooks are wired to it. Run `tuios integration install --all` once and check it with `tuios doctor agents`. Without the hooks a pane reads `none`. The helper then treats it as running until it sees activity or a report file. In every state it checks for the files every five seconds, so a report ends the wait even when a hook was lost, and a dialog goes unnoticed until the timeout.
 

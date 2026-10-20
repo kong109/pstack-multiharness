@@ -85,7 +85,7 @@ The agent writes its report to `result.md` in its run directory and a blocking q
 | `question` | the agent needs a decision. `questionId` names it | Answer with `send --text ... --answer QUESTION_ID`, run in the background, and treat its verdict the same way. If the human answers in the pane instead, run `wait --name NAME`. It blocks while the agent works, and a `result.md` written after the question reads as `done`. |
 | `blocked` | a TUI dialog is open, such as an approval, a trust prompt, or a login. A `question` field appears when a question is still unanswered. On tmux it needs the [screen classifier](#screen-classification) | Read `screen`. Answer a routine dialog with `send --keys`. Ask the user when it wants authority the brief did not grant. |
 | `no_result` | the turn ended with no report, even after one automatic reminder | Run `peek`, then send a correction or close the agent. |
-| `stalled` | the turn never started, or herdr saw no activity after the prompt. On tmux the screen classifier also reads a screen with only a welcome banner as not started. The text may still have arrived | Run `peek` before resending. The helper never types a second prompt on its own. |
+| `stalled` | the turn never started, or herdr saw no activity after the prompt. On tmux the screen classifier also reads a screen that still shows only a welcome banner 90 seconds after the launch or send as not started. The text may still have arrived | Run `peek` before resending. The helper never types a second prompt on its own. |
 | `idle` | tmux only. The screen classifier read a question asked on screen, or the screen stopped changing for 15 seconds with no report and no confident label. The turn may have ended, or a dialog may be open. `screenLabel` names the classifier's read when it made one | Read `screen`. Answer a question or a dialog with `send --text` or `send --keys`, or send a correction. |
 | `stale` | `send --answer` named a question that was already answered or that a newer question replaced. Nothing was typed | Ignore it. Another route already answered that question. |
 | `timeout` | the wait ran out | Run `peek`. Extend with `wait --name NAME`, or close it. |
@@ -122,7 +122,7 @@ On tmux the helper can send the pane's visible text to TypeSafe's Jev model, whi
 | label | minimum confidence | verdict |
 | --- | --- | --- |
 | `turn_finished` | 0.9 | the one reminder, then `no_result` |
-| `not_started` | 0.7 | `stalled` with the screen, nothing typed |
+| `not_started` | 0.7 | keep waiting until 90 seconds after the launch or send, then `stalled` with the screen, nothing typed |
 | `dialog_open` | 0.7 | `blocked` with the screen |
 | `asked_in_terminal` | 0.7 | `idle` at once with the screen |
 | `still_working` | none | keep waiting |
@@ -134,7 +134,10 @@ A verdict that follows a classification carries `screenLabel` with the label and
 - **Privacy.** Each classification of an agent's pane sends up to its last 60 lines to TypeSafe, including scrollback above the visible screen. Wrapped rows are joined, so one line can span several screen rows. The `ask-parent` check sends up to 60 lines of the parent pane's visible screen. Leave the key unset where that text must stay local.
 - **Fallback.** A missing key, a failed or slow call (five-second limit), an unreadable answer, or a confidence below the minimum keeps the wait as it was. The 15-second `idle` still applies, and a classifier failure never ends a wait on its own. With the classifier on, the same failures make `ask-parent` skip typing. With it off, `ask-parent` on tmux types blind.
 
+A harness can show its banner for a minute while it loads before it reads the prompt from argv, as Codex 0.157 does under WSL, so a banner does not end the wait early.
+
 `tools/eval-screen-classifier.mjs` runs the captured screens in `tests/fixtures/screens/` through the classifier and prints each label, confidence, and latency. It needs the key and is not run in CI.
+
 
 tuios reports blocked and working states only for harnesses whose hooks are wired to it. Run `tuios integration install --all` once and check it with `tuios doctor agents`. Without the hooks a pane reads `none`. The helper then treats it as running until it sees activity or a report file. In every state it checks for the files every five seconds, so a report ends the wait even when a hook was lost, and a dialog goes unnoticed until the timeout.
 

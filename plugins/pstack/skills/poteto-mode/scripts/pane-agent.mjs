@@ -343,11 +343,13 @@ export function tmuxMux({ runner, env, clock }) {
       if (starting && now >= startBy) return { kind: "stalled" };
       if (!starting && current !== null && now - changedAt >= SCREEN_POLL_MS && !labels.has(current)) {
         labels.set(current, classifyScreen(current, { runner, env }));
-        const kind = screenSettle(labels.get(current));
-        if (kind) return { kind, screenLabel: labels.get(current) };
       }
-      if (!starting && now - changedAt >= QUIET_MS) {
-        const screenLabel = labels.get(current);
+      const screenLabel = labels.get(current);
+      const kind = screenSettle(screenLabel);
+      // A harness can hold its banner for a minute while it loads, then read the prompt from argv, so a banner settles only after the start window.
+      const loading = kind === "stalled" && now < startBy;
+      if (kind && !loading) return { kind, screenLabel };
+      if (!starting && !loading && now - changedAt >= QUIET_MS) {
         return screenLabel ? { kind: "quiet", screenLabel } : { kind: "quiet" };
       }
       clock.sleep(SCREEN_POLL_MS);

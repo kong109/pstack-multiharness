@@ -1043,13 +1043,25 @@ test("Jev receives only the last 60 lines of a longer tmux capture", () => {
   expect(sent).toEqual([lines.slice(-60).join("\n")]);
 });
 
-test("a tmux welcome banner Jev reads as not started returns stalled within seconds and types nothing", () => {
+test("a tmux welcome banner Jev reads as not started holds through the 90-second start window, then returns stalled and types nothing", () => {
   const { runner, calls } = scripted({ ...tmuxBase, "tmux capture-pane": [text("a"), text("Claude Code v2")], curl: jev("not_started", 0.8) });
   const clock = fakeClock();
   expect(launch(options(), { runner, env: classifiedEnv(), clock }))
     .toMatchObject({ verdict: "stalled", screen: "Claude Code v2", screenLabel: { label: "not_started", confidence: 0.8 } });
-  expect(clock.now()).toBeLessThan(15_000);
+  expect(clock.now()).toBeGreaterThanOrEqual(90_000);
+  expect(clock.now()).toBeLessThan(100_000);
+  expect(curls(calls)).toHaveLength(1);
   expect(calls.some((c) => c[1] === "paste-buffer" || c[1] === "send-keys")).toBe(false);
+});
+
+test("a banner a slow harness holds for 40 seconds before it reads its argv prompt ends in done, not stalled", () => {
+  const loading = Array.from({ length: 20 }, () => text("OpenAI Codex (v0.157.1)\nmodel: loading"));
+  const { runner } = scripted({
+    ...tmuxBase,
+    "tmux capture-pane": [text("a"), ...loading, () => { write("result.md", "2 files\n"); return text("› Read brief.md"); }],
+    curl: jev("not_started", 0.99),
+  });
+  expect(launch(options(), { runner, env: classifiedEnv(), clock: fakeClock() })).toMatchObject({ verdict: "done", result: "2 files\n" });
 });
 
 test("a tmux dialog Jev recognizes returns blocked with the screen and its label", () => {

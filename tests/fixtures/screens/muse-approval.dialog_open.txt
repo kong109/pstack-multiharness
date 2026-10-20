@@ -1,0 +1,20 @@
+  Muse Code 1.4.11
+
+  Skills: 148 loaded · 1 warning · 2 details hidden (ctrl+o to expand)
+
+❯ Run exactly this shell command: echo bye > notes3.txt
+
+◇ Calling tools (22s · esc to interrupt)
+
+── Voice input (alt(option)+v to start) ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Would you like to run the following command?
+
+  $ echo bye > notes3.txt
+  Stage 1/1
+  Current argv: ["echo","bye"]
+
+⟩ 1. Allow this stage once (y)
+  2. Abort the entire command (esc)
+Change approval defaults in /permissions
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  muse-wonder-full-1.0 · high · /tmp/jev-muse-dir · Launch overrides

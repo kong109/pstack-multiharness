@@ -1,0 +1,13 @@
+  Muse Code 1.4.11
+
+  Skills: 148 loaded · 1 warning · 2 details hidden (ctrl+o to expand)
+
+❯ Run exactly this shell command: echo hello > notes.txt
+
+◆ Thinking (18s · esc to interrupt)
+  Sequencing the exact command first, then a separate date call to satisfy the timestamp rule.
+
+── Voice input (alt(option)+v to start) ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  muse-wonder-full-1.0 · high · /tmp/jev-muse-dir · Launch overrides

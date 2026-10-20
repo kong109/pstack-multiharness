@@ -1,0 +1,17 @@
+      ▄▀▀▄        Antigravity CLI 1.3.5
+     ▀▀▀▀▀▀       user@example.com
+    ▀▀▀▀▀▀▀▀      Gemini 4 Argon (Medium)
+   ▄▀▀    ▀▀▄     /tmp/jev-agy-dir
+  ▄▀▀      ▀▀▄
+
+────────────────────────────────────────────────────────────
+> Without using any tools, write a 40-line poem about terminal multiplexers.
+
+  A single prompt awaits upon the glass,
+  A lonely cursor blinking in the dark,
+⣟  Generating...
+└ Tip: Press ? to see keyboard shortcuts.
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+>
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+esc to cancel                                                                                                                  Gemini 4 Argon · medium

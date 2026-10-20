@@ -1,0 +1,48 @@
+  /tmp/jev-grok-dir                                                                                                 1.9K / 256K │ [Dashboard]
+
+
+     ❯ Without using any tools, write a 40-line poem about terminal multiplexers.                                                          5:09 PM
+                                                                                                                                                     █
+                                                                                                                                                     █
+     ◆ user_prompt_submit hook (global/cmux-session) failed, ignored: exit code 1: Error: Socket not found at /tmp/home/.local/state/cmux/     █
+     cmux.sock                                                                                                                                       █
+                                                                                                                                                     █
+  ┃  ◆ Thinking…                                                                                                                                     █
+  ┃                                                                                                                                                  █
+  ┃  …                                                                                                                                               █
+  ┃  Copy mode becomes a dim library of scrollback. A pane can die while the others stay put. Respawn brings back the same command in the same       █
+  ┃  shoes. Synchronize-panes is a choir of shells repeating the same mistake. Layouts are furniture pushed until the compile fits beside the        █
+  ┃  test. The mouse can grab a border, though purists flinch. Keys remember you when the trackpad forgets.                                          █
+                                                                                                                                                     █
+                                                                                                                                                     █
+                                                                                                                                                     █
+                                                                                                                                                     █
+                                                                                                                                                     █
+                                                                                                                                                     █
+                                                                                                                                                     █
+                                                                                                                                                     █
+                                                                                                                                                     █
+                                                                                                                                                     █
+                                                                                                                                                     █
+                                                                                                                                                     █
+                                                                                                                                                     █
+                                                                                                                                                     █
+                                                                                                                                                     █
+                                                                                                                                                     █
+                                                                                                                                                     █
+                                                                                                                                                     █
+                                                                                                                                                     █
+                                                                                                                                                     █
+
+   ⠋ Thinking… 17s                                                                                                                 21s ⇣1.90k [stop]
+
+  Help improve Grok                                                                                                               [Opt out] [Opt in]
+  Off by default. Opt-in to allow SpaceXAI to retain coding data, e.g., prompts, traces, & metrics, for training and debugging
+  purposes. Change anytime via settings.
+  Read Terms and Privacy Policy.
+
+  ╭────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+  │ ❯                                                                                                                                              │
+  ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Grok 4.7 (high) ─╯
+
+  Shift+Tab:mode  │  Ctrl+c:cancel  │  Ctrl+x:shortcuts

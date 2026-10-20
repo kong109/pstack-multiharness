@@ -2,6 +2,16 @@
 
 This port applies the Cursor → Claude Code substitutions in skill bodies. Earlier drafts left them flagged; this revision resolves them. A later pass added a Codex build that shares the same skills; see [Codex port](#codex-port) below.
 
+## 0.9.45 - Jev screen classification verified on every pane harness
+
+This is a deliberate local fork. Preserve it during upstream sync.
+
+`tests/fixtures/screens/` grows from ten Claude Code and Codex screens to 37 screens from all five pane harnesses: Claude Code, Codex, Grok, Antigravity, and Muse. They were captured in throwaway tmux servers with the helper's own `capture-pane` flags and redacted. Three live runs of `tools/eval-screen-classifier.mjs` misread one screen above threshold, the same one each time. A Muse welcome screen with its answered trust prompt still in scrollback reads as `dialog_open` at 0.97 to 0.99. The pane route trusts the workspace through Muse's launch flags, so that screen does not appear there. Rewording the label criteria lowered the misread to about 0.77 but never below 0.7, and it cost margin on the Claude Code welcome screen, so the wording is unchanged.
+
+A `not_started` read no longer ends a wait within seconds. Codex 0.157 under WSL holds its banner while the model loads and reads the brief from argv up to a minute later, so a launch returned `stalled` six seconds in while the brief was still on its way. A banner now settles as `stalled` only after the 90-second start window that already bounds an unchanged screen.
+
+Live tmux runs on macOS launched each of the five harnesses with a small task. Each returned `done`, after `send --keys` answered a folder trust prompt that returned `blocked` for Claude Code and Antigravity. With a Claude Code parent pane showing its trust prompt, `ask-parent` typed nothing from any child. With the parent idle, it typed the line from Claude Code, Grok, and Antigravity children. From Codex and Muse children it returned `sent: false`, because their sandboxes block the classifier's network call. Under WSL, Codex and Muse returned `done` and behaved the same at `ask-parent`. Claude Code under WSL had an expired login. `foreign-harness.md` records the verified harnesses, the known misreads, and the sandbox limit.
+
 ## 0.9.44 - tmux pane agents classify a still screen with Jev
 
 This is a deliberate local fork. Preserve it during upstream sync.

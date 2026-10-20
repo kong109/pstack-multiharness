@@ -65,8 +65,12 @@ const options = (extra = {}) => ({
 test("harnessArgs builds each harness's launch flags from the registry", () => {
   const run = "/tmp/panes/arena-a";
   expect(harnessArgs("codex", { model: "gpt-6.1-sol", effort: "xhigh", access: "read", run })).toEqual([
-    "-m", "gpt-6.1-sol", "-c", "model_reasoning_effort=xhigh", "-a", "never", "-s", "workspace-write", "--add-dir", run,
+    "-m", "gpt-6.1-sol", "-c", "model_reasoning_effort=xhigh", "-a", "never", "-s", "workspace-write",
+    "-c", "sandbox_workspace_write.network_access=true", "--add-dir", run,
   ]);
+  const network = ["-c", "sandbox_workspace_write.network_access=true"];
+  expect(harnessArgs("codex", { model: "m", effort: null, access: "write", run }).join(" ")).toContain(network.join(" "));
+  expect(harnessArgs("muse", { model: "m", effort: null, access: "read", run }).join(" ")).toContain("--sandbox-network enabled");
   const claude = harnessArgs("claude", { model: "claude-opus-5-5", effort: null, access: "read", run });
   expect(claude.slice(0, 4)).toEqual(["--model", "claude-opus-5-5", "--permission-mode", "dontAsk"]);
   expect(claude).not.toContain("--effort");
@@ -118,7 +122,7 @@ test("herdr launch opens one labelled tab, starts the harness in it, prompts wit
   const [tab, start, prompt] = calls;
   expect(tab).toEqual(["herdr", "tab", "create", "--workspace", "wP", "--cwd", root, "--label", "arena-a", "--no-focus"]);
   expect(start.slice(0, 9)).toEqual(["herdr", "agent", "start", "arena-a", "--kind", "codex", "--pane", "wP:p2", "--timeout"]);
-  expect(start.slice(start.indexOf("--", 3) + 1)).toEqual(expect.arrayContaining(["-m", "gpt-6.1-sol", "-a", "never", "-s", "workspace-write"]));
+  expect(start.slice(start.indexOf("--", 3) + 1)).toEqual(expect.arrayContaining(["-m", "gpt-6.1-sol", "-a", "never", "-s", "workspace-write", "sandbox_workspace_write.network_access=true"]));
   expect(prompt.slice(0, 4)).toEqual(["herdr", "agent", "prompt", "arena-a"]);
   expect(prompt).toContain("--wait");
   expect(prompt[4]).toContain("brief.md");

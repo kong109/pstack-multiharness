@@ -10,7 +10,11 @@ This is a deliberate local fork. Preserve it during upstream sync.
 
 A `not_started` read no longer ends a wait within seconds. Codex 0.157 under WSL holds its banner while the model loads and reads the brief from argv up to a minute later, so a launch returned `stalled` six seconds in while the brief was still on its way. A banner now settles as `stalled` only after the 90-second start window that already bounds an unchanged screen.
 
-Live tmux runs on macOS launched each of the five harnesses with a small task. Each returned `done`, after `send --keys` answered a folder trust prompt that returned `blocked` for Claude Code and Antigravity. With a Claude Code parent pane showing its trust prompt, `ask-parent` typed nothing from any child. With the parent idle, it typed the line from Claude Code, Grok, and Antigravity children. From Codex and Muse children it returned `sent: false`, because their sandboxes block the classifier's network call. Under WSL, Codex and Muse returned `done` and behaved the same at `ask-parent`. Claude Code under WSL had an expired login. `foreign-harness.md` records the verified harnesses, the known misreads, and the sandbox limit.
+Live tmux runs on macOS launched each of the five harnesses with a small task. Each returned `done`, after `send --keys` answered a folder trust prompt that returned `blocked` for Claude Code and Antigravity. With a Claude Code parent pane showing its trust prompt, `ask-parent` typed nothing from any child. With the parent idle, it typed the line from every child.
+
+The Codex `read` and `write` profiles now set `sandbox_workspace_write.network_access=true`, and the Muse `read` profile passes `--sandbox-network enabled`. `ask-parent` runs inside the child's sandbox, and those sandboxes blocked the classifier's network call, so Codex and Muse children returned `sent: false` with the parent idle. The agents already reach the internet through their own tools. With network on, both typed the line into an idle Claude Code parent and returned `sent: false` at its trust prompt.
+
+Under WSL, Codex and Muse returned `done` and typed the line into an idle Codex parent. Claude Code under WSL had an expired login, so it was neither child nor parent there. `foreign-harness.md` records the verified harnesses, the known misreads, and the sandbox network setting.
 
 ## 0.9.44 - tmux pane agents classify a still screen with Jev
 

@@ -10,7 +10,7 @@ Use Up/Down or 1/2, then Enter. Esc quits.
 
   Muse Code 1.4.11
 
-  Skills: 148 loaded · 1 warning · 2 details hidden (ctrl+o to expand)
+  Skills: 12 loaded · 1 warning · 2 details hidden (ctrl+o to expand)
 
 ❯ Without using any tools, write a 40-line poem about terminal multiplexers.
 

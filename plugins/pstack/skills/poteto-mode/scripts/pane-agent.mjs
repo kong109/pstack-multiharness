@@ -318,9 +318,9 @@ export function tmuxMux({ runner, env, clock }) {
     const r = tmux(["display-message", "-p", "-t", state.ids.pane, "#{pane_dead}"]);
     return r.status !== 0 || r.stdout.trim() === "1";
   };
-  const settle = (state, { fresh, timeoutMs }) => {
+  const settle = (state, { fresh, timeoutMs, turnAt = clock.now() }) => {
     const deadline = clock.now() + timeoutMs;
-    const startBy = Math.min(deadline, clock.now() + TURN_START_MS);
+    const startBy = Math.min(deadline, turnAt + TURN_START_MS);
     let starting = fresh;
     let last = screen(state);
     let changedAt = clock.now();
@@ -390,7 +390,7 @@ export function tmuxMux({ runner, env, clock }) {
       return settle(state, { fresh: true, timeoutMs });
     },
     // A turn that began unwatched, as after launch --no-wait, has had TURN_START_MS to change the screen already.
-    wait: (state, timeoutMs) => settle(state, { fresh: Boolean(state.awaitTurn) && !(clock.now() - state.turnAt >= TURN_START_MS), timeoutMs }),
+    wait: (state, timeoutMs) => settle(state, { fresh: Boolean(state.awaitTurn) && !(clock.now() - state.turnAt >= TURN_START_MS), timeoutMs, turnAt: state.turnAt }),
     keys(state, keys, timeoutMs) {
       press(state, keys.map((k) => TMUX_KEYS[k.toLowerCase()] ?? k));
       return settle(state, { fresh: Boolean(state.awaitTurn), timeoutMs });

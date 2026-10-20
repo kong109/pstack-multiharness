@@ -1047,8 +1047,9 @@ test("Jev receives only the last 60 lines of a longer tmux capture", () => {
   expect(sent).toEqual([lines.slice(-60).join("\n")]);
 });
 
-test("a tmux welcome banner Jev reads as not started holds through the 90-second start window, then returns stalled and types nothing", () => {
-  const { runner, calls } = scripted({ ...tmuxBase, "tmux capture-pane": [text("a"), text("Claude Code v2")], curl: jev("not_started", 0.8) });
+test("a tmux welcome banner Jev reads as not started holds until 90 seconds after the launch, then returns stalled and types nothing", () => {
+  const blank = Array.from({ length: 16 }, () => text("a"));
+  const { runner, calls } = scripted({ ...tmuxBase, "tmux capture-pane": [...blank, text("Claude Code v2")], curl: jev("not_started", 0.8) });
   const clock = fakeClock();
   expect(launch(options(), { runner, env: classifiedEnv(), clock }))
     .toMatchObject({ verdict: "stalled", screen: "Claude Code v2", screenLabel: { label: "not_started", confidence: 0.8 } });
@@ -1056,6 +1057,24 @@ test("a tmux welcome banner Jev reads as not started holds through the 90-second
   expect(clock.now()).toBeLessThan(100_000);
   expect(curls(calls)).toHaveLength(1);
   expect(calls.some((c) => c[1] === "paste-buffer" || c[1] === "send-keys")).toBe(false);
+});
+
+test("a wait after launch --no-wait holds a banner only until 90 seconds after the launch", () => {
+  const { runner } = scripted({ ...tmuxBase, "tmux capture-pane": text("OpenAI Codex (v0.157.1)"), curl: jev("not_started", 0.95) });
+  const clock = fakeClock();
+  launch(options({ wait: false }), { runner, env: classifiedEnv(), clock });
+  clock.sleep(300_000);
+  expect(waitFor("arena-a", {}, { runner, env: classifiedEnv(), clock }))
+    .toMatchObject({ verdict: "stalled", screenLabel: { label: "not_started", confidence: 0.95 } });
+  expect(clock.now()).toBeLessThanOrEqual(302_000);
+
+  close("arena-a", {}, { runner, env: classifiedEnv() });
+  const early = fakeClock();
+  launch(options({ wait: false }), { runner, env: classifiedEnv(), clock: early });
+  early.sleep(30_000);
+  expect(waitFor("arena-a", {}, { runner, env: classifiedEnv(), clock: early }).verdict).toBe("stalled");
+  expect(early.now()).toBeGreaterThanOrEqual(90_000);
+  expect(early.now()).toBeLessThan(100_000);
 });
 
 test("a banner a slow harness holds for 40 seconds before it reads its argv prompt ends in done, not stalled", () => {

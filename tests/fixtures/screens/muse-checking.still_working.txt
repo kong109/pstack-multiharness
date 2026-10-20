@@ -1,13 +1,13 @@
   Muse Code 1.4.11
 
-  Skills: 148 loaded · 1 warning · 2 details hidden (ctrl+o to expand)
+  Skills: 12 loaded · 1 warning · 2 details hidden (ctrl+o to expand)
 
 ❯ Run exactly this shell command: echo hello > notes.txt
 
-◆ Ran 2 commands · Get current local time · Write hello to notes file · 5.5s · ctrl+o
+◆ Ran 2 commands · List working directory · Write hello to notes file · 5.5s · ctrl+o
 
 ◆ Done — ran the command and wrote notes.txt.
-  completed at 10/19/26 05:17 PM
+  notes.txt now contains: hello
 
 ◈ Double checking (38s · esc to interrupt)
 

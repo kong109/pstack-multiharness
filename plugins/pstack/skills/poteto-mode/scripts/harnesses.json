@@ -22,8 +22,8 @@
     "efforts": null,
     "runDir": ["--add-dir", "{run}"],
     "access": {
-      "read": ["-a", "never", "-s", "workspace-write"],
-      "write": ["-a", "never", "-s", "workspace-write"]
+      "read": ["-a", "never", "-s", "workspace-write", "-c", "sandbox_workspace_write.network_access=true"],
+      "write": ["-a", "never", "-s", "workspace-write", "-c", "sandbox_workspace_write.network_access=true"]
     },
     "t3": { "driver": "codex", "options": { "reasoningEffort": "{effort}" } }
   },
@@ -65,7 +65,7 @@
     "efforts": ["minimal", "low", "medium", "high", "xhigh", "max"],
     "runDir": [],
     "access": {
-      "read": ["--approval-mode", "never", "--trust-workspace"],
+      "read": ["--approval-mode", "never", "--trust-workspace", "--sandbox-network", "enabled"],
       "write": ["--yolo"]
     },
     "t3": { "driver": "muse", "options": { "reasoningEffort": "{effort}" } }

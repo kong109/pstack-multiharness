@@ -1,0 +1,60 @@
+⟩ 1  Trust and continue
+  2  Quit
+
+Use Up/Down or 1/2, then Enter. Esc quits.
+
+  Muse Code 1.4.11
+
+  Skills: 12 loaded · 1 warning · 2 details hidden (ctrl+o to expand)
+
+❯ Without using any tools, write a 40-line poem about terminal multiplexers.
+
+◆ In one dark window, many lives awake,
+  A shell divides itself for work's sake,
+  With panes like rooms along a quiet hall,
+  Each prompt a lantern hung upon the wall.
+  Tmux keeps the session when the wire is gone,
+  Through sudden drops the distant tasks live on,
+  The laptop shuts, the server does not sleep,
+  Its buffers hold what scattered hands would keep.
+  Screen, elder sibling, plain and tried by years,
+  Still guards the login past our doubts and fears,
+  While newer hosts arrange their tabs in rows,
+  And names each window where the cargo goes.
+  A prefix key is struck, then c or n,
+  A pane is born, then split and split again,
+  Left runs the build, the right edits the code,
+  Below, the logs rehearse what errors showed.
+  Here vim is dreaming in a column bright,
+  There htop paints the CPU in light,
+  A test suite mutters, counting pass and fail,
+  And tail keeps following a lengthening tale.
+  Detach is mercy when the network bends,
+  Attach is homecoming that never ends,
+  No process begs the terminal to stay,
+  The session holds them when we walk away.
+  Copy the scrollback, search the vanished line,
+  A thousand outputs frozen still in time,
+  The mouse may wander, keys may take command,
+  Each border answers to a practiced hand.
+  One window watches, one begins to deploy,
+  One holds a shell we keep just to enjoy,
+  And multiplexed, the single screen grows wide,
+  With parallel lives laboring side by side.
+  It is a harbour built of text and light,
+  For ships of process sailing through the night,
+  No storm of logout tears them from their berth,
+  They ride in memory, snug against the earth.
+  So bless the daemon, patient, spare, and true,
+  That folds a dozen terminals in two,
+  Or three, or twenty, neat in one display —
+  And waits, reattached, at the break of day.
+
+❯ Do not use any tools. Ask me which of two file names to use, notes.txt or log.txt, then end your turn and wait for my answer.
+
+◆ Which file name should I use, notes.txt or log.txt?
+
+── Voice input (alt(option)+v to start) ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ Type @ to search and insert workspace file paths
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  muse-wonder-full-1.0 · high · /tmp/jev-muse-dir · YOLO

@@ -8,8 +8,22 @@
     "efforts": ["low", "medium", "high", "xhigh", "max"],
     "runDir": ["--add-dir", "{run}"],
     "access": {
-      "read": ["--permission-mode", "dontAsk", "--allowedTools", "Read,Grep,Glob,Edit(/{run}/question.md),Edit(/{run}/result.md),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git status:*),Bash(git blame:*),Bash(git rev-parse:*),Bash(git ls-files:*),Bash(git grep:*),Bash(rg:*),Bash(ls:*),Bash(wc:*),Bash(node {script} ask-parent:*)", "--disallowedTools", "AskUserQuestion"],
-      "write": ["--permission-mode", "dontAsk", "--allowedTools", "Read,Grep,Glob,Edit,Write,Bash", "--disallowedTools", "AskUserQuestion"]
+      "read": [
+        "--permission-mode",
+        "dontAsk",
+        "--allowedTools",
+        "Read,Grep,Glob,Edit(/{run}/question.md),Edit(/{run}/result.md),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git status:*),Bash(git blame:*),Bash(git rev-parse:*),Bash(git ls-files:*),Bash(git grep:*),Bash(rg:*),Bash(ls:*),Bash(wc:*),Bash(node {script} ask-parent:*)",
+        "--disallowedTools",
+        "AskUserQuestion"
+      ],
+      "write": [
+        "--permission-mode",
+        "dontAsk",
+        "--allowedTools",
+        "Read,Grep,Glob,Edit,Write,Bash",
+        "--disallowedTools",
+        "AskUserQuestion"
+      ]
     },
     "t3": { "driver": "claudeAgent", "options": { "effort": "{effort}" } }
   },
@@ -22,8 +36,22 @@
     "efforts": null,
     "runDir": ["--add-dir", "{run}"],
     "access": {
-      "read": ["-a", "never", "-s", "workspace-write", "-c", "sandbox_workspace_write.network_access=true"],
-      "write": ["-a", "never", "-s", "workspace-write", "-c", "sandbox_workspace_write.network_access=true"]
+      "read": [
+        "-a",
+        "never",
+        "-s",
+        "workspace-write",
+        "-c",
+        "sandbox_workspace_write.network_access=true"
+      ],
+      "write": [
+        "-a",
+        "never",
+        "-s",
+        "workspace-write",
+        "-c",
+        "sandbox_workspace_write.network_access=true"
+      ]
     },
     "t3": { "driver": "codex", "options": { "reasoningEffort": "{effort}" } }
   },
@@ -65,7 +93,13 @@
     "efforts": ["minimal", "low", "medium", "high", "xhigh", "max"],
     "runDir": [],
     "access": {
-      "read": ["--approval-mode", "never", "--trust-workspace", "--sandbox-network", "enabled"],
+      "read": [
+        "--approval-mode",
+        "never",
+        "--trust-workspace",
+        "--sandbox-network",
+        "enabled"
+      ],
       "write": ["--yolo"]
     },
     "t3": { "driver": "muse", "options": { "reasoningEffort": "{effort}" } }

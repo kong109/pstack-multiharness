@@ -36,6 +36,12 @@
       "since": "0.9.29",
       "upstream": "not-proposed"
     },
+    "plugins/pstack/skills/figure-it-out/SKILL.md": {
+      "kind": "port-feature",
+      "why": "Arms the watchdog in Phase C when delegates run in the background while nobody watches, and disarms it in Phase E.",
+      "since": "0.9.133",
+      "upstream": "not-proposed"
+    },
     "plugins/pstack/skills/how/references/explainer-prompt.md": {
       "kind": "policy",
       "why": "Tells a lone explainer on the simple path that no explorers ran and that it traces the code itself with Read, Grep, and Glob before explaining.",
@@ -56,7 +62,7 @@
     },
     "plugins/pstack/skills/poteto-mode/SKILL.md": {
       "kind": "policy",
-      "why": "Adds the Platform Adaptation section, whose runtime sentence the generator stamps from RUNTIMES, with its task-tool and todo.md fallback (per task slug when sessions share a checkout, and beside the desktop app's short update_plan list), the run-or-verify driver line, the deploy-platform and defect-severity triggers, the port's principle summaries, the project playbooks paragraph, and the closed-review-gate rule that the Codex and Pi mappings point to, and it points the Agent-call defaults at the Models section with full tool access and the namespaced pstack:poteto-agent name, requires stopping an abandoned agent before replacing it, renders every reply item as prose, layers technical-writing on top of unslop, and describes Autopilot-full as stopping at merge-ready for the operator's click and Autopilot-stack as Autopilot-full for PRs that build on each other.",
+      "why": "Adds the Platform Adaptation section, whose runtime sentence the generator stamps from RUNTIMES, with its task-tool and todo.md fallback (per task slug when sessions share a checkout, and beside the desktop app's short update_plan list), the run-or-verify driver line, the deploy-platform and defect-severity triggers, the port's principle summaries, the project playbooks paragraph, and the closed-review-gate rule that the Codex and Pi mappings point to, and it points the Agent-call defaults at the Models section with full tool access and the namespaced pstack:poteto-agent name, requires stopping an abandoned agent before replacing it, renders every reply item as prose, layers technical-writing on top of unslop, and describes Autopilot-full as stopping at merge-ready for the operator's click and Autopilot-stack as Autopilot-full for PRs that build on each other. The multiharness fork routes a role entry that names another harness through foreign-harness subagents and arms the watchdog for unattended background agents.",
       "since": "0.9.2",
       "upstream": "not-proposed"
     },
@@ -242,7 +248,7 @@
     },
     "plugins/pstack/skills/setup-pstack/SKILL.md": {
       "kind": "port-feature",
-      "why": "Writes the override sheet at each runtime's own path, loaded by @-include on Claude Code, pasted into AGENTS.md on Codex, and read directly by the Muse plugin hook since none has Cursor's always-applied rules, replaces Cursor's budget step with a default effort and per-role effort levels and explains Codex's active-turn metadata requirement for session effort, adds the SessionStart hook toggle and names the Pi extension and OpenCode plugin as readers of it, lists every runtime's sheet path in a table, routes GitHub Copilot to copilot.md, Kimi and Grok to runtime-specific setup, and OMP to native model configuration and its global routing toggle, and numbers its verification and formal verification offers as steps 9 and 10.",
+      "why": "Writes the override sheet at each runtime's own path, loaded by @-include on Claude Code, pasted into AGENTS.md on Codex, and read directly by the Muse plugin hook since none has Cursor's always-applied rules, replaces Cursor's budget step with a default effort and per-role effort levels and explains Codex's active-turn metadata requirement for session effort, adds the SessionStart hook toggle and names the Pi extension and OpenCode plugin as readers of it, lists every runtime's sheet path in a table, routes GitHub Copilot to copilot.md, Kimi and Grok to runtime-specific setup, and OMP to native model configuration and its global routing toggle, and numbers its verification and formal verification offers as steps 9 and 10. The multiharness fork adds harness entries, a project sheet at .pstack/models.md, and presets.",
       "since": "0.9.2",
       "upstream": "not-proposed"
     },

@@ -1,7 +1,13 @@
 name: Security
 
 on:
+  # Neither job reads prose or images: the scan reads lockfiles and zizmor
+  # reads workflows. Pushes to main and the weekly run still cover everything.
   pull_request:
+    paths-ignore:
+      - "**.md"
+      - "LICENSE*"
+      - "assets/**"
   push:
     branches: [main]
   schedule:

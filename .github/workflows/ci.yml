@@ -13,8 +13,49 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Skips the build, test and lint jobs on a pull request that touches only
+  # prose nothing else reads. README.md, CHANGES.md, NOTICE-skills.md and
+  # docs/reference.md feed the generator and the readme fact tests, and every
+  # file under plugins/ ships, so those always count as code. The two Markdown
+  # jobs run on every change.
+  changes:
+    name: Classify changed files
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: read # list the PR's changed files
+    outputs:
+      code: ${{ steps.classify.outputs.code }}
+    steps:
+      - id: classify
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          if [ "$EVENT" != pull_request ]; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          files=$(gh api "repos/$REPO/pulls/$PR/files" --paginate \
+            --jq '.[] | .filename, (.previous_filename // empty)')
+          printf '%s\n' "$files"
+          code=false
+          [ -n "$files" ] || code=true
+          while IFS= read -r f; do
+            case "$f" in
+              README.md | CHANGES.md | NOTICE-skills.md | docs/reference.md | plugins/*) code=true ;;
+              *.md | LICENSE* | assets/*) ;;
+              *) code=true ;;
+            esac
+          done <<< "$files"
+          echo "code=$code" | tee -a "$GITHUB_OUTPUT"
+
   generated:
     name: Generated files current
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -36,6 +77,8 @@ jobs:
 
   windows-hooks:
     name: Windows session hooks
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: windows-latest
     timeout-minutes: 10
     steps:
@@ -63,6 +106,8 @@ jobs:
 
   windows-worktree-audit:
     name: Windows worktree audit
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: windows-latest
     timeout-minutes: 10
     steps:
@@ -82,6 +127,8 @@ jobs:
 
   forks:
     name: Fork registry
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -140,6 +187,8 @@ jobs:
 
   skills-only:
     name: Skills-only install
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -159,6 +208,8 @@ jobs:
 
   pi-types:
     name: Pi extension types
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -195,6 +246,8 @@ jobs:
 
   scripts:
     name: Vendored bun tooling
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -222,6 +275,8 @@ jobs:
 
   statechart:
     name: Statechart scripts (${{ matrix.group }})
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     # Node runs the tests in one file one at a time and the files in one job
@@ -295,6 +350,8 @@ jobs:
 
   statechart-windows:
     name: Statechart on Windows
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: windows-latest
     timeout-minutes: 20
     defaults:
@@ -365,6 +422,8 @@ jobs:
 
   shellcheck:
     name: Shell scripts
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -379,6 +438,8 @@ jobs:
 
   actionlint:
     name: Workflow lint
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -435,6 +496,8 @@ jobs:
   # the temp directory sits behind the /var link.
   macos-worktree-audit:
     name: macOS worktree audit
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: macos-latest
     timeout-minutes: 10
     steps:

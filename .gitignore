@@ -25,3 +25,7 @@ plugins/pstack/skills/statechart/scripts/node_modules/
 
 # Lake build output for the Lean models
 /lean/.lake/
+
+# Local secrets
+.env
+.env.*

@@ -7,7 +7,8 @@ const token = /^[a-zA-Z0-9_./:#-]+$/;
 
 export const harnesses = JSON.parse(readFileSync(new URL("./harnesses.json", import.meta.url), "utf8"));
 
-// One role entry in the sheet grammar setup-pstack writes: `[harness:]model[ @level]`.
+export const takesEffort = (harness) => harnesses[harness].effort !== null;
+
 export function parseEntry(entry) {
   const text = entry.trim();
   const match = text.match(/^(\S+?)(?:\s+@(\S+))?$/);
@@ -53,8 +54,7 @@ export function resolveRole(text, role, defaults) {
   if (!value) throw new Error(`No mapping or defaults for role: ${role}`);
   return value.split(",").map((entry) => {
     const { harness, model, explicitEffort } = parseEntry(entry);
-    // A harness that takes no effort setting names it in the model id, so the sheet default skips it.
-    const inherited = harness && harnesses[harness].effort === null ? undefined : defaultEffort;
+    const inherited = harness && !takesEffort(harness) ? undefined : defaultEffort;
     const effort = explicitEffort ?? inherited;
     return {
       ...(harness && { harness }),

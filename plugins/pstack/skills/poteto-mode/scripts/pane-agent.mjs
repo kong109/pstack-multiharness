@@ -6,12 +6,13 @@ import { join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 
-import { NAME, fill, foreignRequest, protocolPointer } from "./foreign-launch.mjs";
+import { NAME, fill, checkForeignRequest, protocolPointer } from "./foreign-launch.mjs";
 import { harnesses } from "./resolve-models.mjs";
 import { classifierEnabled, classifyScreen, screenSettle } from "./screen-classifier.mjs";
 
 const START_MS = 60_000;
 const TURN_START_MS = 90_000;
+const turnPending = (state, now) => Boolean(state.awaitTurn) && !(now - state.turnAt >= TURN_START_MS);
 const DEFAULT_WAIT_MS = 1_800_000;
 const RESULT_TEXT_LIMIT = 200_000;
 const SCREEN_LINES = 60;
@@ -381,7 +382,6 @@ export function tmuxMux({ runner, env, clock }) {
         if (gone(state)) return { kind: "gone" };
         return { kind: "error", detail: `tmux paste failed: ${failure(pasted || loaded)}` };
       }
-      // The pause keeps a TUI from reading the paste and its Enter as one paste.
       clock.sleep(PASTE_SETTLE_MS);
       press(state, ["Enter"]);
       state.awaitTurn = true;
@@ -389,8 +389,7 @@ export function tmuxMux({ runner, env, clock }) {
       saveState(state);
       return settle(state, { fresh: true, timeoutMs });
     },
-    // A turn that began unwatched, as after launch --no-wait, has had TURN_START_MS to change the screen already.
-    wait: (state, timeoutMs) => settle(state, { fresh: Boolean(state.awaitTurn) && !(clock.now() - state.turnAt >= TURN_START_MS), timeoutMs, turnAt: state.turnAt }),
+    wait: (state, timeoutMs) => settle(state, { fresh: turnPending(state, clock.now()), timeoutMs, turnAt: state.turnAt }),
     keys(state, keys, timeoutMs) {
       press(state, keys.map((k) => TMUX_KEYS[k.toLowerCase()] ?? k));
       return settle(state, { fresh: Boolean(state.awaitTurn), timeoutMs });
@@ -564,7 +563,7 @@ export function launch(options, deps) {
   const self = selfState(deps);
   const name = nestedName(self, options.name);
   const dir = statePath(name, env);
-  foreignRequest("launch", { harness, model, effort });
+  checkForeignRequest("launch", { harness, model, effort });
   if (!["read", "write"].includes(access)) throw new Error("--access is read or write");
   if (!brief || !existsSync(brief)) throw new Error("--brief must name an existing file");
   if (existsSync(join(dir, "state.json"))) throw new Error(`Pane agent ${name} already exists; close it first`);
@@ -614,7 +613,6 @@ export function send(name, { text, keys, answer, timeoutMs = DEFAULT_WAIT_MS }, 
   const state = loadState(name, deps.env);
   const pending = pendingQuestion(state.run);
   if (answer !== undefined && pending !== answer) {
-    // A failed submit already moved the question aside, so a retry is matched against question.md.prev.
     const undelivered = pending === null && state.answered !== answer && String(stamp(join(state.run, "question.md.prev"))) === answer;
     if (!undelivered) {
       const detail = pending !== null ? `the pending question is ${pending}, not ${answer}`

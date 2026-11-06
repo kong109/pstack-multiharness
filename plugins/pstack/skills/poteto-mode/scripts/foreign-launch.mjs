@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 
-import { harnesses } from "./resolve-models.mjs";
+import { harnesses, takesEffort } from "./resolve-models.mjs";
 
 export const skill = fileURLToPath(new URL("../SKILL.md", import.meta.url));
 
@@ -12,9 +12,9 @@ export const fill = (template, vars) =>
 
 export const protocolPointer = `Read the poteto-mode instructions at ${skill} before working. If the task supplies a specialist prompt or reference, read it and preserve that specialty. Report evidence and limitations accurately.`;
 
-export function foreignTarget(label, { harness, model, effort }) {
-  const { effort: flag, efforts } = harnesses[harness];
-  if (effort !== null && !flag) {
+export function checkForeignTarget(label, { harness, model, effort }) {
+  const { efforts } = harnesses[harness];
+  if (effort !== null && !takesEffort(harness)) {
     throw new Error(`${harness} takes no effort setting; name the effort in the model id (${harness}:${model}-${effort}) for ${label}`);
   }
   if (effort !== null && efforts && !efforts.includes(effort)) {
@@ -22,10 +22,9 @@ export function foreignTarget(label, { harness, model, effort }) {
   }
 }
 
-// The checks a launch request passes, by pane or by T3 Code, before anything starts.
-export function foreignRequest(label, { harness, model, effort = null }) {
+export function checkForeignRequest(label, { harness, model, effort = null }) {
   if (!Object.hasOwn(harnesses, harness ?? "")) throw new Error(`--harness must be one of ${Object.keys(harnesses).join(", ")}`);
   if (!TOKEN.test(model ?? "")) throw new Error("--model is required and may hold only letters, digits, and . _ / : -");
   if (effort !== null && !TOKEN.test(effort)) throw new Error("--effort may hold only letters, digits, and . _ / : -");
-  foreignTarget(label, { harness, model, effort });
+  checkForeignTarget(label, { harness, model, effort });
 }

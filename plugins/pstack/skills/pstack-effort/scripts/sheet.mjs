@@ -15,8 +15,7 @@ export const slotText = ({ harness, model, effort }) => `${harness ? `${harness}
 
 const ROLE_LINE = /^([a-z][a-z ,\-]*[a-z]):\s*(\S.*)$/;
 
-// Every role line, including one whose entries parseSlot cannot read and the page therefore skips.
-export const roleLabels = (text) =>
+export const allRoleLabels = (text) =>
   text.split(/\r?\n/).map((line) => ROLE_LINE.exec(line)?.[1]).filter((role) => role && !NOT_ROLES.has(role));
 
 export function parseSheet(text) {

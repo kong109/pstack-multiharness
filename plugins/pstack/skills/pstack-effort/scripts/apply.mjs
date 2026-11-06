@@ -3,9 +3,9 @@ import { copyFileSync, existsSync, readFileSync, realpathSync, writeFileSync } f
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
-import { foreignTarget } from "../../poteto-mode/scripts/foreign-launch.mjs";
+import { checkForeignTarget } from "../../poteto-mode/scripts/foreign-launch.mjs";
 import { resolveRole } from "../../poteto-mode/scripts/resolve-models.mjs";
-import { parseSheet, roleLabels, slotText } from "./sheet.mjs";
+import { parseSheet, allRoleLabels, slotText } from "./sheet.mjs";
 
 const { native } = JSON.parse(readFileSync(new URL("../providers.json", import.meta.url), "utf8"));
 
@@ -52,12 +52,12 @@ export function planApply(current, next, base) {
     throw new Error(`refused: ${drifted.join(", ")} changed in the file after the page was rendered. Render the page again and redo those edits.`);
   }
   const text = lines.join("\n");
-  for (const role of roleLabels(text)) {
+  for (const role of allRoleLabels(text)) {
     for (const { harness = native, model, effort } of resolveRole(text, role)) {
       if (harness === "claude" && model?.startsWith("claude-")) {
         throw new Error(`${role}: ${model} is a full model ID, which the Agent tool rejects; write the family name, such as ${model.split("-")[1]}`);
       }
-      foreignTarget(role, { harness, model: model ?? "inherit-parent", effort });
+      checkForeignTarget(role, { harness, model: model ?? "inherit-parent", effort });
     }
   }
   return { changes, text };

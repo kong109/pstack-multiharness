@@ -8,7 +8,7 @@ import { parseArgs } from "node:util";
 
 const STALL_MINUTES = 15;
 const SETTLE_MINUTES = 3;
-const SHELLS = new Set(["sh", "bash", "zsh", "fish", "dash", "lsof"]);
+const NOT_AGENT_WORK = new Set(["sh", "bash", "zsh", "fish", "dash", "lsof"]);
 const script = fileURLToPath(import.meta.url);
 
 const registry = (dir) => join(dir, "inflight.tsv");
@@ -72,8 +72,6 @@ function lastTurn(path) {
   return turn;
 }
 
-// Processes whose working directory is inside the worktree, or null when lsof is unavailable.
-// Shells are left out: an agent's idle Bash tool shell sits in its worktree long after the agent died.
 function processesIn(worktree) {
   if (worktree === "-" || !existsSync(worktree)) return [];
   const out = spawnSync("lsof", ["-a", "-d", "cwd", "-F", "pcn"], { encoding: "utf8" });
@@ -86,7 +84,7 @@ function processesIn(worktree) {
     else if (line.startsWith("c")) command = line.slice(1);
     else if (line.startsWith("n")) {
       const cwd = line.slice(1);
-      if ((cwd === root || cwd.startsWith(root + sep)) && pid !== process.pid && !SHELLS.has(command)) names.add(command);
+      if ((cwd === root || cwd.startsWith(root + sep)) && pid !== process.pid && !NOT_AGENT_WORK.has(command)) names.add(command);
     }
   }
   return [...names].sort();

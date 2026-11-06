@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { runInNewContext } from "node:vm";
-import { foreignTarget } from "../plugins/pstack/skills/poteto-mode/scripts/foreign-launch.mjs";
+import { checkForeignTarget } from "../plugins/pstack/skills/poteto-mode/scripts/foreign-launch.mjs";
 import { harnesses, resolveRole } from "../plugins/pstack/skills/poteto-mode/scripts/resolve-models.mjs";
 import { apply, parseMessage, planApply } from "../plugins/pstack/skills/pstack-effort/scripts/apply.mjs";
 import { buildProviders, codexModels, readPresets } from "../plugins/pstack/skills/pstack-effort/scripts/render.mjs";
@@ -286,9 +286,9 @@ test("the registry and the provider catalog agree, so the page only offers what 
     expect(Object.keys(harnesses), provider.id).toContain(provider.harness);
     for (const model of provider.models) {
       for (const effort of provider.efforts) {
-        expect(() => foreignTarget(provider.id, { harness: provider.harness, model: model.slug, effort }), `${provider.id} ${model.slug}@${effort}`).not.toThrow();
+        expect(() => checkForeignTarget(provider.id, { harness: provider.harness, model: model.slug, effort }), `${provider.id} ${model.slug}@${effort}`).not.toThrow();
       }
-      expect(() => foreignTarget(provider.id, { harness: provider.harness, model: model.slug, effort: null })).not.toThrow();
+      expect(() => checkForeignTarget(provider.id, { harness: provider.harness, model: model.slug, effort: null })).not.toThrow();
     }
   }
 });

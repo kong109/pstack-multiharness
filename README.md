@@ -5,6 +5,8 @@
 
 Lauren Tan's [pstack](https://github.com/cursor/plugins/tree/main/pstack) is an opinionated Cursor skill stack that improves agent outcomes. This is a port for Claude Code, Codex, Pi, GitHub Copilot, Muse, and other agent harnesses. It tracks upstream and also carries named policy forks, each declared in [`tools/forks.json`](tools/forks.json).
 
+This repository, pstack-multiharness, is a fork of [michael-denyer/pstack-claude](https://github.com/michael-denyer/pstack-claude). It adds three things. A role can run on another CLI harness, such as `codex:gpt-6.1-sol @xhigh`, in a pane you can watch. Role mappings can be saved and reused as presets. The `/pstack-effort` page edits the mapping. The install commands below install the fork.
+
 Tell `poteto-mode` your goal and it will invoke the correct workflow for the task. It keeps your code concise, simple and verified.
 
 For concurrency bugs and invariants that tests cannot reach, `/create-formal-verification-skill` picks the riskiest property in your code, verifies it with a tool that fits, and leaves a project skill the next agent reruns. The separate [agent-formal-verify](https://github.com/michael-denyer/agent-formal-verify) plugin goes deeper on the method, with guided TLA+ model checking, Lean proofs, and Kani for Rust.
@@ -21,11 +23,11 @@ This port translates upstream's Cursor skills for Claude Code before installatio
 Run in Claude Code 2.1.292 or later:
 
 ```text
-/plugin marketplace add michael-denyer/pstack-claude
-/plugin install pstack@pstack-claude
+/plugin marketplace add kong109/pstack-multiharness
+/plugin install pstack@pstack-multiharness
 ```
 
-Claude Code leaves auto-update off for third-party marketplaces, so pstack stays on the version you installed. To turn it on, run `/plugin`, open the **Marketplaces** tab, select `pstack-claude`, and choose **Enable auto-update**. To update once by hand, run `claude plugin update pstack@pstack-claude`.
+Claude Code leaves auto-update off for third-party marketplaces, so pstack stays on the version you installed. To turn it on, run `/plugin`, open the **Marketplaces** tab, select `pstack-multiharness`, and choose **Enable auto-update**. To update once by hand, run `claude plugin update pstack@pstack-multiharness`.
 
 </details>
 
@@ -36,8 +38,8 @@ Claude Code leaves auto-update off for third-party marketplaces, so pstack stays
 Run in your terminal:
 
 ```shell
-codex plugin marketplace add michael-denyer/pstack-claude
-codex plugin add pstack@pstack-claude
+codex plugin marketplace add kong109/pstack-multiharness
+codex plugin add pstack@pstack-multiharness
 ```
 
 Invoke a skill by typing `$` and its name, such as `$poteto-mode` or `$babysit`, then choosing its entry, which inserts `$pstack:<name>`. `/skills` lists every skill.
@@ -50,7 +52,7 @@ Invoke a skill by typing `$` and its name, such as `$poteto-mode` or `$babysit`,
 Run in your terminal:
 
 ```shell
-pi install git:github.com/michael-denyer/pstack-claude
+pi install git:github.com/kong109/pstack-multiharness
 ```
 
 The package loads the skills and the pstack Pi extension, which adds the subagent, question, and wake-up tools the skills use, plus `/loop` and the routing instruction. Invoke a skill with `/skill:<name>`.
@@ -63,8 +65,8 @@ The package loads the skills and the pstack Pi extension, which adds the subagen
 Run in your terminal:
 
 ```shell
-copilot plugin marketplace add michael-denyer/pstack-claude
-copilot plugin install pstack@pstack-claude
+copilot plugin marketplace add kong109/pstack-multiharness
+copilot plugin install pstack@pstack-multiharness
 ```
 
 This installs pstack for the Copilot CLI and the GitHub Copilot app, which share `~/.copilot`. Start a new session afterwards. Copilot ships no default pstack models, so the first skill that needs one runs `setup-pstack` to pick from the models your account lists, and later sessions reuse that choice.
@@ -79,8 +81,8 @@ The Copilot build is tested on Copilot CLI 1.0.87 through 1.0.92. On those versi
 Run in your terminal:
 
 ```shell
-git clone https://github.com/michael-denyer/pstack-claude
-cd pstack-claude
+git clone https://github.com/kong109/pstack-multiharness
+cd pstack-multiharness
 muse plugins install ./plugins/pstack
 muse plugins approve pstack
 ```
@@ -95,8 +97,8 @@ The first command installs the native Muse plugin bundle. The second approves it
 Run in your terminal:
 
 ```shell
-omp plugin marketplace add michael-denyer/pstack-claude
-omp plugin install --scope user pstack@pstack-claude
+omp plugin marketplace add kong109/pstack-multiharness
+omp plugin install --scope user pstack@pstack-multiharness
 ```
 
 Restart OMP after installing, disabling, or uninstalling pstack. OMP 18.16.0 shares one plugin cache across scopes, so an upgrade or removal can affect other installations; inspect their source and scope before changing them. See [OMP issue 16827](https://github.com/can1357/oh-my-pi/issues/16827).
@@ -109,11 +111,11 @@ Restart OMP after installing, disabling, or uninstalling pstack. OMP 18.16.0 sha
 After a release containing `kimi.plugin.json` is published, close other Kimi sessions and install it in a fresh Kimi Code CLI session:
 
 ```text
-/plugins install https://github.com/michael-denyer/pstack-claude
+/plugins install https://github.com/kong109/pstack-multiharness
 /reload
 ```
 
-To test an unreleased checkout, use `/plugins install /absolute/path/to/pstack-claude` instead, followed by `/reload`; Kimi copies the whole checkout, including Git metadata and local files, so use a clean, reviewed copy. To update, close other Kimi sessions, reinstall from the same source in a fresh session, and run `/reload`. Invoke a skill as `/skill:pstack:poteto-mode`; see the [Kimi mapping](plugins/pstack/skills/poteto-mode/references/kimi-tools.md) for tool guidance.
+To test an unreleased checkout, use `/plugins install /absolute/path/to/pstack-multiharness` instead, followed by `/reload`; Kimi copies the whole checkout, including Git metadata and local files, so use a clean, reviewed copy. To update, close other Kimi sessions, reinstall from the same source in a fresh session, and run `/reload`. Invoke a skill as `/skill:pstack:poteto-mode`; see the [Kimi mapping](plugins/pstack/skills/poteto-mode/references/kimi-tools.md) for tool guidance.
 
 </details>
 
@@ -121,8 +123,8 @@ To test an unreleased checkout, use `/plugins install /absolute/path/to/pstack-c
 <summary><strong>Grok Build</strong></summary>
 
 ```shell
-git clone https://github.com/michael-denyer/pstack-claude
-cd pstack-claude
+git clone https://github.com/kong109/pstack-multiharness
+cd pstack-multiharness
 grok plugin install "$PWD/plugins/pstack" --trust
 grok plugin enable pstack
 ```
@@ -137,8 +139,8 @@ Start a new session and use `/poteto-mode` to load the skill explicitly. To upda
 For a first install, check that `${MINIMAX_DATA_DIR:-$HOME/.minimax}/plugins/pstack` does not already exist. Then run in your terminal:
 
 ```shell
-git clone https://github.com/michael-denyer/pstack-claude
-cd pstack-claude
+git clone https://github.com/kong109/pstack-multiharness
+cd pstack-multiharness
 mkdir -p "${MINIMAX_DATA_DIR:-$HOME/.minimax}/plugins"
 cp -R plugins/pstack "${MINIMAX_DATA_DIR:-$HOME/.minimax}/plugins/pstack"
 ```
@@ -150,14 +152,14 @@ MiniMax Code loads each directory under `plugins/` in its data directory as a lo
 <details>
 <summary><strong>OpenCode 2</strong></summary>
 
-Clone the repository, then add the absolute path to `plugins/pstack/opencode` to the existing `plugins` array in `~/.config/opencode/opencode.jsonc`. On Windows, use a path such as `C:/Users/name/pstack-claude/plugins/pstack/opencode`. Restart OpenCode after checkout updates.
+Clone the repository, then add the absolute path to `plugins/pstack/opencode` to the existing `plugins` array in `~/.config/opencode/opencode.jsonc`. On Windows, use a path such as `C:/Users/name/pstack-multiharness/plugins/pstack/opencode`. Restart OpenCode after checkout updates.
 
 Alternatively, install, check, or update the native Git package:
 
 ```bash
-opencode plugin add 'github:michael-denyer/pstack-claude#main'
-opencode plugin check 'github:michael-denyer/pstack-claude#main'
-opencode plugin update 'github:michael-denyer/pstack-claude#main'
+opencode plugin add 'github:kong109/pstack-multiharness#main'
+opencode plugin check 'github:kong109/pstack-multiharness#main'
+opencode plugin update 'github:kong109/pstack-multiharness#main'
 ```
 
 A commit-pinned reference does not advance. If a check immediately after installation reports no package plugins, wait for the server to load it and check again.
@@ -174,8 +176,8 @@ The plugin registers `pstack-` skill IDs and adds routing in root sessions. If r
 Run in your terminal:
 
 ```shell
-git clone https://github.com/michael-denyer/pstack-claude
-cd pstack-claude
+git clone https://github.com/kong109/pstack-multiharness
+cd pstack-multiharness
 agy plugin install ./plugins/pstack
 ```
 
@@ -190,8 +192,8 @@ This installs the native Antigravity plugin bundle (`skills`, `agents`, and `Ses
 Gemini CLI, Prime Agent, and skills-only Codex installs read skills from `~/.agents/skills/`. Run in your terminal:
 
 ```shell
-git clone https://github.com/michael-denyer/pstack-claude
-cd pstack-claude
+git clone https://github.com/kong109/pstack-multiharness
+cd pstack-multiharness
 mkdir -p ~/.agents/skills
 for s in plugins/pstack/skills/*/; do
   target=~/.agents/skills/"$(basename "$s")"

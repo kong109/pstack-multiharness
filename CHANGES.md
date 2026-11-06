@@ -2,6 +2,16 @@
 
 This file is the release changelog, with one `## <version> - <title>` entry per release, newest first. The Cursor-to-Claude rewrite rules live in [`tools/substitutions.json`](tools/substitutions.json), and the [sync boundary](CONTRIBUTING.md#the-sync-boundary) in `CONTRIBUTING.md` defines how a change to upstream's skill content is declared.
 
+## 0.9.133 - pstack-multiharness on 0.9.132
+
+This release ports the pstack-multiharness fork onto upstream 0.9.132. It keeps upstream's sheet grammar, with a space before `@`, a `default effort:` line, and the family names Claude Code accepts, such as `opus @xhigh`.
+
+A role entry can name another harness, as in `codex:gpt-6.1-sol @xhigh`. [`harnesses.json`](plugins/pstack/skills/poteto-mode/scripts/harnesses.json) registers `claude`, `codex`, `grok`, `agy`, and `muse`. `resolve-models.mjs` returns the harness with the model and effort. [Foreign-harness subagents](plugins/pstack/skills/poteto-mode/references/foreign-harness.md) runs that role as a T3 Code subagent inside T3 Code. Elsewhere it runs the role in a herdr tab, tuios window, or tmux window, and asks the user when none is available. `screen-classifier.mjs` reads the worker's pane, and `tools/eval-screen-classifier.mjs` scores it against the captured screens in `tests/fixtures/screens/`. The [watchdog](plugins/pstack/skills/poteto-mode/references/watchdog.md) checks unattended background workers.
+
+`setup-pstack` can write a project sheet at `.pstack/models.md`, which replaces the user sheet, and can start from a preset. `/pstack-preset` saves the current mapping as a named preset. `/pstack-effort` shows the mapping as a page and applies the message the page produces. It refuses an unsupported effort, a full `claude-` model ID, and the old `model@level` form.
+
+The fork drops its own generated Claude effort agents, its OpenCode agents, and its Codex prompt stubs, which upstream's routing replaces. A pull request that changes only prose skips the build, test, and lint jobs in CI and the security scan. A denylist entry in `tools/substitutions.json` can name files in an `allow` list, so the `pstack-effort` provider catalog can list Grok and Antigravity model IDs.
+
 ## 0.9.132 - resume links in CRLF and BOM notes
 
 `resume.mjs` now ignores links inside the fenced code blocks of a note saved with CRLF line endings, as its link rule says. The fence pattern's opening line ends in `.*\n`, and `.` does not match a carriage return. In a CRLF note the pattern missed each tilde fence, so `publish` read the links inside it and failed with `does not resolve (ENOENT)`. A leading byte order mark did the same to a fence on the note's first line. `verifyLinks` now strips the mark and folds CRLF to LF before it removes code, as `check-playbooks.mjs` does. The recorded sha256 does not change, because `fileInfo` hashes the file's bytes. @wattanartongtipsukon-create found and fixed the CRLF case in [#416](https://github.com/michael-denyer/pstack-claude/pull/416), and a follow-up commit on that PR added the byte order mark case.

@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
-      pull-requests: read
+      pull-requests: read # list the PR's changed files
     outputs:
       code: ${{ steps.classify.outputs.code }}
     steps:

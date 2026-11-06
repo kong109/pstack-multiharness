@@ -219,6 +219,9 @@ test("refuses an entry a dispatch would reject", () => {
   expect(() => planApply(sheet, sheet.replace("opus @high", "opus @turbo"), sheet)).toThrow("Unsupported claude effort for feature: turbo");
   expect(() => planApply(sheet, sheet.replace("feature: opus @high", "feature: claude-opus-5-5 @high"), sheet)).toThrow("write the family name, such as opus");
   expect(() => planApply(`${sheet}bug-fix: opus@high\n`, `${sheet}bug-fix: opus@high\n`, `${sheet}bug-fix: opus@high\n`)).toThrow("`opus @high`");
+  for (const line of ["  bug-fix: opus@high", "bug-fix : opus@high"]) {
+    expect(() => planApply(`${sheet}${line}\n`, `${sheet}${line}\n`, `${sheet}${line}\n`), line).toThrow("`opus @high`");
+  }
 });
 
 test("lists only the roles whose entries changed", () => {

@@ -13,7 +13,7 @@ function parseSlot(raw) {
 
 export const slotText = ({ harness, model, effort }) => `${harness ? `${harness}:` : ""}${model}${effort ? ` @${effort}` : ""}`;
 
-const ROLE_LINE = /^([a-z][a-z ,\-]*[a-z]):\s*(\S.*)$/;
+const ROLE_LINE = /^\s*([a-z][a-z ,\-]*[a-z])\s*:\s*(\S.*)$/;
 
 export const allRoleLabels = (text) =>
   text.split(/\r?\n/).map((line) => ROLE_LINE.exec(line)?.[1]).filter((role) => role && !NOT_ROLES.has(role));

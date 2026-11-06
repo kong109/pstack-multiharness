@@ -41,7 +41,7 @@ jobs:
           [ -n "$files" ] || code=true
           while IFS= read -r f; do
             case "$f" in
-              README.md | CHANGES.md | NOTICE-skills.md | docs/reference.md | plugins/*) code=true ;;
+              README.md | CHANGES.md | NOTICE-skills.md | docs/* | plugins/*) code=true ;;
               *.md | LICENSE* | assets/*) ;;
               *) code=true ;;
             esac

@@ -41,7 +41,7 @@ Remaining triggers:
 - Deploying to a managed platform (Railway, Fly, Vercel, Heroku, and the like) → load that platform's skill, project-local or installed, before running its CLI, the same way Shipping step 1 resolves the forge before the first PR operation.
 - A defect found mid-task → severity decides its artifact, not where it turned up. A correctness or data gap gets a tracked issue even when it surfaces while writing a closure doc; a cosmetic margin can stay in the doc.
 - Broken skill mid-task → fix it in its own PR. Don't block. Don't silently work around it.
-- Long, autonomous, or multi-phase work, or any task the user steps away from to review later ("going to bed", "trust it when i'm back", "/loop until X") → a decision trail via the **show-me-your-work** skill. Commit it when stakes need an auditable record. Keep it local otherwise.
+- Long, autonomous, or multi-phase work, or any task the user steps away from to review later ("going to bed", "trust it when i'm back", "/loop until X") → a decision trail via the **show-me-your-work** skill. Commit it when stakes need an auditable record. Keep it local otherwise. When agents run in the background while the user is away, also arm the [watchdog](references/watchdog.md).
 
 ## Principles
 

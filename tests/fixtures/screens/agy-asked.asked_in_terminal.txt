@@ -1,0 +1,60 @@
+
+  A single prompt awaits upon the glass,
+  A lonely cursor blinking in the dark,
+  Before the days of windows came to pass,
+  One shell alone could hold the coder's spark.
+
+  Then screen arrived to split the monochrome,
+  And tmux followed with a sharper blade,
+  Now zellij carves a modern, tiled home
+  Where sessions live and never have to fade.
+
+  With Ctrl-b the secret door unlocks,
+  A prefix key to bend the space and time,
+  We slice the void in horizontal blocks,
+  And stack our panes in symmetry sublime.
+
+  Here in the left, a faithful editor glows,
+  Where functions bloom in syntax-tinted light,
+  While on the right, a stream of output flows,
+  And unit tests are running through the night.
+
+  Down at the bottom, htop paints the load,
+  In bars of green and amber, row by row,
+  While git awaits to stage the latest code,
+  And server logs in quiet rhythm grow.
+
+  Across the footer runs the status bar,
+  A ribbon stitched with clock and branch and host,
+  That tells us who we are and where we are,
+  When wandering through the machines weghost.
+
+  Then thunder strikes—the wireless link is torn,
+  The coffee shop's unsteady router dies,
+  The laptop sleeps until the coming morn,
+  Yet on the distant box, the session flies.
+
+  Unharmed by broken pipes or dropped ssh,
+  The daemon guards the child processes well,
+  Compiler jobs still churn their steady way,
+  Inside that phantom, unattached shell.
+
+  We wake, log in, and type attach -t main,
+  And in a blink, the workspace is restored:
+  Each split, each scrollback buffer, every pane,
+  Like chessmen waiting on a timeless board.
+
+  No mouse is needed in this gridded art,
+  Just keystrokes dancing through a tiled domain—
+  The multiplexer, keeper of the heart
+  Of every engineer's unbroken train.
+
+────────────────────────────────────────────────────────────
+> Do not use any tools. Ask me which of two file names to use, notes.txt or log.txt, then end your turn and wait for my answer.
+
+  Which file name would you like to use: notes.txt or log.txt?
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+>
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+? for shortcuts                                                                                                                Gemini 4 Argon · medium

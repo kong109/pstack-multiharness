@@ -1,0 +1,44 @@
+ ▐▛███▛█   Claude Code v2.1.302
+▝▜██████▀  Opus 5.5 (1M context) with medium effort · Claude Max
+ ▝▝   ▝▝   /tmp/jev-trust-dir
+
+
+❯ Think carefully, then write a 12-line poem about tmux panes. Do not use any tools.
+
+⏺ Prefix, then percent: the window splits in two,
+  a thin line drawn straight down the glass.
+  On the left, the logs keep scrolling through;
+  on the right, a cursor waits for tests to pass.
+  Prefix, then a quote: a pane below,
+  where htop breathes in bars of green and red.
+  I hop between them, arrow keys in tow,
+  three rooms of thought inside a single head.
+  Detach, then close the lid and drive away;
+  the server hums, the jobs keep running on.
+  Next morning, tmux a, and there they stay,
+  just as I left them, nothing lost or gone.
+
+  (I left off the usual completion timestamp because you asked me not to use tools, and getting the time needs one.)
+
+✻ Cooked for 10s · done 3:17 PM
+
+❯ Do not use any tools. Ask me whether I want the next poem about vim or emacs, then end your turn and wait for my answer.
+
+⏺ Should the next poem be about vim or emacs?
+
+✻ Baked for 1s · done 3:18 PM
+
+
+
+
+
+
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  [Opus 5.5 (1M context)][thinking][medium][ctx:6%][$0.26]
+  ⏸ manual mode on · ← 1 agent

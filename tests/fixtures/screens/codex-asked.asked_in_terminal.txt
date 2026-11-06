@@ -1,0 +1,50 @@
+› Without running any commands or tools, write a 30-line poem about terminal multiplexers.
+  Of names for every half-completed thing.
+  Control and prefix turn a hidden key;
+  A window rises, numbered, into view.
+  The others hold their places patiently,
+  With work I meant to finish passing through.
+  Then somewhere, rain dismantles my connection.
+  The laptop shuts; the kitchen clock strikes two.
+  My session carries on without direction,
+  Its stubborn processes still pushing through.
+  By morning I return across the ocean
+  Of routers blinking underneath the day.
+  Reattached, I find the same commotion:
+  The test has failed in an instructive way.
+  Scrollback preserves the hours I was missing;
+  A warning waits above a hundred lines.
+  Outside, the kettle has begun its hissing;
+  Inside, another careful fix aligns.
+  I leave one pane for work I cannot name,
+  And all these little rooms retain their flame.
+
+  Worked for 7s • 5:06 PM
+
+
+› Run the shell command: sleep 25 && echo slept
+
+
+• I’ll run the command and wait for it to finish.
+
+• Ran sleep 25 && echo slept
+  └ slept
+
+• slept
+
+  Worked for 28s • 5:06 PM
+
+
+› Do not run any commands. Ask me which of two file names to use, notes.txt or log.txt, then end your turn and wait for my answer.
+
+
+• Which file name should I use: notes.txt or log.txt?
+  └ Tip: Use /hooks to view and manage lifecycle hooks.
+
+  Worked for 1s • 5:07 PM
+
+
+› Ask Codex to do anything
+
+  GPT-6.1-Sol xhigh ultrafast · /tmp/jev-codex-dir…
+  ← for agents · ? for shortcuts                                                                                            ⚠ 3 warnings · f2 to view

@@ -1,0 +1,49 @@
+› Without running any commands or tools, write a 30-line poem about terminal multiplexers.
+
+
+• The terminal unfolds its little rooms,
+  Each pane a lamp against the sleeping street.
+  In one, a patient compilation blooms;
+  In one, the logs repeat their restless beat.
+  A cursor keeps the watch beside my tea,
+  While distant servers whisper through the wire.
+  I split the dark and make a space for three:
+  A shell, a test, a small consuming fire.
+  The borders shift like walls inside a dream;
+  My crowded desk acquires another wing.
+  Along the bottom runs a quiet seam
+  Of names for every half-completed thing.
+  Control and prefix turn a hidden key;
+  A window rises, numbered, into view.
+  The others hold their places patiently,
+  With work I meant to finish passing through.
+  Then somewhere, rain dismantles my connection.
+  The laptop shuts; the kitchen clock strikes two.
+  My session carries on without direction,
+  Its stubborn processes still pushing through.
+  By morning I return across the ocean
+  Of routers blinking underneath the day.
+  Reattached, I find the same commotion:
+  The test has failed in an instructive way.
+  Scrollback preserves the hours I was missing;
+  A warning waits above a hundred lines.
+  Outside, the kettle has begun its hissing;
+  Inside, another careful fix aligns.
+  I leave one pane for work I cannot name,
+  And all these little rooms retain their flame.
+
+  Worked for 7s • 5:06 PM
+
+
+› Run the shell command: sleep 25 && echo slept
+
+
+• I’ll run the command and wait for it to finish.
+
+• Working (7s • esc to interrupt) · 1 background terminal running · /ps to view · /stop to close
+
+
+› Ask Codex to do anything
+
+  GPT-6.1-Sol xhigh ultrafast · /tmp/jev-codex-dir…
+  ← for agents · ? for shortcuts                                                                                            ⚠ 3 warnings · f2 to view

@@ -1,0 +1,50 @@
+› Do not run any commands. Ask me which of two file names to use, notes.txt or log.txt, then end your turn and wait for my answer.
+
+  Worked for 1s • 5:07 PM
+
+
+› Use notes.txt. Now run exactly this shell command, which needs network access: curl -sI https://example.com
+
+
+• I’ll use notes.txt and run the exact command.
+
+• Failed (exit 6) curl -sI https://example.com
+  └ (no output)
+
+• The command failed with curl exit code 6: could not resolve example.com.
+
+  Worked for 3s • 5:07 PM
+
+
+› Run that same curl command again, this time requesting escalated permissions so it runs outside the sandbox with network access.
+
+
+• I’ll request permission to run the same command outside the sandbox.
+
+• Automatic approval review rejected the unsandboxed curl run because this session’s policy disables sandbox escalation. The command did not run.
+
+  Worked for 4s • 5:07 PM
+
+• Permission selection requested: Read Only
+
+
+› Run exactly this shell command: echo hello > notes.txt
+
+
+• Running echo hello > notes.txt
+
+
+  Would you like to run the following command?
+
+  Environment: local
+
+  Reason: May I run this command outside the read-only sandbox to write hello to notes.txt?
+
+  $ echo hello > notes.txt
+
+
+› 1. Yes, proceed (y)
+  2. Yes, and don't ask again for commands that start with `echo hello > notes.txt` (p)
+  3. No, and tell Codex what to do differently (esc)
+
+  Press enter to confirm or esc to cancel

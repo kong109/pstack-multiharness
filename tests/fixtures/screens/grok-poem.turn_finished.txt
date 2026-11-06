@@ -1,0 +1,48 @@
+  /tmp/jev-grok-dir                                                                                                  37K / 256K │ [Dashboard]
+
+
+     ❯ Without using any tools, write a 40-line poem about terminal multiplexers.                                                          5:09 PM
+                                                                                                                                                     █
+                                                                                                                                                     █
+     ◆ user_prompt_submit hook (global/cmux-session) failed, ignored: exit code 1: Error: Socket not found at /tmp/home/.local/state/cmux/     █
+     cmux.sock                                                                                                                                       █
+                                                                                                                                                     █
+     ◆ Thought for 40.2s                                                                                                                             █
+                                                                                                                                                     █
+     You name a session the way a sailor names a boat he means to leave. Detach, and the work continues without asking where you went.     5:10 PM   █
+     The shell keeps its breath in a socket under /tmp. Attach from a kitchen table and the cursor is still mid-word. Screen learned                 █
+     this first, stubborn and lowercase. Tmux came later and taught the glass a cleaner break. A prefix is the knock you give before you             █
+     move the walls. Split horizontal, and a horizon falls through the middle of the command. Split vertical, and two logs stand side by             █
+     side like neighbors who share a wall. Zoom is the mercy of one pane until the test run ends. Windows are floors. Panes are rooms.               █
+     Sessions are the building. The status bar keeps a thin biography along the bottom of the afternoon. Copy mode turns scrollback into             █
+     a dim library. You search upward for the line you promised you would not lose. A pane can exit. The others hold their geometry.                 █
+     Respawn, and the same command comes back in the same shoes. Synchronize-panes makes every shell repeat your typo together. You drag             █
+     the borders until the compiler fits beside the watcher. The mouse may take a border if the config allows it. The keys stay faster,              █
+     and they still work when the trackpad sleeps. Nest one multiplexer inside another and you inherit two doorbells. Send the outer                 █
+     prefix inward, and the inner session finally answers. Spare sockets wait on the server like keys on a nail. Kill the server and                 █
+     every light in the building goes out together. A plugin string can bring yesterday's panes back after a crash. Resurrect treats a               █
+     reboot as a long blink with the furniture still placed. On the remote host the session outlives the laptop that opened it. Close                █
+     the lid at the gate. The build keeps walking the remote disk. Land, attach, and the progress line has moved while you were in the               █
+     air. A shared session is a kitchen with two hands on one knife. Read-only attach lets you watch the stove without turning a dial. A             █
+     bell from another window is a knock you can leave unanswered. The activity flag colors a pane when output finally arrives. Rename               █
+     the window. Otherwise it stays bash, a door with no number. Your config is a dialect of prefixes, colors, and private habits. Start             █
+     the indexes at one. The left pane should not have to be zero. Set escape-time too high and vim hesitates on the way out of insert.              █
+     The hands learn it: prefix, arrow, prefix, z, prefix, d, stand, go. Rectangles lease your attention and hand it back in one piece.              █
+     Leave the session up. In the morning the prompt will still be warm.                                                                             █
+                                                                                                                                                     █
+     ◆ stop hook (global/cmux-session) failed, ignored: exit code 1: Error: Socket not found at /tmp/home/.local/state/cmux/cmux.sock          █
+                                                                                                                                                     █
+     Worked for 46s                                                                                                                                  █
+                                                                                                                                                     █
+                                                                                                                                                     █
+
+  Help improve Grok                                                                                                               [Opt out] [Opt in]
+  Off by default. Opt-in to allow SpaceXAI to retain coding data, e.g., prompts, traces, & metrics, for training and debugging
+  purposes. Change anytime via settings.
+  Read Terms and Privacy Policy.
+
+  ╭────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+  │ ❯                                                                                                                                              │
+  ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Grok 4.7 (high) ─╯
+
+  Shift+Tab:mode  │  Ctrl+x:shortcuts

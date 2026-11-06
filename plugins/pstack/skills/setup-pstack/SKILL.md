@@ -41,9 +41,19 @@ The Codex home directory is `$CODEX_HOME` when that variable is set and `~/.code
 
 Enumerate the model names the `Agent` tool's `model` parameter accepts in this session. That is the dependable source. On Claude Code they are the family names listed in [Models](#models) below, each running that family's current model, and a full model ID is rejected. The default panel is listed there too. The panel is chosen for cross-family diversity. Ask the user to confirm or paste any additional slugs they want available. Never write a real slug you have not confirmed is available. The aliases `inherit-parent` and `auto` are always valid even though they are not detected slugs. Both mean the role runs on the parent session's model, which the `Agent` call expresses by omitting `model`.
 
+Also detect the other CLI harnesses a role can run on with `command -v claude codex grok agy muse`, and whether this session has T3 Code's `delegate_task` tool or runs inside herdr, tuios, or tmux (`HERDR_ENV`, `TUIOS_ENV`, `TMUX`). An entry such as `codex:gpt-6.1-sol @xhigh` runs on that harness through [foreign-harness subagents](../poteto-mode/references/foreign-harness.md), so offer the installed harnesses' models only when one of those routes exists.
+
 ### 2. Load current state
 
-The default role-to-model mapping is the rule shape shown in the Write the override sheet step below. If the current runtime's sheet already exists, read it and treat its values as the current choices. Otherwise start from those defaults. A line whose role is not in that shape, such as `how critics`, is from a retired role. Drop it. An older sheet may name full model IDs that start with `claude-`, which the `Agent` tool rejects. Replace each with its family name, the word after `claude-`.
+The default role-to-model mapping is the rule shape shown in the Write the override sheet step below. If the current runtime's sheet already exists, read it and treat its values as the current choices. Otherwise start from those defaults. A line whose role is not in that shape, such as `how critics`, is from a retired role. Drop it. An older sheet may name full model IDs that start with `claude-`, which the `Agent` tool rejects. Replace each with its family name, the word after `claude-`. An older sheet may also write effort without a space, as in `sonnet@xhigh`, or set it per model with `effort: model = value` lines. Rewrite the first as `sonnet @xhigh`. Fold each `effort:` line into the entries of that model that carry no suffix, then drop the line. List every rewrite in step 3.
+
+#### Project scope
+
+A project may keep its own sheet at `<project-root>/.pstack/models.md`. An existing project sheet replaces the user sheet as a whole for that project, and missing roles take the skill defaults, never the user sheet's values. Configure the scope the user names. Otherwise keep the project scope when a project sheet exists, and ask which scope to configure when neither is established. The `session hook` line stays in the user sheet, since the hook reads only that one. For a project sheet, step 7 adds `@.pstack/models.md` to the project's `CLAUDE.md` on Claude Code, or a plain instruction naming the path to the project's `AGENTS.md` on other runtimes.
+
+#### Presets
+
+List saved presets with the [preset helper](../pstack-preset/scripts/presets.mjs), run from the project root: `node /path/to/presets.mjs list user` and `node /path/to/presets.mjs list project`. When either scope has one, offer the presets, labelled `user/NAME` and `project/NAME`, beside keeping the current mapping and configuring by hand. Honor a preset the user already chose without asking again. For a chosen preset, run `show SCOPE NAME` and take its mapping as the proposal for step 3. Roles it lacks take this runtime's defaults. A preset saved elsewhere does not prove its models exist here, so step 5 still validates every entry. A preset scope and the configured scope are independent: a user preset can configure a project, and a project preset can become the user default.
 
 ### 3. Map and confirm
 
@@ -59,7 +69,7 @@ On Claude Code and Codex, the plugin's `SessionStart` hook injects the poteto-mo
 
 ### 5. Validate
 
-Every real slug written must be in the detected set. `inherit-parent` and `auto` always pass. Validate the slug without any `@<level>` suffix, and the level against the effort levels in [Models](#models). The `default effort` value is one of those levels or `session`. On Codex, the levels are the `reasoning_effort` values your Codex models accept instead. If a chosen real slug or level is not available, stop and ask again.
+Every real slug written must be in the detected set. `inherit-parent` and `auto` always pass. Validate the slug without any `@<level>` suffix, and the level against the effort levels in [Models](#models). The `default effort` value is one of those levels or `session`. On Codex, the levels are the `reasoning_effort` values your Codex models accept instead. A `harness:` entry is checked against that harness instead. Its model comes from the user or that harness's own model list, and its level must be one the [registry](../poteto-mode/scripts/harnesses.json) accepts. Run `node /path/to/poteto-mode/scripts/resolve-models.mjs <sheet> "<role>"` on the written sheet for every role. It rejects an entry the grammar cannot read. If a chosen real slug or level is not available, stop and ask again.
 
 ### 6. Write the override sheet
 
@@ -104,7 +114,7 @@ On Muse, no include line is needed: the plugin hook reads the sheet directly and
 
 ### 8. Confirm
 
-Tell the user where the override was written, how its model rows load, and whether the plugin hook is on. Re-running this skill updates the override sheet.
+Tell the user where the override was written, its scope, the preset it started from if any, how its model rows load, and whether the plugin hook is on. Name each entry that runs on another harness and whether T3 Code or a multiplexer can run it from here. Mention `pstack-preset` to save the result for reuse and `pstack-effort` to edit it on a page. Re-running this skill updates the override sheet, never the preset it started from.
 
 ### 9. Offer a verification skill (optional)
 

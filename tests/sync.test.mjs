@@ -373,6 +373,12 @@ describe("denylistHits", () => {
     expect(denylistHits("how.md", "the role line in the `pstack-models.mdc` rule", RULES.denylist)).toHaveLength(1);
   });
 
+  test("a slug passes only in a file its entry allows", () => {
+    const catalog = '{ "slug": "grok-4.7" }, { "slug": "gemini-3.8-flash-high" }';
+    expect(denylistHits("skills/pstack-effort/providers.json", catalog, RULES.denylist)).toEqual([]);
+    expect(denylistHits("skills/pstack-effort/SKILL.md", catalog, RULES.denylist)).toHaveLength(2);
+  });
+
   test("a Cursor phrase that no rule rewrites any more fails the scan if upstream brings it back", () => {
     for (const line of [
       'on "restart Cursor"',

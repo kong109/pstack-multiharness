@@ -192,11 +192,13 @@ export function unmatchedRules(rules, trees) {
   return rules.map((rule) => rule.key).filter((key) => !matched.has(key));
 }
 
-// An entry is a literal `token` or a `regex`; either fails the line it matches.
+// An entry is a literal `token` or a `regex`; either fails the line it matches,
+// except in a file its `allow` list names.
 export function denylistHits(path, text, denylist) {
   const hits = [];
   text.split("\n").forEach((line, i) => {
-    for (const { token, regex, hint } of denylist) {
+    for (const { token, regex, hint, allow = [] } of denylist) {
+      if (allow.includes(path)) continue;
       if (token ? line.includes(token) : new RegExp(regex).test(line)) {
         hits.push(`${path}:${i + 1}: "${token ?? regex}" — ${hint}`);
       }

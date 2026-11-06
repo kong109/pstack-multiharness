@@ -1,4 +1,2 @@
-* text=auto
-*.sh text eol=lf
-plugins/pstack/hooks/session-start text eol=lf
-plugins/pstack/skills/poteto-mode/scripts/watch-pr/ship-pr text eol=lf
+# Keep generator anchors and executable scripts identical on every platform.
+* text=auto eol=lf

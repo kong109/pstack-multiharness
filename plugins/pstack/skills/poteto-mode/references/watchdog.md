@@ -2,7 +2,7 @@
 
 A background agent can stop without any notice reaching you. A subagent that ends its turn to wait on its own background child never wakes, because the child's notice goes to the top-level session. A Claude Code restart kills every subagent in flight and reports nothing. Waiting for a notice in either case waits forever. The watchdog checks each agent in flight on a timer that runs outside the Claude Code process.
 
-Arm it for every run that leaves agents running in the background while nobody watches: an orchestrate program, a figure-it-out run, an autonomous run. [liveness.mjs](../scripts/liveness.mjs) keeps the run's state in one run directory, such as the orchestrate store or the folder that holds the decision trail.
+Arm it for every run that leaves agents running in the background while nobody watches, such as a figure-it-out run or an autonomous run. The orchestrate playbook calls no scripts, so it judges its workers by their pushes and PR activity instead. [liveness.mjs](../scripts/liveness.mjs) keeps the run's state in one run directory, such as the folder that holds the decision trail.
 
 ## Arm it
 
@@ -32,7 +32,7 @@ The tick runs `liveness.mjs check <run-dir>` and acts on each line.
 | `STALLED` | no transcript write for 15 minutes and nothing running in the worktree | Read the end of the transcript, then resume the agent with `SendMessage`. Say what stopped it and what is on disk, and paste the run's standing orders if it has them. |
 | `PENDING` | a queued `delegate_task` call | Launch it as [Launch T3 Code tasks from a tick](#launch-t3-code-tasks-from-a-tick) says. |
 
-A verdict is a reason to look, not proof. A process the agent left behind, such as a dev server, keeps it `OK`. A tool that works outside the worktree, or any tool where `lsof` is missing, as on Windows, reads `STALLED` after 15 minutes. Read the transcript before you resume anything. Under the orchestrate playbook, `ENDED` and `STALLED` agents are silent deaths, handled by its Liveness and failure rules.
+A verdict is a reason to look, not proof. A process the agent left behind, such as a dev server, keeps it `OK`. A tool that works outside the worktree, or any tool where `lsof` is missing, as on Windows, reads `STALLED` after 15 minutes. Read the transcript before you resume anything.
 
 ## After a restart
 

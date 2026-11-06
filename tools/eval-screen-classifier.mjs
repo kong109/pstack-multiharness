@@ -1,4 +1,3 @@
-// Opt-in live evaluation against TypeSafe's Jev API; needs TYPESAFE_API_KEY and is not run in CI.
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,7 +12,7 @@ if (!classifierEnabled(process.env)) {
   process.exit(1);
 }
 
-let misses = 0;
+let confidentMisses = 0;
 console.log(["fixture", "expected", "label", "confidence", "settles", "ms"].join("\t"));
 for (const file of readdirSync(fixtures).filter((f) => f.endsWith(".txt")).sort()) {
   const [name, expected] = file.split(".");
@@ -22,9 +21,8 @@ for (const file of readdirSync(fixtures).filter((f) => f.endsWith(".txt")).sort(
   const ms = Math.round(performance.now() - started);
   const floor = SCREEN_LABELS[got?.label]?.minConfidence ?? Infinity;
   const settles = Boolean(got) && got.confidence >= floor;
-  // A wrong label only harms when it clears its threshold; below it the helper keeps waiting.
-  if (got?.label !== expected && settles) misses++;
+  if (got?.label !== expected && settles) confidentMisses++;
   console.log([name, expected, got?.label ?? "(failed)", got?.confidence?.toFixed(3) ?? "-", settles ? "yes" : "no", ms].join("\t"));
 }
-console.log(`${misses} misclassified above threshold`);
-process.exitCode = misses ? 1 : 0;
+console.log(`${confidentMisses} misclassified above threshold`);
+process.exitCode = confidentMisses ? 1 : 0;

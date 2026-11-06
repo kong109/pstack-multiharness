@@ -196,16 +196,16 @@ function modelOf(s) {
 }
 function writesHarnessPrefix(s) { return !isAlias(s) && (s.prefixed || s.harness !== DATA.native); }
 function modelDefault(s) {
-  return (writesHarnessPrefix(s) && DATA.defaults[s.harness + ":" + s.model]) || DATA.defaults[s.model] || "";
+  const m = modelOf(s);
+  return m && !m.efforts.length ? "" : DATA.defaultEffort;
 }
-function clearEffort(s) { s.effort = modelDefault(s) ? "default" : ""; }
+function clearEffort(s) { s.effort = ""; }
 function unsupportedEffort(s) {
   const m = modelOf(s);
-  return Boolean(m && s.effort && s.effort !== "default" && !m.efforts.includes(s.effort));
+  return Boolean(m && s.effort && !m.efforts.includes(s.effort));
 }
 function entry(s) {
-  const effort = s.effort === "default" && !modelDefault(s) ? "" : s.effort;
-  return (writesHarnessPrefix(s) ? s.harness + ":" : "") + s.model + (effort ? "@" + effort : "");
+  return (writesHarnessPrefix(s) ? s.harness + ":" : "") + s.model + (s.effort ? " @" + s.effort : "");
 }
 function line(r) { return r.role + ": " + r.slots.map(entry).join(", "); }
 
@@ -236,11 +236,10 @@ function renderMeta() {
   m.append(el("span", { text: "sheet " + DATA.sheetPath }));
   m.append(el("span", { text: "scope " + DATA.scope }));
   m.append(el("span", { text: "native harness " + DATA.native }));
-  if (DATA.configDir) m.append(el("span", { text: "agents " + DATA.configDir }));
   m.append(el("span", { text: "read " + DATA.generated }));
   const lg = document.getElementById("legend");
   lg.textContent = "Providers: " + PROVIDERS.map(p => p.label + " runs on " + p.harness).join("; ") +
-    ". A slot on another harness runs as a T3 Code subagent inside T3 Code, otherwise in its own herdr tab or tuios window.";
+    ". A slot on another harness runs as a T3 Code subagent inside T3 Code, otherwise in its own herdr tab, tuios window, or tmux window.";
 }
 
 function changeProvider(s, harness) {
@@ -304,11 +303,10 @@ function effortBoxes(r, s, si, ri) {
 
 function effortNote(s) {
   if (unsupportedEffort(s)) return `keeps effort ${s.effort}, which this model does not list`;
-  if (s.effort === "default") return "no box ticked: writes @default, the harness's own effort";
   if (s.effort) return "";
   if (!modelOf(s).efforts.length) return "this harness takes no effort setting; the effort is part of the model";
   const inherited = modelDefault(s);
-  return inherited ? `no box ticked: the sheet's effort line sets ${inherited} for this model` : "no box ticked: harness default effort";
+  return inherited ? `no box ticked: the sheet's default effort line sets ${inherited}` : "no box ticked: runs at the session's effort";
 }
 
 function renderRoles() {
@@ -379,7 +377,6 @@ function renderResponse() {
     "/pstack-effort apply",
     `sheet: ${DATA.sheetPath}`,
     `scope: ${DATA.scope}`,
-    DATA.configDir ? `config-dir: ${DATA.configDir}` : null,
     `changes: ${diffs.length}`,
     ...diffs.map(d => `- ${d}`),
     "",
@@ -399,10 +396,8 @@ function commit() { save(); renderRoles(); renderResponse(); }
 function presetLabel(p) { return p.scope + "/" + p.name; }
 function presetSlot(p, s) {
   const slot = { harness: s.harness || DATA.native, prefixed: Boolean(s.harness), model: s.model, effort: s.effort };
-  if (!slot.effort) {
-    const own = (s.harness && p.defaults[s.harness + ":" + s.model]) || p.defaults[s.model] || "";
-    slot.effort = own || (modelDefault(slot) ? "default" : "");
-  }
+  const m = modelOf(slot);
+  if (!slot.effort && p.defaultEffort !== DATA.defaultEffort && !(m && !m.efforts.length)) slot.effort = p.defaultEffort;
   return slot;
 }
 function loadPreset(p) {

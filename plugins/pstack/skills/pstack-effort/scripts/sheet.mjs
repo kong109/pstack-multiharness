@@ -1,6 +1,6 @@
 import { parseEntry } from "../../poteto-mode/scripts/resolve-models.mjs";
 
-const NOT_ROLES = new Set(["effort", "session hook"]);
+const NOT_ROLES = new Set(["default effort", "session hook"]);
 
 function parseSlot(raw) {
   try {
@@ -11,20 +11,25 @@ function parseSlot(raw) {
   }
 }
 
-export const slotText = ({ harness, model, effort }) => `${harness ? `${harness}:` : ""}${model}${effort ? `@${effort}` : ""}`;
+export const slotText = ({ harness, model, effort }) => `${harness ? `${harness}:` : ""}${model}${effort ? ` @${effort}` : ""}`;
+
+const ROLE_LINE = /^\s*([a-z][a-z ,\-]*[a-z])\s*:\s*(\S.*)$/;
+
+export const allRoleLabels = (text) =>
+  text.split(/\r?\n/).map((line) => ROLE_LINE.exec(line)?.[1]).filter((role) => role && !NOT_ROLES.has(role));
 
 export function parseSheet(text) {
   const lines = text.split(/\r?\n/);
   const roles = [];
-  const defaults = {};
+  let defaultEffort = "";
   lines.forEach((line, index) => {
-    const model = /^effort:\s*(\S+)\s*=\s*(\S+)\s*$/.exec(line);
-    if (model) defaults[model[1]] = model[2];
-    const m = /^([a-z][a-z ,\-]*[a-z]):\s*(\S.*)$/.exec(line);
+    const fallback = /^default effort:\s*(\S+)\s*$/.exec(line);
+    if (fallback) defaultEffort = fallback[1] === "session" ? "" : fallback[1];
+    const m = ROLE_LINE.exec(line);
     if (!m || NOT_ROLES.has(m[1])) return;
-    const slots = m[2].split(",").map((entry) => parseSlot(entry));
+    const slots = m[2].split(",").map(parseSlot);
     if (slots.some((slot) => !slot)) return;
     roles.push({ role: m[1], line: index, slots });
   });
-  return { lines, roles, defaults };
+  return { lines, roles, defaultEffort };
 }

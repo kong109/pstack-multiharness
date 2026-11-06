@@ -1,6 +1,12 @@
 # Foreign-harness subagents
 
-A role entry can name another CLI harness, as in `codex:gpt-6.1-sol@xhigh`. The [resolver](../scripts/resolve-models.mjs) returns that as `harness`. An entry with no `harness`, or with the harness the current session runs on, dispatches natively as [model and effort resolution](model-dispatch.md) says. Every other entry runs on its own harness, either as a T3 Code subagent or in the real TUI of that harness, in a pane the user can watch. That covers a Codex parent that resolves a `claude:` entry and a Claude Code parent that resolves a `codex:` entry.
+A role entry can name another CLI harness, as in `codex:gpt-6.1-sol @xhigh`. The prefix must be a harness in the [registry](../scripts/harnesses.json), and the entry must name a concrete model. A prefix that is not registered stays part of the model id. Run the [resolver](../scripts/resolve-models.mjs) on the active sheet to read a role's entries as JSON:
+
+```sh
+node /path/to/poteto-mode/scripts/resolve-models.mjs /path/to/pstack-models.md "arena runners" "<the skill's default models>"
+```
+
+It returns one object per entry, in order, with `harness` on entries that name one, `model` (null for `inherit-parent` and `auto`), and `effort`, which is the entry's `@level` or the sheet's `default effort` line, and null for `session`. A harness whose registry `effort` is null names the effort in its model id, so the default effort skips it. An entry with no `harness`, or with the harness the current session runs on, dispatches natively, as the calling skill's Models and Reasoning effort sections say. Every other entry runs on its own harness, either as a T3 Code subagent or in the real TUI of that harness, in a pane the user can watch. That covers a Codex parent that resolves a `claude:` entry and a Claude Code parent that resolves a `codex:` entry.
 
 Never run a foreign entry through a one-shot mode such as `codex exec` or `claude -p`, and never through the `Agent` tool.
 
@@ -8,7 +14,7 @@ Never run a foreign entry through a one-shot mode such as `codex exec` or `claud
 
 Take the first that applies.
 
-1. No `harness`, or the session's own harness. Dispatch natively as [model and effort resolution](model-dispatch.md) says.
+1. No `harness`, or the session's own harness. Dispatch natively.
 2. T3 Code. This session has the `delegate_task` tool from the `t3-code` MCP server, whose name may carry a prefix such as `mcp__t3-code__delegate_task`. `orchestrator_capabilities` lists a provider whose `driverKind` is the entry's `t3.driver` in the [registry](../scripts/harnesses.json), with `canRunCrossProviderChildTask` true. Use the [T3 Code route](#t3-code-route).
 3. herdr, tuios, or tmux. `HERDR_ENV`, `TUIOS_ENV`, or `TMUX` is set. Use the [pane route](#pane-route).
 4. Otherwise tell the user and ask for a native model. Never fall back to a hidden process.
@@ -24,7 +30,7 @@ T3 Code comes before the panes because a T3 Code server started from a herdr pan
 3. Run the script, one command per agent. Take `--harness`, `--model`, and `--effort` from the resolver output, and omit `--effort` when it is null.
 
 ```sh
-node /path/to/poteto-mode/scripts/t3-task.mjs --name arena-a --harness grok --model grok-4.7 --effort xhigh --access read --brief /path/to/brief.md
+node /path/to/poteto-mode/scripts/t3-task.mjs --name arena-a --harness codex --model gpt-6.1-sol --effort xhigh --access read --brief /path/to/brief.md
 ```
 
 4. Pass the printed JSON fields to `delegate_task` unchanged, one call per agent, all in the same turn for a panel.

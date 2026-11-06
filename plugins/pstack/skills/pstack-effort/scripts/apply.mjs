@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 import { copyFileSync, existsSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
-import { installProfiles, routesFromSheet } from "../../poteto-mode/scripts/claude-agents.mjs";
-import { parseSheet, slotText } from "./sheet.mjs";
+import { checkForeignTarget } from "../../poteto-mode/scripts/foreign-launch.mjs";
+import { resolveRole } from "../../poteto-mode/scripts/resolve-models.mjs";
+import { parseSheet, allRoleLabels, slotText } from "./sheet.mjs";
+
+const { native } = JSON.parse(readFileSync(new URL("../providers.json", import.meta.url), "utf8"));
 
 const field = (message, name) => new RegExp(String.raw`^${name}:[ \t]*(.+)$`, "m").exec(message)?.[1]?.trim();
 
@@ -19,7 +21,7 @@ export function parseMessage(raw) {
   if (!sheetPath || base === undefined || next === undefined) {
     throw new Error("message needs a `sheet:` line and fenced ```pstack-base and ```pstack-sheet blocks; render the page again and copy a fresh message");
   }
-  return { sheetPath, scope: field(message, "scope"), configDir: field(message, "config-dir"), base: `${base}\n`, next: `${next}\n` };
+  return { sheetPath, base: `${base}\n`, next: `${next}\n` };
 }
 
 const fmt = (role) => role.slots.map(slotText).join(", ");
@@ -44,21 +46,25 @@ export function planApply(current, next, base) {
     }
     const line = `${role.role}: ${fmt(wanted.roles[i])}`;
     lines[there.line] = lines[there.line].endsWith("\r") ? `${line}\r` : line;
-    changes.push({ role: role.role, from: fmt(there), to: fmt(wanted.roles[i]), foreign: wanted.roles[i].slots.filter((s) => s.harness) });
+    changes.push({ role: role.role, from: fmt(there), to: fmt(wanted.roles[i]) });
   });
   if (drifted.length) {
     throw new Error(`refused: ${drifted.join(", ")} changed in the file after the page was rendered. Render the page again and redo those edits.`);
   }
   const text = lines.join("\n");
-  routesFromSheet(text);
+  for (const role of allRoleLabels(text)) {
+    for (const { harness = native, model, effort } of resolveRole(text, role)) {
+      if (harness === "claude" && model?.startsWith("claude-")) {
+        throw new Error(`${role}: ${model} is a full model ID, which the Agent tool rejects; write the family name, such as ${model.split("-")[1]}`);
+      }
+      checkForeignTarget(role, { harness, model: model ?? "inherit-parent", effort });
+    }
+  }
   return { changes, text };
 }
 
-export const defaultConfigDir = ({ scope, sheetPath }) =>
-  scope === "project" ? join(dirname(dirname(sheetPath)), ".claude") : join(homedir(), ".claude");
-
 export function apply({ message, dryRun = false, env = process.env, log = console.log }) {
-  const { sheetPath, scope, configDir, base, next } = parseMessage(readFileSync(message, "utf8"));
+  const { sheetPath, base, next } = parseMessage(readFileSync(message, "utf8"));
   if (!existsSync(sheetPath)) throw new Error(`sheet not found: ${sheetPath}`);
   const { changes, text } = planApply(readFileSync(sheetPath, "utf8"), next, base);
   changes.forEach((c) => log(`${c.role}: ${c.from} -> ${c.to}`));
@@ -69,20 +75,11 @@ export function apply({ message, dryRun = false, env = process.env, log = consol
   copyFileSync(sheetPath, backup);
   writeFileSync(sheetPath, text);
   log(`wrote ${sheetPath} (backup ${backup})`);
-  const dir = configDir ?? defaultConfigDir({ scope, sheetPath });
-  let agents;
-  try {
-    ({ agents } = installProfiles(sheetPath, resolve(dir), { check: false }));
-  } catch (error) {
-    copyFileSync(backup, sheetPath);
-    throw new Error(`${error.message}\nrestored ${sheetPath} from ${backup}`);
+  const foreign = parseSheet(text).roles.some((r) => r.slots.some((s) => s.harness && s.harness !== native));
+  if (foreign && !env.HERDR_ENV && !env.HERDR_PANE_ID && env.TUIOS_ENV !== "1" && !env.TMUX) {
+    log("note: this sheet routes roles to another harness. Inside T3 Code those roles run as T3 Code subagents. Elsewhere they need herdr, tuios, or tmux, and this shell runs in none of them");
   }
-  log(`installed ${agents.length} routed agent${agents.length === 1 ? "" : "s"} in ${dir}`);
-  const foreign = parseSheet(text).roles.some((r) => r.slots.some((s) => s.harness && s.harness !== "claude"));
-  if (foreign && !env.HERDR_ENV && !env.HERDR_PANE_ID && env.TUIOS_ENV !== "1") {
-    log("note: this sheet routes roles to another harness. Inside T3 Code those roles run as T3 Code subagents. Elsewhere they need herdr or tuios, and this shell has neither multiplexer");
-  }
-  return { changes, backup, agents };
+  return { changes, backup };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(resolve(process.argv[1]))).href) {

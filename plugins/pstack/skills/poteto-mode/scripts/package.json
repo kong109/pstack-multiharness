@@ -3,15 +3,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "bun test orch watch-pr",
+    "test": "bun test watch-pr check-plan.test.ts",
     "typecheck": "tsc --project tsconfig.json"
   },
   "dependencies": {
-    "commander": "14.0.0",
-    "cross-spawn": "7.0.6"
+    "commander": "14.0.0"
   },
   "devDependencies": {
-    "@types/cross-spawn": "6.0.6",
     "bun-types": "latest",
     "typescript": "latest"
   }

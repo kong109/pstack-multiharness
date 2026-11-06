@@ -29,7 +29,7 @@ export function buildProviders({ providers, available, codex }) {
     let models = provider.models;
     if (provider.harness === "claude") {
       const known = new Set(models.map((m) => m.slug));
-      models = [...models, ...available.filter((m) => !known.has(m.slug))];
+      models = [...models, ...available.filter((slug) => !known.has(slug)).map((slug) => ({ slug, label: slug }))];
     }
     if (provider.harness === "codex" && codex) models = codex;
     return {
@@ -43,17 +43,17 @@ export function readPresets(project = process.cwd(), home = homedir()) {
   return ["user", "project"].flatMap((scope) => {
     const directory = presetDirectory(scope, project, home);
     return listPresets(directory).flatMap((name) => {
-      const { roles, defaults } = parseSheet(readFileSync(join(directory, `${name}.md`), "utf8"));
-      return roles.length ? [{ scope, name, roles: roles.map(({ role, slots }) => ({ role, slots })), defaults }] : [];
+      const { roles, defaultEffort } = parseSheet(readFileSync(join(directory, `${name}.md`), "utf8"));
+      return roles.length ? [{ scope, name, roles: roles.map(({ role, slots }) => ({ role, slots })), defaultEffort }] : [];
     });
   });
 }
 
-export function pageData({ sheetPath, scope, configDir, native, generated, text, catalog, presets = [] }) {
-  const { lines, roles, defaults } = parseSheet(text);
+export function pageData({ sheetPath, scope, native, generated, text, catalog, presets = [] }) {
+  const { lines, roles, defaultEffort } = parseSheet(text);
   if (!roles.length) throw new Error(`no role lines found in ${sheetPath}`);
   return {
-    sheetPath, scope, configDir, native, generated, lines, roles, defaults, presets,
+    sheetPath, scope, native, generated, lines, roles, defaultEffort, presets,
     providers: buildProviders(catalog),
   };
 }
@@ -61,10 +61,10 @@ export function pageData({ sheetPath, scope, configDir, native, generated, text,
 function main(argv) {
   const { values } = parseArgs({ args: argv, options: {
     sheet: { type: "string" }, out: { type: "string" }, scope: { type: "string" },
-    "config-dir": { type: "string" }, native: { type: "string" }, "project-root": { type: "string" },
+    native: { type: "string" }, "project-root": { type: "string" },
   } });
   if (!values.sheet || !values.out) {
-    throw new Error("usage: render.mjs --sheet <models.md> --out <page.html> [--scope project|user] [--config-dir <dir>] [--native claude|codex] [--project-root <dir>]");
+    throw new Error("usage: render.mjs --sheet <models.md> --out <page.html> [--scope project|user] [--native claude|codex] [--project-root <dir>]");
   }
   const defaults = readJson(join(skillDir, "providers.json"));
   const modelsPath = join(skillDir, "..", "..", "models.json");
@@ -73,7 +73,6 @@ function main(argv) {
   const data = pageData({
     sheetPath,
     scope: values.scope ?? "project",
-    configDir: values["config-dir"] ? resolve(values["config-dir"]) : "",
     native: values.native ?? defaults.native,
     generated: new Date().toISOString().slice(0, 16).replace("T", " "),
     text: readFileSync(sheetPath, "utf8"),

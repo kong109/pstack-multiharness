@@ -7,10 +7,10 @@
       "harness": "claude",
       "efforts": ["low", "medium", "high", "xhigh", "max"],
       "models": [
-        { "slug": "claude-opus-5-5", "label": "Claude Opus 5.5" },
-        { "slug": "claude-sonnet-5-5", "label": "Claude Sonnet 5.5" },
-        { "slug": "claude-fable-5-1", "label": "Claude Fable 5.1" },
-        { "slug": "claude-haiku-4-5", "label": "Claude Haiku 4.5" }
+        { "slug": "opus", "label": "Opus" },
+        { "slug": "sonnet", "label": "Sonnet" },
+        { "slug": "fable", "label": "Fable" },
+        { "slug": "haiku", "label": "Haiku" }
       ]
     },
     {

@@ -1,10 +1,9 @@
 {
   "name": "pstack",
-  "version": "0.9.45",
-  "description": "if you want to go fast, go deep first. pstack helps you write less, but higher quality code. rigorous agent workflows you can parallelize with confidence. Codex port of the Claude Code plugin; skills are shared, tool names resolve via skills/poteto-mode/references/codex-tools.md. Original pstack by Lauren Tan (poteto).",
+  "version": "0.9.133",
+  "description": "If you want to go fast, go deep first. pstack helps you write less, but higher quality code. rigorous agent workflows you can parallelize with confidence. Codex port of the Claude Code plugin; skills are shared, tool names resolve via skills/poteto-mode/references/codex-tools.md. Original pstack by Lauren Tan (poteto).",
   "author": {
     "name": "Michael Denyer",
-    "email": "mdenyer@gmail.com",
     "url": "https://github.com/michael-denyer"
   },
   "homepage": "https://github.com/kong109/pstack-multiharness",
@@ -29,7 +28,7 @@
     "prime-agent"
   ],
   "skills": "./skills/",
-  "hooks": "./hooks/hooks.json",
+  "hooks": "./hooks/codex-hooks.json",
   "interface": {
     "displayName": "pstack",
     "shortDescription": "Rigorous, parallelizable agent workflows: go deep first, write less, verify everything",
@@ -46,6 +45,8 @@
       "Interrogate this diff with multiple models."
     ],
     "websiteURL": "https://github.com/kong109/pstack-multiharness",
-    "brandColor": "#7C3AED"
+    "brandColor": "#7C3AED",
+    "composerIcon": "./assets/pstack-icon.png",
+    "logo": "./assets/pstack-icon.png"
   }
 }

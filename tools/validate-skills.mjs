@@ -7,8 +7,6 @@ import { pathToFileURL } from "node:url";
 // The one directory walker for every tool in tools/. `node_modules` under
 // poteto-mode/scripts is gitignored but present on any machine that ran the
 // vendored tooling's install, and its READMEs are not ours to validate.
-export const displayPath = (path) => path.split(sep).join("/");
-
 export const SKIPPED_DIRS = new Set([".git", "node_modules"]);
 
 // Sorted, so reports and scans read the same on every filesystem.
@@ -27,7 +25,36 @@ export function markdownFiles(dir) {
 
 function markdownTargets(text) {
   const targets = [];
-  for (const [, raw] of text.matchAll(/\]\(([^)\n]*)\)/g)) targets.push(destination(raw));
+  // Only an unescaped, outer parenthesis closes the link. Angle destinations
+  // and quoted titles can contain parentheses that do not affect its depth.
+  // A link never spans lines, so each line is scanned on its own.
+  for (const line of text.split(/\r\n|\r|\n/)) {
+    const openings = /\]\([ \t]*/g;
+    while (openings.exec(line)) {
+      const start = openings.lastIndex;
+      let depth = 1;
+      let angle = line[start] === "<";
+      let quote = null;
+      for (let i = start; i < line.length; i += 1) {
+        const char = line[i];
+        if (char === "\\") {
+          i += 1;
+        } else if (angle) {
+          if (char === ">") angle = false;
+        } else if (quote) {
+          if (char === quote) quote = null;
+        } else if ((char === '"' || char === "'") && /[ \t]/.test(line[i - 1])) {
+          quote = char;
+        } else if (char === "(") {
+          depth += 1;
+        } else if (char === ")" && --depth === 0) {
+          targets.push(destination(line.slice(start, i)));
+          openings.lastIndex = i + 1;
+          break;
+        }
+      }
+    }
+  }
   for (const [, raw] of text.matchAll(/^\s{0,3}\[(?!\^)[^\]\n]+\]:\s*(.+)$/gm)) {
     targets.push(destination(raw));
   }
@@ -76,7 +103,7 @@ function prosePathProblems(text, file, root) {
     const candidates = [resolve(dirname(file), token), resolve(pluginRoot, token)];
     const outside = candidates.find((path) => existsSync(path) && !pathIsInside(root, path));
     if (outside) {
-      problems.push(`${displayPath(relative(root, file))} -> ${token} (${displayPath(relative(pluginRoot, outside))} is not installed with the skills tree)`);
+      problems.push(`${relative(root, file)} -> ${token} (${relative(pluginRoot, outside)} is not installed with the skills tree)`);
     }
   }
   return problems;
@@ -109,17 +136,17 @@ export function validateSkillsTree(skillsDir) {
       try {
         path = decodeURIComponent(encodedPath);
       } catch {
-        problems.push(`${displayPath(relative(root, file))} -> ${target} (invalid URI encoding)`);
+        problems.push(`${relative(root, file)} -> ${target} (invalid URI encoding)`);
         continue;
       }
 
       const resolved = resolve(dirname(file), path);
       if (scheme === "file" || isAbsolute(path) || !pathIsInside(root, resolved)) {
-        problems.push(`${displayPath(relative(root, file))} -> ${target} (escapes skills tree)`);
+        problems.push(`${relative(root, file)} -> ${target} (escapes skills tree)`);
       } else if (!existsSync(resolved)) {
-        problems.push(`${displayPath(relative(root, file))} -> ${target} (missing)`);
+        problems.push(`${relative(root, file)} -> ${target} (missing)`);
       } else if (!pathIsInside(realRoot, realpathSync(resolved))) {
-        problems.push(`${displayPath(relative(root, file))} -> ${target} (escapes skills tree through symlink)`);
+        problems.push(`${relative(root, file)} -> ${target} (escapes skills tree through symlink)`);
       }
     }
   }

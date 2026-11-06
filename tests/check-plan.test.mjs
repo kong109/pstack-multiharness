@@ -1,11 +1,15 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+// check-plan.mjs runs under node; a starved CI runner took over bun's 5 s
+// default and the test read the killed child as code null (run 36492567721).
+setDefaultTimeout(30_000);
+
 const mode = join(import.meta.dir, "../plugins/pstack/skills/poteto-mode");
-const playbook = readFileSync(join(mode, "playbooks/multi-phase-plan.md"), "utf8").replaceAll("\r\n", "\n");
+const playbook = readFileSync(join(mode, "playbooks/multi-phase-plan.md"), "utf8");
 const template = playbook.match(/^````markdown\n([\s\S]*?)^````$/m);
 if (!template) throw new Error("Multi-phase playbook has no plan skeleton");
 const skeleton = template[1];
@@ -42,6 +46,15 @@ describe("plan checklists", () => {
     expect(run(skeleton.replaceAll("- [ ]", "- [x]")).code).toBe(0);
   });
 
+  test("a plan saved with a UTF-8 byte-order mark passes", () => {
+    for (const plan of ["\uFEFF" + skeleton, "\uFEFF---\ntitle: Plan\n---\n" + skeleton]) {
+      expect(run(plan)).toEqual({
+        code: 0,
+        out: expect.stringContaining("1 PR sections, 0 problems"),
+      });
+    }
+  });
+
   for (const heading of [
     "### Arm the program",
     "### Spawn owners",
@@ -76,6 +89,31 @@ describe("plan checklists", () => {
     expect(result.code).toBe(1);
     expect(result.out).toContain("Close the program has no box");
   });
+
+  test("fenced examples cannot supply How to read this guidance", () => {
+    const plan = editSection("## How to read this", (body) => "\n```markdown\n" + body + "\n```\n");
+    const result = run(plan);
+    expect(result.code).toBe(1);
+    expect(result.out).toContain('How to read this lacks "One box is one unit of work"');
+  });
+
+  test("fenced examples cannot supply program markers", () => {
+    const plan = skeleton.replace(/(## Program checklist\n)([\s\S]*?)(?=\n## )/, (_, heading, body) =>
+      heading + body.replaceAll("hourly", "frequent") + "\n```text\nhourly\n```\n",
+    );
+    const result = run(plan);
+    expect(result.code).toBe(1);
+    expect(result.out).toContain('Program checklist lacks "/hourly|every hour/"');
+  });
+
+  test("fenced examples cannot supply review gate evidence", () => {
+    const plan = skeleton.replace(/(\*\*Review gate\.\*\*)([\s\S]*?)(?=\*\*Merge\.\*\*)/, (_, heading) =>
+      heading + "\n- [ ] Review the change.\n```text\nscreenshot video operator\n```\n",
+    );
+    const result = run(plan);
+    expect(result.code).toBe(1);
+    for (const word of ["screenshot", "video", "operator"]) expect(result.out).toContain(`Review gate lacks "${word}"`);
+  });
 });
 
 describe("fenced plan evidence", () => {
@@ -86,6 +124,7 @@ describe("fenced plan evidence", () => {
     ["shorter inner tildes", "~~~~markdown", "~~~yaml\nmessage: “code”\n~~~", "~~~~"],
     ["different inner delimiter", "```markdown", "~~~yaml\nmessage: “code”\n~~~", "```"],
     ["indented delimiter", "   ~~~yaml", "message: “code”", "   ~~~"],
+    ["list item delimiter", "    ```yaml", "    PORT: 3000\n    message: “code”", "    ```"],
     ["longer closing delimiter", "~~~yaml", "message: “code”", "~~~~"],
     ["delimiter with trailing text", "```text", "```still code\nmessage: “code”", "```"],
   ]) {

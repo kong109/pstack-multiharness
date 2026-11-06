@@ -1,39 +1,29 @@
-# OpenCode V2 model routing
+# OpenCode mapping
 
-Read this before any pstack delegation in OpenCode. It overrides Claude-specific agent names and model parameters in the calling skill.
+OpenCode 2 loads the native pstack plugin, which registers each skill as `pstack-<name>`. Invoke `pstack:how` as `pstack-how` with the `skill` tool, and resolve relative references from the skill's base directory. Map `Read` to `read`, `Bash` to `shell`, and the `Skill` tool to `skill`.
 
-OpenCode's `subagent` tool selects a named agent. The agent profile selects the model and reasoning variant. A missing per-call model parameter does not prevent model routing.
+## Claude action mapping
 
-Use the launcher and configuration of the current session. A custom launcher such as `opencode-muse` may have an isolated home, config directory, and credential database. Do not run the regular `opencode` CLI to verify that runtime. Delegation itself uses the native subagent tool, not a shell-launched CLI.
+- For the `Agent` tool, use `subagent` with its available `agent`, `description`, and `prompt` fields. A Claude `subagent_type` names a role, not an OpenCode agent ID. The plugin does not register `pstack:poteto-agent`; choose only an available agent and put the absolute path to `poteto-mode/SKILL.md` in its brief. Do not assume `general-purpose` exists.
+- Map `run_in_background: true` to the `subagent` tool's `background: true`. Use its returned `sessionID` to continue the same child. A Claude `readonly: true` flag has no direct equivalent; use an available read-only agent or permissions, and do not claim read-only isolation otherwise. `isolation: "worktree"` likewise requires a separately created worktree.
+- Map `AskUserQuestion` to the available `question` tool. Map `TaskCreate`, `TaskUpdate`, and `TodoWrite` to `todowrite` with the complete todo list, or use a local checklist if the tool is unavailable.
+- The `loop` skill's wake-up mechanism is runtime-specific. Use `schedule_create` only when the user authorizes a schedule; do not silently substitute a recurring schedule for a single wake-up.
+- `plugin-dev:skill-development` is a Claude plugin skill, not an OpenCode built-in. Use it only if available. Likewise, `.claude/skills/` and `CLAUDE.md` are Claude-specific paths, not proof that OpenCode loaded an instruction or skill.
+- `${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects/` holds Claude transcripts, not this OpenCode session's history. Use an available OpenCode history source or say the history is unavailable.
 
-## Install and check the routes
+## Per-skill notes
 
-Select the active sheet using [configuration scope](model-dispatch.md#configuration-scope), including project overrides and explicitly configured legacy paths. Do not use a guessed model or a mapping from an isolated runtime's empty home directory. Locate the active OpenCode configuration directory through `OPENCODE_CONFIG_DIR`, then `XDG_CONFIG_HOME/opencode`, then the user's global OpenCode directory.
+| Skill | On OpenCode 2 |
+| --- | --- |
+| `setup-pstack` | Use the configured models listed by OpenCode and the model names guidance below. |
+| `why` | Use connected sources where available and report missing evidence instead of assuming it. |
 
-Run the bundled `../scripts/opencode-agents.mjs` helper with explicit absolute paths:
+## Model names
 
-```sh
-node /path/to/poteto-mode/scripts/opencode-agents.mjs --mapping /path/to/pstack-models.md --config-dir /path/to/opencode --install
-```
+Claude Code model aliases are not OpenCode model IDs. Select a configured chat model only when the user explicitly asks for a model or variant; otherwise let the subagent inherit its model. OpenCode accepts `providerID/modelID` or `providerID/modelID#variant` in the `subagent` tool's `model` field. Look up the ID and variant with the `models` tool; do not guess.
 
-The helper creates model-specific Markdown agents and `pstack-routing.json`. It preserves unrelated configuration and refuses to overwrite unmanaged files. The helper uses the shared model/effort resolver: inline `model@effort` wins over model-wide `effort:` settings, which win over legacy reasoning-variant table rows. `@default` clears both defaults and uses the runtime default. Without an effort setting or legacy variant row, the profile uses the runtime default. Explicit effort on `auto` or `inherit-parent` is rejected because this adapter cannot apply it to the generic agent. Validate model and variant availability against the running runtime catalog before installation. Rerun installation when the sheet changes. Old generated profiles are retained, but only current routes may be used.
+- The model sheet is `${XDG_CONFIG_HOME:-~/.config}/opencode/pstack-models.md`. Add that path to the OpenCode configuration's `instructions` array to load role choices; the plugin reads the `session hook` setting directly.
+- For role-model skills (`architect`, `arena`, `how`, `interrogate`, `no-comments`, `poteto-mode`, `reflect`, `swarm`, `thermos`, `why`), treat a saved user choice as an explicit instruction only when it identifies a configured model. The `subagent` input has no separate effort field; use a listed `#variant` when requested. Omit `model` for `inherit-parent` or `auto`.
+- For diverse-model panels, use different available providers only when the user requests those models. Otherwise inherit and state that model diversity was not established.
 
-## Launch by role
-
-Before spawning, resolve the role used by the calling skill:
-
-```sh
-node /path/to/poteto-mode/scripts/opencode-agents.mjs --mapping /path/to/pstack-models.md --config-dir /path/to/opencode --role feature
-```
-
-This checks that installed profiles match the current sheet and returns agent IDs with model and variant. Use the returned `agent` in `subagent`, retaining the task, file pointers, specialist instructions, and background behavior required by the calling skill. For a panel, launch each returned entry as specified by that skill. For a cross-judge pool, choose one entry according to the skill's selection rule.
-
-An entry that names another harness, such as `codex:` or `claude:`, is returned with `foreign` true and no agent. Launch it through [foreign-harness subagents](foreign-harness.md) instead of `subagent`.
-
-Only `auto` and `inherit-parent` deliberately route to `general`. Never substitute `general` or `explore` for an explicit model assignment. A role missing from the sheet needs an explicit assignment before it can be routed with this helper.
-
-If a newly installed agent is not recognized, refresh the location configuration using the running server's documented API or open a fresh session. Do not restart the whole service while other sessions are working. If refresh is unavailable, report that the profiles are installed but not yet usable in the current session.
-
-Verify a smoke task through the actual subagent tool. Check the resulting child session's recorded provider, model, and variant through the server API. A model's own statement about its identity is not verification. Do not claim a mixed-model review unless the child session metadata confirms those assignments.
-
-See the [OpenCode V2 agents documentation](https://opencode.ai/v2/docs/agents) for profile discovery and model inheritance.
+Use the `models` command to inspect configured models before writing the sheet.

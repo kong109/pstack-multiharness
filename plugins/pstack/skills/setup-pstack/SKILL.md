@@ -1,90 +1,155 @@
 ---
 name: setup-pstack
-description: Configure pstack role models and effort at project or user scope, optionally starting from a saved preset, and install model- and effort-specific subagents for OpenCode V2 and Claude Code. Use for /setup-pstack, pstack-setup, choosing a pstack preset, or changing role mappings.
+description: Configure which models pstack uses per role. Detects available models and writes the current runtime's override sheet. Use for /setup-pstack, "configure pstack models", changing pstack's model choices, or turning the SessionStart hook on or off.
 ---
 
 # Setup pstack
 
-On OpenCode V2, follow [OpenCode model routing](../poteto-mode/references/opencode-tools.md). Detect models and reasoning variants from the running OpenCode catalog, preserve the user's role sheet, and install named agent profiles with the bundled helper after any mapping change. Confirm a live child session's recorded model and variant before claiming routing works. The Claude-specific include and per-call model instructions below do not apply to OpenCode.
-
-On Claude Code, the `Agent` tool cannot carry effort. Whenever the written sheet has any explicit effort, install the routed agents with [Claude Code effort routing](../poteto-mode/references/claude-routing.md) after step 6 and confirm them in step 8. Do not report effort as unsupported on Claude Code; it is applied through those agents.
-
 On Codex, read the [platform mapping](../poteto-mode/references/codex-tools.md), including its per-skill notes, before following this skill.
 
-Configure the project or user override sheet using [configuration scope](../poteto-mode/references/model-dispatch.md#configuration-scope). Respect a scope named by the user. Otherwise keep the existing project scope when one exists; if no target is established, ask whether to configure this project or the user default. Preset storage scope and the scope being configured are independent. A user preset can be applied to a project, and a project preset can become the user default.
+On GitHub Copilot, read the [platform mapping](../poteto-mode/references/copilot-tools.md), including its per-skill notes, before following this skill.
+
+On Muse, read the [platform mapping](../poteto-mode/references/muse-tools.md), including its per-skill notes, before following this skill.
+
+On Antigravity, read the [platform mapping](../poteto-mode/references/agy-tools.md), including its per-skill notes, before following this skill.
+
+On Grok Build, read the [platform mapping](../poteto-mode/references/grok.md). In step 1, use the models advertised by `spawn_subagent` and ask the user to confirm choices; the session model selector is supplementary. If the tool exposes no `model` parameter, explain that per-call model selection is unavailable and offer only `inherit-parent` and `auto`; both omit `model`, and configured subagent overrides may still apply. Write that meaning in the sheet header. In step 2, preserve full `claude-` IDs and validate them against the tool's advertised models instead of rewriting them to family names. Skip step 4, the effort questions in step 3 and effort validation in step 5; omit effort and `session hook` lines and suffixes from the sheet. Grok exposes no per-call effort parameter. In step 8, explain that the enabled plugin supplies a model-followed routing hint that the `session hook` setting does not control.
+
+On GitHub Copilot, follow [the Copilot setup](copilot.md) in place of steps 1, 3, 4, and 7 and step 6's header.
+
+On OMP, follow [OMP setup](../poteto-mode/references/omp-tools.md#model-names) instead of steps 1 through 8. OMP uses native model roles and agent overrides; its global pstack sheet controls only the session hook. Ask whether main-session routing should be on or off for all OMP profiles. In `~/.omp/pstack-models.md`, replace all `session hook:` lines with one exact `session hook: on` or `session hook: off` line, preserving other lines and the existing encoding. Confirm the global scope and restart the session to clear earlier context.
+
+On Kimi Code CLI, skip step 4, the effort questions in step 3 and effort validation in step 5; omit effort and `session hook` lines and suffixes from the sheet. In steps 1 and 6, describe `inherit-parent` and `auto` as omitting `model`: Kimi uses the configured subagent default when present, otherwise the parent's model. Write that meaning in the sheet header. If the `Agent` tool has no `model` parameter, offer only these aliases. In step 2, preserve model aliases exactly, including ones starting with `claude-`; do not apply the Claude Code family-name rewrite. In step 8, explain that routing is controlled by the plugin's enabled state instead of reporting a hook setting. See [Kimi model names](../poteto-mode/references/kimi-tools.md#model-names).
+
+On another runtime, read [Other runtimes](#other-runtimes) below for where the sheet lives and how it loads; the steps are the same.
+
+Write the current runtime's per-role model override sheet, using the path in [Other runtimes](#other-runtimes). Each pstack skill names a default model inline; the override sheet adapts those defaults to the models you actually have access to.
+
+Claude Code has no auto-applied "rules" mechanism like Cursor's `.mdc`. The Claude Code config directory is `$CLAUDE_CONFIG_DIR` when that variable is set and `~/.claude` otherwise. This skill calls it `<config>`. Inclusion is explicit: the user adds a line to `<config>/CLAUDE.md` (or their project `CLAUDE.md`) such as:
+
+```text
+@<config>/pstack-models.md
+```
+
+with `<config>` written as the resolved path, so the file is loaded as context for every session.
+
+The Codex home directory is `$CODEX_HOME` when that variable is set and `~/.codex` otherwise. This skill calls it `<codex-home>`.
 
 ## Steps
 
 ### 1. Detect available models
 
-Enumerate the model slugs you can pass to an `Agent` subagent in this session — that is the dependable source. The currently available Claude models and the default panel are listed in [Models](#models) below; the quad is chosen for cross-family, cross-tier diversity, and the single-role default stays out of the panels because it already covers the single-model roles. Ask the user to confirm or paste any additional slugs they want available. Also detect the other harnesses with `command -v codex claude grok agy muse gemini opencode`, whether this session has T3 Code's `delegate_task` tool, and whether it runs inside herdr (`HERDR_ENV`), tuios (`TUIOS_ENV`), or tmux (`TMUX`). A role entry may name a harness, as in `codex:model@effort`, and it runs through [foreign-harness subagents](../poteto-mode/references/foreign-harness.md), as a T3 Code subagent or in a visible pane. Offer `harness:` entries only for a harness this session can run, an installed one in herdr, tuios, or tmux, or a provider `orchestrator_capabilities` lists in T3 Code, because otherwise the entry has nowhere to run. Never write a real slug you have not confirmed is available. The aliases `inherit-parent` and `auto` are always valid even though they are not detected slugs; both mean the role runs on the parent session's model, which the `Agent` call expresses by omitting `model`.
+Enumerate the model names the `Agent` tool's `model` parameter accepts in this session. That is the dependable source. On Claude Code they are the family names listed in [Models](#models) below, each running that family's current model, and a full model ID is rejected. The default panel is listed there too. The panel is chosen for cross-family diversity. Ask the user to confirm or paste any additional slugs they want available. Never write a real slug you have not confirmed is available. The aliases `inherit-parent` and `auto` are always valid even though they are not detected slugs. Both mean the role runs on the parent session's model, which the `Agent` call expresses by omitting `model`.
+
+Also detect the other CLI harnesses a role can run on with `command -v claude codex grok agy muse`, and whether this session has T3 Code's `delegate_task` tool or runs inside herdr, tuios, or tmux (`HERDR_ENV`, `TUIOS_ENV`, `TMUX`). An entry such as `codex:gpt-6.1-sol @xhigh` runs on that harness through [foreign-harness subagents](../poteto-mode/references/foreign-harness.md), so offer the installed harnesses' models only when one of those routes exists.
 
 ### 2. Load current state
 
-Read the target sheet if it exists. For a new project config, start from the effective user sheet if present; otherwise use the role defaults in the Write the override sheet step, translated to the current runtime.
+The default role-to-model mapping is the rule shape shown in the Write the override sheet step below. If the current runtime's sheet already exists, read it and treat its values as the current choices. Otherwise start from those defaults. A line whose role is not in that shape, such as `how critics`, is from a retired role. Drop it. An older sheet may name full model IDs that start with `claude-`, which the `Agent` tool rejects. Replace each with its family name, the word after `claude-`. An older sheet may also write effort without a space, as in `sonnet@xhigh`, or set it per model with `effort: model = value` lines. Rewrite the first as `sonnet @xhigh`. Fold each `effort:` line into the entries of that model that carry no suffix, then drop the line. List every rewrite in step 3.
 
-List saved presets using the [preset helper](../pstack-preset/scripts/presets.mjs), running from the project root: `node /path/to/presets.mjs list user` and `node /path/to/presets.mjs list project`. If any exist, offer the scope-labeled presets alongside keeping the current mapping and configuring manually. Honor an already selected preset without asking again. Disambiguate same-name presets by scope. If neither scope has presets, continue normal setup.
+#### Project scope
 
-For a selected preset, run `show SCOPE NAME` and use its mapping as the proposed configuration. Do not write the active sheet yet. Missing roles use runtime defaults, not stale roles from the previous sheet. Validate models and effort for this runtime in the Validate step; saving a preset does not certify availability elsewhere.
+A project may keep its own sheet at `<project-root>/.pstack/models.md`. An existing project sheet replaces the user sheet as a whole for that project, and missing roles take the skill defaults, never the user sheet's values. Configure the scope the user names. Otherwise keep the project scope when a project sheet exists, and ask which scope to configure when neither is established. The `session hook` line stays in the user sheet, since the hook reads only that one. For a project sheet, step 7 adds `@.pstack/models.md` to the project's `CLAUDE.md` on Claude Code, or a plain instruction naming the path to the project's `AGENTS.md` on other runtimes.
+
+#### Presets
+
+List saved presets with the [preset helper](../pstack-preset/scripts/presets.mjs), run from the project root: `node /path/to/presets.mjs list user` and `node /path/to/presets.mjs list project`. When either scope has one, offer the presets, labelled `user/NAME` and `project/NAME`, beside keeping the current mapping and configuring by hand. Honor a preset the user already chose without asking again. For a chosen preset, run `show SCOPE NAME` and take its mapping as the proposal for step 3. Roles it lacks take this runtime's defaults. A preset saved elsewhere does not prove its models exist here, so step 5 still validates every entry. A preset scope and the configured scope are independent: a user preset can configure a project, and a project preset can become the user default.
 
 ### 3. Map and confirm
 
-Follow [model and effort resolution](../poteto-mode/references/model-dispatch.md). Show resolved effort beside every model, including each panel entry. Offer model-wide defaults with `effort: model = value` and per-role overrides with `model@effort`. Preserve existing effort choices when changing model mappings, including legacy `effort:` lines. Do not replace them with the bare-model template below. Ask only for missing choices.
+Show every role with its current model, marking any real slug not in the detected set as needing a choice. Also list each line step 2 dropped or rewrote. Ask whether to accept as-is or change specific roles, offering the detected models plus `inherit-parent` and `auto` as the options. Prefer `AskUserQuestion` over free text. For panel roles (arena runners, architect runners, interrogate reviewers) the value is a list, and one subagent runs per entry, alias entries included, so the list length sets the count. `arena cross-judge pool` is also a list, but Arena runs one judge. It tries only values from a family other than the parent's, in list order, so order it by preference. An `inherit-parent` or `auto` value never judges. `swarm workers` is the default model for every worker unless a race or comparison assigns another model per arm.
 
-Show every role with its current model, marking any real slug not in the detected set as needing a choice. Ask whether to accept as-is or change specific roles, offering the detected models plus `inherit-parent` and `auto` as the options. Prefer `AskUserQuestion` over free text. For panel roles (arena runners, architect runners, interrogate reviewers) the value is a list, and one subagent runs per entry, alias entries included, so the list length sets the count. `arena cross-judge pool` is also a list, but Arena selects one value from it whose model family differs from the parent's when possible. `swarm workers` is the default model for every worker unless a race or comparison assigns another model per arm.
+Then ask for the default reasoning effort, the `default effort` line. It is `session`, which keeps the parent session's effort, or one of the levels in [Models](#models). Start from the default listed there. Every role value without a suffix runs at it. Then ask whether any role should run at another level. On Claude Code a role value may carry one after its slug, as in `<slug> @xhigh`; panel entries take their own, as in `<slug> @xhigh, <slug> @max`. Each level is passed as the dispatch's effort, so the choice holds without changing the session. Leave the suffix off for the default effort.
+
+On Codex, explain that `session` requires the current thread's active-turn metadata, which some hosts do not expose. The platform mapping's helper reads it; when it is unavailable, an explicit effort choice is required before dispatching. Offer a fixed default level for those hosts instead of promising automatic inheritance.
 
 ### 4. Choose whether the session hook routes tasks
 
-On Claude Code and Codex, ask whether to keep the SessionStart routing hook, default on. Codex requires hook trust through `/hooks`. Preserve an existing choice. The hook reads `session hook: on` or `session hook: off` from the runtime user sheet, even when role configuration uses project scope. Write the choice there without replacing unrelated settings. A project sheet does not override this user-wide hook setting.
+On Claude Code and Codex, the plugin's `SessionStart` hook injects the poteto-mode mandate on startup, resume, clear, and compact. Codex asks the user to trust plugin hooks through `/hooks` before running them. On Pi, the pstack extension adds the same mandate to the system prompt at every agent start. On Muse, the native plugin's `SessionStart` hook injects the mandate once the user approves the plugin's hooks with `muse plugins approve pstack`. On OpenCode 2, the native plugin adds the mandate to root-session model requests. Ask whether to keep the hook. The default is on. The answer is the `session hook` line in the current runtime's sheet: `on` or `off`. With no sheet or no line, the hook injects. The line is inert on other runtimes without a pstack routing hook.
 
 ### 5. Validate
 
-Run the resolver for every role using the proposed sheet and its default model list. Single-model roles must have one entry. Validate explicit effort against the host model capabilities and confirm a concrete dispatch control can apply it; on Claude Code that control is the routed agent's `effort:` frontmatter. Prompt text is not an effort control. Report unsupported settings instead of dropping them. Remove legacy prose describing effort as only a worker-brief instruction, while preserving its `effort:` settings.
-
-Every unprefixed real slug written must be in the detected set; `inherit-parent` and `auto` always pass. A `harness:` entry's model comes from the user or from that harness's own model list, and its effort must be one the [registry](../poteto-mode/scripts/harnesses.json) accepts for the harness. If a chosen real slug is not available, stop and ask again.
+Every real slug written must be in the detected set. `inherit-parent` and `auto` always pass. Validate the slug without any `@<level>` suffix, and the level against the effort levels in [Models](#models). The `default effort` value is one of those levels or `session`. On Codex, the levels are the `reasoning_effort` values your Codex models accept instead. A `harness:` entry is checked against that harness instead. Its model comes from the user or that harness's own model list, and its level must be one the [registry](../poteto-mode/scripts/harnesses.json) accepts. Run `node /path/to/poteto-mode/scripts/resolve-models.mjs <sheet> "<role>"` on the written sheet for every role. It rejects an entry the grammar cannot read. If a chosen real slug or level is not available, stop and ask again.
 
 ### 6. Write the override sheet
 
-Write the selected target sheet with the shape below and all effective role rows and effort defaults. A project target is `<project-root>/.pstack/models.md`; user targets follow configuration scope. Preserve user adjustments made after selecting a preset. If applying an unchanged complete preset, the helper supports `apply SCOPE NAME /absolute/target.md`; use `--replace` when setup is replacing an existing target as requested. Applying creates an independent copy; subsequent edits do not change the preset.
+Write the current runtime's sheet with the shape below. Overwrite the whole file so re-runs stay idempotent.
 
 ```markdown
 # pstack model configuration
 
-Per-role model overrides for pstack skills. Each pstack SKILL.md names its defaults in a Models section; the values here override those defaults. Delete a line to fall back to the skill default. A value of `inherit-parent` or `auto` runs that role on the parent session's model (the `Agent` call omits `model`); an alias entry in a panel list still counts toward that panel's fan-out. Entries accept model@effort for per-role effort. A line `effort: model = value` sets a model-wide default; inline effort wins, and @default clears it. Resolve both fields with pstack's resolve-models.mjs before dispatch; apply effort through runtime controls, never through the worker brief. `session hook: off` stops the Claude Code or Codex SessionStart hook from injecting the poteto-mode mandate; any other value, or no line, leaves it on.
+Per-role model overrides for pstack skills. Each pstack SKILL.md names its defaults in a Models section; the values here override those defaults. Delete a line to fall back to the skill default. A value of `inherit-parent` or `auto` runs that role on the parent session's model (the `Agent` call omits `model`); an alias entry in a panel list still counts toward that panel's fan-out. A model may carry a reasoning effort, as in `opus @xhigh` (levels: low, medium, high, xhigh, max); the role's subagent then runs at that level, each entry of a panel list on its own. `default effort` sets the level for a value without one; `session` uses the runtime's platform mapping to start from the parent session's effort. On Codex this requires active-turn metadata or an explicit effort choice. `session hook: off` stops the supported runtime's pstack routing hook from injecting the poteto-mode mandate; any other value, or no line, leaves it on.
 
-feature, refactoring: claude-opus-5-5
-bug-fix: claude-fable-5-1
-perf-issue: claude-fable-5-1
-hillclimb: claude-fable-5-1
-judgment and prose: claude-opus-5-5
-strongest judgment: claude-fable-5-1
-how explorer: claude-opus-5-5
-how explainer: claude-opus-5-5
-why investigators: claude-opus-5-5
-why synthesizer: claude-opus-5-5
-reflect tooling: claude-opus-5-5
-reflect judgment, divergent, synthesizer: claude-opus-5-5
-arena runners: claude-opus-5-5, claude-fable-5-1, claude-sonnet-5
-arena cross-judge pool: claude-opus-5-5, claude-fable-5-1, claude-sonnet-5
-swarm workers: claude-opus-5-5
-architect runners: claude-opus-5-5, claude-fable-5-1, claude-sonnet-5
-interrogate reviewers: claude-opus-5-5, claude-fable-5-1, claude-sonnet-5
+feature, refactoring: sonnet
+bug-fix: opus
+perf-issue: opus
+hillclimb: opus
+judgment and prose: opus
+strongest judgment: fable
+how explorer: opus
+how explainer: opus
+why investigators: opus
+why synthesizer: opus
+reflect tooling: opus
+reflect judgment, divergent, synthesizer: opus
+arena runners: opus, fable, sonnet, haiku
+arena cross-judge pool: opus, fable, sonnet, haiku
+swarm workers: opus
+architect runners: opus, fable, sonnet, haiku
+interrogate reviewers: opus, fable, sonnet, haiku
+thermos reviewers: opus
+no-comments reviewer: opus
 
+default effort: session
 session hook: on
 ```
 
 ### 7. Wire it in
 
-Add or update one scoped instruction in the destination instructions file to read the target sheet before pstack dispatch. On Claude Code, use `@.pstack/models.md` in project `CLAUDE.md` or the user sheet include in global `CLAUDE.md`. On Codex and OpenCode, add a plain instruction in project or user `AGENTS.md` naming the absolute sheet path, or the project-relative `.pstack/models.md`. Do not copy role rows into instructions files. Update existing pstack mapping blocks or pointers to avoid stale competing values; preserve unrelated instructions. State that a project sheet takes precedence over the user sheet.
+On Claude Code, if `<config>/CLAUDE.md` does not already include `<config>/pstack-models.md`, append an `@` line naming the sheet's resolved path, such as `@~/.claude/pstack-models.md`, so the model rows load on every session. If the user prefers project scope, add the include to the project's `CLAUDE.md` instead.
+
+On Codex, paste the model rows and the `default effort` line into `<codex-home>/AGENTS.md`; Codex has no `@` include. Do not paste the `session hook` line there: the plugin hook reads it directly from `<codex-home>/pstack-models.md`.
+
+On Muse, no include line is needed: the plugin hook reads the sheet directly and injects its role lines at session start. It runs only after the user approves the plugin's hooks, so name `muse plugins approve pstack` when the hook has not run yet.
 
 ### 8. Confirm
 
-Report whether the session hook is on and where its setting lives. Report the config scope, target path, selected preset scope/name if any, and how it loads. Report each entry that runs in another harness and whether T3 Code or a multiplexer will run it. On Claude Code with explicit effort, also report the installed agents and whether the session can already see them. Mention `pstack-preset` for saving the resulting configuration for reuse, and `pstack-effort` for editing a slot's provider, model, and effort on a page. Re-running setup updates the chosen sheet, not its source preset.
+Tell the user where the override was written, its scope, the preset it started from if any, how its model rows load, and whether the plugin hook is on. Name each entry that runs on another harness and whether T3 Code or a multiplexer can run it from here. Mention `pstack-preset` to save the result for reuse and `pstack-effort` to edit it on a page. Re-running this skill updates the override sheet, never the preset it started from.
+
+### 9. Offer a verification skill (optional)
+
+Check whether the project has a way to drive the real app for proof (a project `verify` or `verify-*` skill, or an existing harness). If not, offer once: "want a project-local verification skill, so agents can drive the app the way a user does and prove changes work? I can generate one with /create-verification-skill." On yes, invoke [`/create-verification-skill`](../create-verification-skill/SKILL.md). On no, move on without pushing.
+
+### 10. Offer a formal verification skill (optional)
+
+Check whether the project already has a formal verification skill (a project skill that runs a model checker, a proof, or another verifier against the code). If not, offer once: "want a formal verification skill, so agents can prove a key property of your code holds in every case in scope, not only the cases tests reach? I can generate one with /create-formal-verification-skill." On yes, invoke [`/create-formal-verification-skill`](../create-formal-verification-skill/SKILL.md). On no, move on without pushing.
+
+## Other runtimes
+
+The role lines are the same everywhere. What differs is the sheet path, how the runtime loads it, and how you list models. Detect models with the runtime's own tool and never write a slug you have not seen listed. A runtime whose subagent call has no model parameter still gets the sheet, as the record of the user's choice, and applies it where it can. The `session hook` line applies to the Claude Code, Codex, GitHub Copilot, Muse, MiniMax Code, Antigravity, OMP, and OpenCode 2 plugins and to the pstack Pi extension.
+
+| Runtime | Sheet | Load | List models | Status |
+| --- | --- | --- | --- | --- |
+| Claude Code | `<config>/pstack-models.md` | `@<config>/pstack-models.md` in `<config>/CLAUDE.md` | the `Agent` tool's model parameter | verified live |
+| Codex | `<codex-home>/pstack-models.md` | model rows: paste into `<codex-home>/AGENTS.md`; hook setting: read by the plugin | your configured Codex models, see [codex-tools.md](../poteto-mode/references/codex-tools.md#model-names) | hook contract tested; discovery verified |
+| Pi | `pstack-models.md` in the Pi agent directory, `$PI_CODING_AGENT_DIR` or `~/.pi/agent` | read by the pstack Pi extension, model rows and hook setting both; no include line | `pi --list-models`, see [pi-tools.md](../poteto-mode/references/pi-tools.md#model-names) and its `setup-pstack` note | extension contract tested offline; live results in the repository's `docs/pi-equivalence.md` |
+| GitHub Copilot (CLI and app) | `${COPILOT_HOME:-~/.copilot}/pstack-models.md` | the plugin hook checks it and injects its role lines at session start; skills-only installs read it with `view` | the `task` tool's `model` enum, see [copilot-tools.md](../poteto-mode/references/copilot-tools.md#model-names) | hook contract tested; CLI install smoke-tested |
+| Muse | `${XDG_CONFIG_HOME:-~/.config}/muse/pstack-models.md` | the plugin hook reads it and injects its role lines at session start, once hooks are approved; no include line | the model catalog (`muse model-profile show <model>` names each one), see [muse-tools.md](../poteto-mode/references/muse-tools.md#model-names) | hook contract tested; plugin install verified |
+| MiniMax Code | `~/.minimax/pstack-models.md`, even when `MINIMAX_DATA_DIR` moves MiniMax's data directory, since MiniMax Code withholds that variable from hooks and its `bash` tool | model rows: read by the agent before a role-model skill, or paste into `AGENTS.md` in MiniMax Code's data directory; hook setting: read by the plugin | `mcode provider list` or the `model` slash command, see [minimax-tools.md](../poteto-mode/references/minimax-tools.md#model-names) | hook contract tested; plugin load smoke-tested on 0.7.4; no live session |
+| Kimi Code CLI | `<KIMI_CODE_HOME>/pstack-models.md`, or `~/.kimi-code/pstack-models.md` when unset | read by the agent before a role-model skill; no hook setting | the `Agent` tool's model parameter when available, see [kimi-tools.md](../poteto-mode/references/kimi-tools.md#model-names) | installation and synthetic-provider context delivery checked on Kimi 2.4.1 for macOS; model compliance untested |
+| Antigravity (`agy`) | `~/.gemini/config/pstack-models.md` | model rows: read by the agent before a role-model skill, or paste into `~/.gemini/config/AGENTS.md`; hook setting: read by the plugin's `SessionStart` hook | `invoke_subagent`'s `Model` enum (`inherit`, `flash_lite`, `flash`, `pro`), see [agy-tools.md](../poteto-mode/references/agy-tools.md#model-names) | tested with `agy` 1.5.0 on macOS: plugin install, hook on/off, full skill read and a live subagent reply; Windows untested |
+| OMP | `~/.omp/pstack-models.md` (global across profiles; hook only) | read by the OMP plugin for routing | `omp models --kind chat`; model roles use OMP configuration, see [omp-tools.md](../poteto-mode/references/omp-tools.md#model-names) | installation, skill access, and the routing toggle checked on OMP 18.16.0 with a synthetic provider; model compliance untested |
+| Grok Build | `${GROK_HOME:-~/.grok}/pstack-models.md` | read by the agent before a role-model skill; the `session hook` line does not control the Grok routing hint | the `spawn_subagent` tool's advertised models; use overrides only at the user's explicit request; see [grok.md](../poteto-mode/references/grok.md#model-names) | synthetic-provider plugin and skill loading tested |
+| OpenCode 2 | `${XDG_CONFIG_HOME:-~/.config}/opencode/pstack-models.md` | add the path to the `instructions` array in `opencode.jsonc`; the plugin reads the hook setting directly | the `models` command in the session; see [opencode-tools.md](../poteto-mode/references/opencode-tools.md#model-names) | native skill activation and routing tested on 2.2.5 with a loopback provider |
+| Gemini CLI | `~/.gemini/pstack-models.md` | `@~/.gemini/pstack-models.md` in `~/.gemini/GEMINI.md` | the `model` slash command in the session | from published docs, no live session |
+| Prime Agent | no documented sheet path; Prime's configuration chooses models | | | no live session |
 
 ## Models
 
 Stamped from `plugins/pstack/models.json` (edit there, rerun `tools/generate.mjs`).
 
-- Available Claude models: Opus 5.5 (`claude-opus-5-5`), Opus 5 (`claude-opus-5`), Opus 4.8 (`claude-opus-4-8`), Opus 4.6 (`claude-opus-4-6`), Fable 5.1 (`claude-fable-5-1`), Sonnet 5 (`claude-sonnet-5`), Sonnet 4.6 (`claude-sonnet-4-6`), Haiku 4.5 (`claude-haiku-4-5`)
-- Default panel: `claude-opus-5-5`, `claude-fable-5-1`, `claude-sonnet-5`
-- Single-role default: `claude-opus-5-5`
+- Available Claude models: `opus`, `fable`, `sonnet`, `haiku`
+- Default panel: `opus`, `fable`, `sonnet`, `haiku`
+- Reasoning effort levels: `low`, `medium`, `high`, `xhigh`, `max`
+- Default reasoning effort: `session`
+- Single-role default: `opus`

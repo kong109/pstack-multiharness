@@ -3,7 +3,7 @@ import { mkdirSync, readFileSync, readdirSync, realpathSync, writeFileSync } fro
 import { dirname, join, resolve } from "node:path";
 import { homedir } from "node:os";
 import { pathToFileURL } from "node:url";
-import { normalizeLegacyEffort, resolveRole } from "../../poteto-mode/scripts/resolve-models.mjs";
+import { resolveRole } from "../../poteto-mode/scripts/resolve-models.mjs";
 
 export function presetDirectory(scope, project = process.cwd(), home = homedir()) {
   if (scope === "user") return join(home, ".agents", "pstack", "presets");
@@ -20,9 +20,9 @@ function presetPath(directory, name) {
 }
 
 export function snapshot(text) {
-  const rows = normalizeLegacyEffort(text).split(/\r?\n/).map((line) => line.trim())
-    .filter((line) => /^[a-z][a-z ,\-]*:/.test(line));
-  const roles = rows.filter((line) => !line.startsWith("effort:"))
+  const rows = text.split(/\r?\n/).map((line) => line.trim())
+    .filter((line) => /^[a-z][a-z ,\-]*:/.test(line) && !line.startsWith("session hook:"));
+  const roles = rows.filter((line) => !line.startsWith("default effort:"))
     .map((line) => line.slice(0, line.indexOf(":")));
   if (!roles.length) throw new Error("No role mappings found in source sheet");
   for (const role of roles) resolveRole(rows.join("\n"), role);

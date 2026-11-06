@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 
-import { NAME, fill, foreignRequest, protocolPointer } from "./agent-routes.mjs";
+import { NAME, fill, checkForeignRequest, protocolPointer } from "./foreign-launch.mjs";
 import { harnesses } from "./resolve-models.mjs";
 
 const ROLES = { read: "review", write: "implementation" };
@@ -27,11 +27,9 @@ ${protocolPointer}
 `;
 }
 
-// One resolved foreign entry as the arguments of T3 Code's delegate_task tool. The child inherits the
-// parent's runtime mode and T3 Code steps it down to what the provider offers, so no mode is set here.
 export function t3Task({ name, harness, model, effort = null, access = "read", brief }) {
   if (!NAME.test(name ?? "")) throw new Error(`--name must match ${NAME}`);
-  foreignRequest("t3-task", { harness, model, effort });
+  checkForeignRequest("t3-task", { harness, model, effort });
   const { t3 } = harnesses[harness];
   if (!t3) throw new Error(`${harness} has no t3 block in harnesses.json, so T3 Code cannot run it`);
   if (!Object.hasOwn(ROLES, access)) throw new Error("--access is read or write");

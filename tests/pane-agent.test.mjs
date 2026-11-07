@@ -410,7 +410,12 @@ test("detectMux picks the running multiplexer and refuses to guess", () => {
   expect(detectMux({ TUIOS_ENV: "1" })).toBe("tuios");
   expect(detectMux({}, "tuios")).toBe("tuios");
   expect(() => detectMux({ HERDR_ENV: "1", TUIOS_ENV: "1" })).toThrow("pass --mux");
-  expect(() => detectMux({})).toThrow("Not running inside herdr, tuios, or tmux");
+  expect(() => detectMux({})).toThrow("Not running inside herdr, tuios, tmux, or Rex");
+  const rex = { REX_SESSION: "session:x", REX_BLOCK: "block:y" };
+  expect(detectMux(rex)).toBe("rex");
+  expect(detectMux({ ...rex, HERDR_ENV: "1" })).toBe("herdr");
+  expect(detectMux({ ...rex, TMUX: "/tmp/t,1,0", TMUX_PANE: "%0" })).toBe("tmux");
+  expect(() => detectMux({ ...rex, HERDR_ENV: "1", TUIOS_ENV: "1" })).toThrow("pass --mux herdr or --mux tuios");
 });
 
 test("detectMux finds tmux and names every multiplexer it finds when more than one is set", () => {
@@ -1309,5 +1314,104 @@ test("ask-parent types into a tmux parent pane only when Jev confidently reads n
     const blind = askWith(noCurl, { env });
     expect(blind.out).toMatchObject({ sent: true });
     expect(blind.typed).toHaveLength(2);
+  }
+});
+
+const rexSelf = "block:01a1b285-e909-7a06-8e98-c0a309ac3b94";
+const rexChild = "block:01a1b355-92eb-7338-a20c-ed13e0cfdb46";
+const rexEnv = () => ({ PSTACK_PANES_DIR: join(root, "panes"), REX_SESSION: "session:s1", REX_BLOCK: rexSelf, REX_SERVER: "unix:///rex.sock" });
+const rexRecord = (state, at = 0, extra = {}) =>
+  ({ records: [{ state, app: "codex", updated_at: new Date(at).toISOString(), owner: { pid: 7, name: "codex" } }, { id: "sub", state: "working", updated_at: new Date(at).toISOString() }].slice(0, extra.sub ? 2 : 1) });
+const json = (body) => text(JSON.stringify(body));
+const rexBase = {
+  "rex window new": json({ window_id: "window:w1", block_ids: [rexChild], revision: 3 }),
+  "rex block call -s session:s1 -b block:01a1b355-92eb-7338-a20c-ed13e0cfdb46 process": json({ last_exit: null }),
+  "rex capture": text("codex screen\n"),
+  "rex send": text(""),
+  "rex send-key": text(""),
+  "rex window close": text(""),
+};
+const childStatus = `rex block call -s session:s1 -b ${rexChild} program_status`;
+
+test("rex launch opens one named background tab and settles on the status the harness reports", () => {
+  const { runner, calls } = scripted({
+    ...rexBase,
+    [childStatus]: [json({ records: [] }), json(rexRecord("working", 1)), () => { write("result.md", "rex result\n"); return json(rexRecord("done", 4000)); }],
+  });
+  const out = launch(options(), { runner, env: rexEnv(), clock: fakeClock() });
+  expect(out).toMatchObject({ verdict: "done", result: "rex result\n", mux: "rex" });
+  expect(calls[0].slice(0, 11)).toEqual(["rex", "window", "new", "-s", "session:s1", "arena-a", "-c", root, "--focus=false", "--json", "--"]);
+  expect(calls[0][11]).toBe("codex");
+  expect(calls[0].at(-1)).toContain("brief.md");
+  const addressed = calls.slice(1).map((c) => c.slice(c.indexOf("-s"), c.indexOf("-s") + 4).join(" "));
+  expect(new Set(addressed)).toEqual(new Set([`-s session:s1 -b ${rexChild}`]));
+  close("arena-a", {}, { runner, env: rexEnv() });
+  expect(calls.at(-1)).toEqual(["rex", "window", "close", "-s", "session:s1", "window:w1"]);
+});
+
+test("a rex done record from the turn before a send is ignored until the harness reports again", () => {
+  const clock = fakeClock();
+  launch(options({ wait: false }), { runner: scripted(rexBase).runner, env: rexEnv(), clock });
+  clock.sleep(10_000);
+  let polled = 0;
+  const { runner, calls } = scripted({
+    ...rexBase,
+    [childStatus]: () => {
+      polled += 1;
+      if (polled < 3) return json(rexRecord("done", 5_000));
+      if (polled === 3) return json(rexRecord("working", clock.now()));
+      write("result.md", "second\n");
+      return json(rexRecord("done", clock.now()));
+    },
+  });
+  const out = send("arena-a", { text: "-x continue" }, { runner, env: rexEnv(), clock });
+  expect(out).toMatchObject({ verdict: "done", result: "second\n" });
+  expect(calls.filter((c) => c[1] === "send")).toEqual([["rex", "send", "-s", "session:s1", "-b", rexChild, "--", " -x continue"]]);
+  expect(calls.filter((c) => c[1] === "send-key")).toEqual([["rex", "send-key", "-s", "session:s1", "-b", rexChild, "enter"]]);
+});
+
+test("rex returns blocked with the screen when the harness reports blocked, and error when its block is gone", () => {
+  const blocked = scripted({ ...rexBase, [childStatus]: json(rexRecord("blocked", 1)), "rex capture": text("Allow this command?\n") });
+  expect(launch(options(), { runner: blocked.runner, env: rexEnv(), clock: fakeClock() }))
+    .toMatchObject({ verdict: "blocked", screen: "Allow this command?" });
+  close("arena-a", {}, { runner: blocked.runner, env: rexEnv() });
+  const gone = scripted({
+    ...rexBase,
+    [childStatus]: json({ records: [] }),
+    [`rex block call -s session:s1 -b ${rexChild} process`]: [json({ last_exit: null }), { status: 3, stdout: "", stderr: "not found" }],
+  });
+  expect(launch(options(), { runner: gone.runner, env: rexEnv(), clock: fakeClock() })).toMatchObject({ verdict: "error" });
+});
+
+test("a rex harness that reports no status settles on its screen, as on tmux", () => {
+  const { runner } = scripted({ ...rexBase, [childStatus]: json({ records: [] }), "rex capture": [text("banner"), text("Trust this folder?")] });
+  const out = launch(options(), { runner, env: rexEnv(), clock: fakeClock() });
+  expect(out).toMatchObject({ verdict: "idle", screen: "Trust this folder?" });
+});
+
+test("rex keys go to send-key under Rex's key names", () => {
+  const { runner, calls } = scripted({ ...rexBase, [childStatus]: [json(rexRecord("idle", 0)), json(rexRecord("working", 1)), () => { write("result.md", "r\n"); return json(rexRecord("done", 1e9)); }] });
+  launch(options({ wait: false }), { runner, env: rexEnv(), clock: fakeClock() });
+  send("arena-a", { keys: "Down Enter Escape C-c y" }, { runner, env: rexEnv(), clock: fakeClock() });
+  expect(calls.find((c) => c[1] === "send-key")).toEqual(["rex", "send-key", "-s", "session:s1", "-b", rexChild, "down", "enter", "escape", "ctrl+c", "y"]);
+});
+
+test("rex ask-parent types into an idle parent block and types nothing into a blocked one", () => {
+  const parentStatus = `rex block call -s session:s1 -b ${rexSelf} program_status`;
+  for (const [parent, sent] of [["idle", true], ["blocked", false]]) {
+    const { runner, calls } = scripted({
+      ...rexBase,
+      [childStatus]: [json(rexRecord("working", 1)), () => { write("question.md", "Which branch?\n"); return json(rexRecord("done", 1e9)); }],
+      [parentStatus]: json({ records: [{ state: parent, app: "claude-code", updated_at: "1970-01-01T00:00:00Z" }] }),
+    });
+    const asked = launch(options(), { runner, env: rexEnv(), clock: fakeClock() });
+    expect(asked.verdict).toBe("question");
+    expect(askParent(runDir(), { runner, env: {}, clock: fakeClock() }).sent).toBe(sent);
+    const typed = calls.filter((c) => c.includes(rexSelf) && (c[1] === "send" || c[1] === "send-key"));
+    expect(typed).toEqual(sent ? [
+      ["rex", "send", "-s", "session:s1", "-b", rexSelf, "--", questionLine(asked.questionId)],
+      ["rex", "send-key", "-s", "session:s1", "-b", rexSelf, "enter"],
+    ] : []);
+    close("arena-a", {}, { runner, env: rexEnv() });
   }
 });

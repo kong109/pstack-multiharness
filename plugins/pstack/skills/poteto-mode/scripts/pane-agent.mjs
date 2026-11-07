@@ -329,29 +329,22 @@ export function tuiosMux({ runner, env }) {
 
 const TMUX_KEYS = { esc: "Escape", escape: "Escape" };
 
-export function tmuxMux({ runner, env, clock }) {
-  const tmux = (args) => runner("tmux", args);
-  const failure = (r) => (r.stderr || r.stdout).trim().slice(0, 300);
-  const capture = (state) => tmux(["capture-pane", "-p", "-J", "-t", state.ids.pane, "-S", `-${SCREEN_LINES}`]);
-  const screen = (state) => {
-    const r = capture(state);
-    return r.status === 0 ? screenText(r.stdout) : null;
-  };
+const failure = (r) => (r.stderr || r.stdout).trim().slice(0, 300);
+
+// tmux and Rex both settle a turn by watching the screen. A harness that reports Rex program status steers the watch with it.
+function screenWatch({ runner, env, clock, screen, gone, status = () => null }) {
   const begun = (state) => {
     if (!state.awaitTurn) return;
     state.awaitTurn = false;
     saveState(state);
   };
-  const gone = (state) => {
-    const r = tmux(["display-message", "-p", "-t", state.ids.pane, "#{pane_dead}"]);
-    return r.status !== 0 || r.stdout.trim() === "1";
-  };
-  const settle = (state, { fresh, timeoutMs, turnAt = clock.now() }) => {
+  return (state, { fresh, timeoutMs, turnAt = clock.now() }) => {
     const deadline = clock.now() + timeoutMs;
     const startBy = Math.min(deadline, turnAt + TURN_START_MS);
     let starting = fresh;
     let last = screen(state);
     let changedAt = clock.now();
+    let worked = false;
     const labels = new Map();
     for (;;) {
       if (reported(state)) {
@@ -367,9 +360,22 @@ export function tmuxMux({ runner, env, clock }) {
         starting = false;
         begun(state);
       }
+      const told = status(state, turnAt);
+      if (told === "blocked") return { kind: "blocked" };
+      if (told === "error") return { kind: "error", detail: "the harness reported an error" };
+      if (told === "working") {
+        worked = true;
+        changedAt = now;
+        starting = false;
+        begun(state);
+      }
+      if (told === "done" || (told === "idle" && worked)) {
+        begun(state);
+        return { kind: "rest" };
+      }
       if (now >= deadline) return { kind: starting ? "stalled" : "timeout" };
       if (starting && now >= startBy) return { kind: "stalled" };
-      if (!starting && current !== null && now - changedAt >= SCREEN_POLL_MS && !labels.has(current)) {
+      if (!starting && told !== "working" && current !== null && now - changedAt >= SCREEN_POLL_MS && !labels.has(current)) {
         labels.set(current, classifyScreen(current, { runner, env }));
       }
       const screenLabel = labels.get(current);
@@ -383,6 +389,20 @@ export function tmuxMux({ runner, env, clock }) {
       clock.sleep(SCREEN_POLL_MS);
     }
   };
+}
+
+export function tmuxMux({ runner, env, clock }) {
+  const tmux = (args) => runner("tmux", args);
+  const capture = (state) => tmux(["capture-pane", "-p", "-J", "-t", state.ids.pane, "-S", `-${SCREEN_LINES}`]);
+  const screen = (state) => {
+    const r = capture(state);
+    return r.status === 0 ? screenText(r.stdout) : null;
+  };
+  const gone = (state) => {
+    const r = tmux(["display-message", "-p", "-t", state.ids.pane, "#{pane_dead}"]);
+    return r.status !== 0 || r.stdout.trim() === "1";
+  };
+  const settle = screenWatch({ runner, env, clock, screen, gone });
   const press = (state, keys) => {
     const r = tmux(["send-keys", "-t", state.ids.pane, ...keys]);
     if (r.status !== 0) throw new Error(`tmux send-keys failed: ${failure(r)}`);
@@ -433,6 +453,91 @@ export function tmuxMux({ runner, env, clock }) {
   };
 }
 
+const REX_KEYS = { esc: "escape", bspace: "backspace", "c-c": "ctrl+c" };
+const rexBin = (env) => (env.REX_BIN_DIR ? join(env.REX_BIN_DIR, "rex") : "rex");
+const rexBlock = (runner, env, session, block, method) => {
+  const r = runner(rexBin(env), ["block", "call", "-s", session, "-b", block, method]);
+  try { return r.status === 0 ? JSON.parse(r.stdout) : null; } catch { return null; }
+};
+// The root program-status record has no id. Records for subagents carry one.
+const rexStatus = (runner, env, session, block) => rexBlock(runner, env, session, block, "program_status")?.records?.find((r) => r.id === undefined) ?? null;
+
+export function rexMux({ runner, env, clock }) {
+  const rex = (args) => runner(rexBin(env), args);
+  const at = (state) => ["-s", state.ids.session, "-b", state.ids.pane];
+  const screen = (state) => {
+    const r = rex(["capture", ...at(state), "--trim", "--unwrap"]);
+    return r.status === 0 ? screenText(r.stdout) : null;
+  };
+  const gone = (state) => {
+    const process = rexBlock(runner, env, state.ids.session, state.ids.pane, "process");
+    return !process || process.last_exit !== null;
+  };
+  // A done or idle record from an earlier turn stays until the harness reports again, so only one newer than the turn counts.
+  const status = (state, turnAt) => {
+    const record = rexStatus(runner, env, state.ids.session, state.ids.pane);
+    if (!record) return null;
+    if (record.state === "blocked" || record.state === "working") return record.state;
+    return Date.parse(record.updated_at) >= turnAt ? record.state : null;
+  };
+  const settle = screenWatch({ runner, env, clock, screen, gone, status });
+  const press = (state, keys) => {
+    const r = rex(["send-key", ...at(state), ...keys]);
+    if (r.status !== 0) throw new Error(`rex send-key failed: ${failure(r)}`);
+  };
+  return {
+    id: "rex",
+    launch(state, { cwd, ...launchArgs }) {
+      const session = env.REX_SESSION;
+      const r = rex(["window", "new", "-s", session, state.name, "-c", cwd, "--focus=false", "--json", "--", ...harnessArgv(launchArgs)]);
+      let opened = null;
+      try { opened = JSON.parse(r.stdout); } catch {}
+      if (r.status !== 0 || !opened?.block_ids?.[0]) throw new Error(`rex window new failed: ${failure(r)}`);
+      state.ids = { ...state.ids, session, window: opened.window_id, pane: opened.block_ids[0] };
+      state.prompted = true;
+      state.awaitTurn = true;
+      state.turnAt = clock.now();
+      saveState(state);
+      return null;
+    },
+    initial: (state, timeoutMs) => settle(state, { fresh: true, timeoutMs }),
+    submit(state, text, timeoutMs) {
+      const typed = rex(["send", ...at(state), "--", text]);
+      if (typed.status !== 0) {
+        if (gone(state)) return { kind: "gone" };
+        return { kind: "error", detail: `rex send failed: ${failure(typed)}` };
+      }
+      clock.sleep(PASTE_SETTLE_MS);
+      press(state, ["enter"]);
+      state.awaitTurn = true;
+      state.turnAt = clock.now();
+      saveState(state);
+      return settle(state, { fresh: true, timeoutMs });
+    },
+    wait: (state, timeoutMs) => settle(state, { fresh: turnPending(state, clock.now()), timeoutMs, turnAt: state.turnAt }),
+    keys(state, keys, timeoutMs) {
+      press(state, keys.map((k) => (k.length === 1 ? k : REX_KEYS[k.toLowerCase()] ?? k.toLowerCase())));
+      return settle(state, { fresh: Boolean(state.awaitTurn), timeoutMs });
+    },
+    alive: (state) => !gone(state),
+    peek(state) {
+      const r = rex(["capture", ...at(state), "--trim", "--unwrap"]);
+      return r.status === 0 ? screenText(r.stdout) : `(unreadable: ${failure(r).slice(0, 200)})`;
+    },
+    close(state) {
+      if (!state.ids?.window) return true;
+      return rex(["window", "close", "-s", state.ids.session, state.ids.window]).status === 0 || gone(state);
+    },
+  };
+}
+
+function screenBlocked({ runner, env }, text) {
+  if (!classifierEnabled(env)) return false;
+  if (text === null) return true;
+  const classified = classifyScreen(screenText(text), { runner, env });
+  return !classified || classified.label === "dialog_open" || classified.confidence < PARENT_CLEAR_MIN_CONFIDENCE;
+}
+
 const muxes = {
   herdr: {
     detect: (env) => Boolean(env.HERDR_ENV || env.HERDR_PANE_ID),
@@ -468,12 +573,10 @@ const muxes = {
     paneId: /^%\d+$/,
     server: (env) => env.TMUX,
     backend: tmuxMux,
-    blocked({ runner, env }, parent) {
-      if (!classifierEnabled(env)) return false;
-      const r = runner("tmux", ["capture-pane", "-p", "-t", parent.pane]);
-      if (r.status !== 0) return true;
-      const classified = classifyScreen(screenText(r.stdout), { runner, env });
-      return !classified || classified.label === "dialog_open" || classified.confidence < PARENT_CLEAR_MIN_CONFIDENCE;
+    blocked(deps, parent) {
+      if (!classifierEnabled(deps.env)) return false;
+      const r = deps.runner("tmux", ["capture-pane", "-p", "-t", parent.pane]);
+      return screenBlocked(deps, r.status === 0 ? r.stdout : null);
     },
     typeInto({ runner, clock }, parent, line) {
       const text = runner("tmux", ["send-keys", "-t", parent.pane, "-l", "--", line]);
@@ -482,14 +585,40 @@ const muxes = {
       return [text, runner("tmux", ["send-keys", "-t", parent.pane, "Enter"])];
     },
   },
+  rex: {
+    detect: (env) => Boolean(env.REX_SESSION && env.REX_BLOCK),
+    // Rex is the terminal app, so its variables reach any herdr, tuios, or tmux started inside it, and that one is the nearer multiplexer.
+    outermost: true,
+    paneEnv: "REX_BLOCK",
+    paneId: /^block:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+    sessionEnv: "REX_SESSION",
+    server: (env) => env.REX_SERVER ?? env.REX_SESSION,
+    backend: rexMux,
+    blocked(deps, parent) {
+      const record = rexStatus(deps.runner, deps.env, parent.session, parent.pane);
+      if (record) return record.state === "blocked";
+      if (!classifierEnabled(deps.env)) return false;
+      const r = deps.runner(rexBin(deps.env), ["capture", "-s", parent.session, "-b", parent.pane, "--trim", "--unwrap"]);
+      return screenBlocked(deps, r.status === 0 ? r.stdout : null);
+    },
+    typeInto({ runner, env, clock }, parent, line) {
+      const at = ["-s", parent.session, "-b", parent.pane];
+      const text = runner(rexBin(env), ["send", ...at, "--", line]);
+      if (text.status !== 0) return [text];
+      clock.sleep(PASTE_SETTLE_MS);
+      return [text, runner(rexBin(env), ["send-key", ...at, "enter"])];
+    },
+  },
 };
 
 export function detectMux(env, requested) {
   if (requested) return requested;
-  const found = Object.keys(muxes).filter((id) => muxes[id].detect(env));
+  const detected = Object.keys(muxes).filter((id) => muxes[id].detect(env));
+  const inner = detected.filter((id) => !muxes[id].outermost);
+  const found = inner.length > 0 ? inner : detected;
   if (found.length > 1) throw new Error(`More than one multiplexer is set in this environment (${found.join(", ")}); pass --mux ${found.join(" or --mux ")}`);
   if (found.length === 1) return found[0];
-  throw new Error("Not running inside herdr, tuios, or tmux, so there is no pane to show the agent in. Run it as a native subagent, or ask the user to start herdr, tuios, or tmux.");
+  throw new Error("Not running inside herdr, tuios, tmux, or Rex, so there is no pane to show the agent in. Run it as a native subagent, or ask the user to start herdr, tuios, tmux, or Rex.");
 }
 
 const muxFor = (id, deps) => {

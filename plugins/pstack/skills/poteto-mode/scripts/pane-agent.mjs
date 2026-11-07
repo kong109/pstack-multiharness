@@ -611,9 +611,11 @@ const muxes = {
   },
 };
 
+export const detectedMuxes = (env) => Object.keys(muxes).filter((id) => muxes[id].detect(env));
+
 export function detectMux(env, requested) {
   if (requested) return requested;
-  const detected = Object.keys(muxes).filter((id) => muxes[id].detect(env));
+  const detected = detectedMuxes(env);
   const inner = detected.filter((id) => !muxes[id].outermost);
   const found = inner.length > 0 ? inner : detected;
   if (found.length > 1) throw new Error(`More than one multiplexer is set in this environment (${found.join(", ")}); pass --mux ${found.join(" or --mux ")}`);

@@ -52,7 +52,7 @@ The pasted message carries `sheet:`, `scope:`, a change list, the role lines as 
    The script backs up the sheet to `<sheet>.bak`, which the next apply replaces, and writes the changed role lines.
 4. Check the result. Run `node <poteto-mode>/scripts/resolve-models.mjs <sheet> "<changed role>"` for each changed role. Each entry returns its model and effort, and an entry on another harness also returns its `harness`.
 5. Re-render and republish the page to the same URL, so it shows the applied map.
-6. Reply with each changed role (old to new) and the backup path. When the sheet routes any role to another harness and this session is in none of T3 Code, herdr, tuios, or tmux, say so, because those roles have nowhere to run.
+6. Reply with each changed role (old to new) and the backup path. When the sheet routes any role to another harness and this session is in none of T3 Code, herdr, tuios, tmux, or Rex, say so, because those roles have nowhere to run.
 
 ## Rules
 

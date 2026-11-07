@@ -480,8 +480,6 @@ function rexScreen(runner, env, session, block) {
   const tail = rexBlock(runner, env, session, block, "blob_read", { id: head.id, offset: Math.max(0, head.total - REX_TAIL_BYTES), max_bytes: REX_TAIL_BYTES });
   return tail ? tail.data.slice(tail.data.indexOf("\n") + 1) : null;
 }
-// Workrex splits --agent into words and types them into the tab's shell, so the wrapper reports the block it runs in and then becomes the harness.
-const WORKREX_WRAP = 'printf "%s %s" "$REX_SESSION" "$REX_BLOCK" > "$1" && cd "$2" && shift 2 && exec "$@"';
 const shellWord = (word) => `'${word.replaceAll("'", "'\\''")}'`;
 
 // The root program-status record has no id. Records for subagents carry one.
@@ -522,8 +520,11 @@ export function rexMux({ runner, env, clock }) {
   const openWorkrex = (state, cwd, argv) => {
     const { repo, branch, base, workrex: handle } = state.worktree;
     const marker = join(state.run, "block");
-    const command = ["sh", "-c", WORKREX_WRAP, "sh", marker, cwd, ...argv].map(shellWord).join(" ");
-    const r = runner("workrex", ["add", branch, "--name", handle, "--base", base, "--background", "--agent", command], { cwd: repo, input: "" });
+    const script = join(state.run, "agent.sh");
+    // Workrex types --agent into the tab's shell, and a long line typed ahead of the shell gets cut, so the argv waits in a script.
+    // The script reports the block it runs in, which Workrex does not print, then becomes the harness.
+    writeFileSync(script, `printf '%s %s' "$REX_SESSION" "$REX_BLOCK" > ${shellWord(marker)}\ncd ${shellWord(cwd)} && exec ${argv.map(shellWord).join(" ")}\n`);
+    const r = runner("workrex", ["add", branch, "--name", handle, "--base", base, "--background", "--agent", `sh ${shellWord(script)}`], { cwd: repo, input: "" });
     if (r.status !== 0) throw new Error(`workrex add failed: ${failure(r)}`);
     const reported = () => (existsSync(marker) ? readFileSync(marker, "utf8").split(" ") : []);
     for (let i = 0; i < 120 && reported().length < 2; i++) clock.sleep(250);

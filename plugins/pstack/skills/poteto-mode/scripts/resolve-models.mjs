@@ -2,6 +2,7 @@
 import { readFileSync, realpathSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { parseArgs } from "node:util";
 
 const token = /^[a-zA-Z0-9_./:#-]+$/;
 const harnessName = /^[a-z][a-z0-9-]*$/;
@@ -34,8 +35,8 @@ export function parseEntry(entry, list = harnesses) {
     throw invalid(spaced ? "" : `write the effort after a space, as in \`${text.replace("@", " @")}\``);
   }
   const colon = model.indexOf(":");
-  if (arrow < 0 && colon > 0 && Object.hasOwn(list, model.slice(0, colon))) {
-    throw invalid(`name the harness after the model, as in \`${model.slice(colon + 1)}->${model.slice(0, colon)}${spaced ? ` ${spaced}` : ""}\``);
+  if (colon > 0 && Object.hasOwn(list, model.slice(0, colon))) {
+    throw invalid(`name the harness after the model, as in \`${model.slice(colon + 1)}->${harness ?? model.slice(0, colon)}${spaced ? ` ${spaced}` : ""}\``);
   }
   if (!model || !token.test(model) || (explicitEffort !== undefined && !token.test(explicitEffort))) throw invalid();
   if (harness && aliases.has(model)) throw invalid(`a ->${harness} entry names a model or a provider`);
@@ -45,13 +46,22 @@ export function parseEntry(entry, list = harnesses) {
 export const providerOf = (model, catalog = providers) =>
   catalog.find((p) => p.models.some((m) => m.slug === model) || (p.match && new RegExp(p.match).test(model)));
 
+export const ownProvider = (model, catalog = providers) =>
+  catalog.find((p) => p.harness === model) ?? (model.includes("/") || aliases.has(model) ? undefined : providerOf(model, catalog));
+
 // A provider's harness name stands for its default model, and a model with a provider runs on that provider's harness unless the entry names one.
+// `harness` is left out when it is the session's own. A session outside the registry runs every entry without an arrow natively.
 export function resolveEntry({ model: written, harness: chosen, explicitEffort }, { defaultEffort = "session", ...given } = {}) {
   const { harnesses: list, providers: catalog, native: home } = { ...registry, ...given };
+  const session = given.session ?? home;
   const named = catalog.find((p) => p.harness === written);
+  if (!chosen && !named && !Object.hasOwn(list, session)) {
+    const effort = explicitEffort ?? defaultEffort;
+    return { model: aliases.has(written) ? null : written, effort: effort === "session" ? null : effort };
+  }
   const model = named ? named.default : written;
-  const provider = named ?? (model.includes("/") || aliases.has(model) ? undefined : providerOf(model, catalog));
-  const harness = chosen ?? provider?.harness ?? home;
+  const provider = ownProvider(written, catalog);
+  const harness = chosen ?? provider?.harness ?? session;
   if (!Object.hasOwn(list, harness)) {
     throw new Error(`Unknown harness: ${harness} in ${written}->${harness} (registered: ${Object.keys(list).join(", ")})`);
   }
@@ -66,7 +76,7 @@ export function resolveEntry({ model: written, harness: chosen, explicitEffort }
   }
   const effort = explicitEffort ?? (takesEffort(harness, list) ? defaultEffort : undefined);
   return {
-    ...(harness !== home && { harness }),
+    ...(harness !== session && { harness }),
     model: aliases.has(id) ? null : id,
     effort: effort === undefined || effort === "session" ? null : effort,
   };
@@ -100,12 +110,13 @@ export function resolveRole(text, role, defaults, options = {}) {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(resolve(process.argv[1]))).href) {
   try {
-    const [file, role, defaults, ...extra] = process.argv.slice(2);
+    const { values, positionals } = parseArgs({ allowPositionals: true, options: { session: { type: "string" } } });
+    const [file, role, defaults, ...extra] = positionals;
     if (!file || !role || extra.length) {
-      throw new Error('Usage: resolve-models.mjs <sheet|-> "role" ["default-models"]');
+      throw new Error('Usage: resolve-models.mjs [--session <harness>] <sheet|-> "role" ["default-models"]');
     }
     const text = file === "-" ? "" : readFileSync(file, "utf8");
-    console.log(JSON.stringify(resolveRole(text, role, defaults), null, 2));
+    console.log(JSON.stringify(resolveRole(text, role, defaults, { session: values.session }), null, 2));
   } catch (error) {
     console.error(error.message);
     process.exitCode = 1;

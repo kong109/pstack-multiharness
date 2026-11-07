@@ -90,6 +90,8 @@ test("an Agent-tool worktree in the sandbox and an unplanned seat fail the run",
   mkdirSync(join(dir, ".claude", "worktrees", "agent-1"), { recursive: true });
   const verdict = judge([...good, seat("extra", "grok", "grok-4.7")], planned, { sandboxDir: dir, userSession: "s-user" });
   expect(verdict).toMatchObject({ ok: false, run: { noPlainWorktrees: false, noStraySeats: false }, strays: ["extra"], plainWorktrees: ["agent-1"] });
+  const elsewhere = judge(good, planned, { userSession: "s-user", worktrees: ["/s", "/s__worktrees/verify-1", "/s__worktrees/verify-1/.claude/worktrees/agent-2"] });
+  expect(elsewhere).toMatchObject({ ok: false, run: { noPlainWorktrees: false }, plainWorktrees: ["agent-2"] });
 });
 
 const gitIn = (dir, ...args) => spawnSync("git", ["-C", dir, ...args], { encoding: "utf8" }).stdout.trim();

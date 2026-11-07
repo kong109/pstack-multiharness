@@ -4,8 +4,8 @@ import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
-import { providerOf, harnesses as registry } from "../../poteto-mode/scripts/resolve-models.mjs";
-import { parseSheet } from "./sheet.mjs";
+import { ownProvider, harnesses as registry } from "../../poteto-mode/scripts/resolve-models.mjs";
+import { allRoleLabels, parseSheet } from "./sheet.mjs";
 import { listPresets, presetDirectory } from "../../pstack-preset/scripts/presets.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -50,13 +50,9 @@ export function readPresets(project = process.cwd(), home = homedir()) {
   });
 }
 
-// Mirrors resolveEntry's provider lookup, which resolve-models.mjs does not export.
 export function providerFor(model, providers, native) {
   if (model === "auto" || model === "inherit-parent") return providers.find((p) => p.harness === native)?.id ?? "";
-  const named = providers.find((p) => p.harness === model);
-  if (named) return named.id;
-  if (model.includes("/")) return "";
-  return providerOf(model, providers)?.id ?? "";
+  return ownProvider(model, providers)?.id ?? "";
 }
 
 export const harnessChoices = (list) => Object.fromEntries(Object.entries(list).map(([name, spec]) => [name, {
@@ -94,17 +90,23 @@ function main(argv) {
   const modelsPath = join(skillDir, "..", "..", "models.json");
   const available = existsSync(modelsPath) ? readJson(modelsPath).available ?? [] : [];
   const sheetPath = resolve(values.sheet);
+  const text = readFileSync(sheetPath, "utf8");
   const data = pageData({
     sheetPath,
     scope: values.scope ?? "project",
     native: values.native ?? defaults.native,
     generated: new Date().toISOString().slice(0, 16).replace("T", " "),
-    text: readFileSync(sheetPath, "utf8"),
+    text,
     catalog: { providers: defaults.providers, available, codex: codexModels() },
     presets: readPresets(resolve(values["project-root"] ?? process.cwd())),
   });
   writeFileSync(values.out, pageHtml(data));
   console.log(`rendered ${data.roles.length} roles and ${data.presets.length} presets from ${sheetPath} -> ${resolve(values.out)}`);
+  const shown = new Set(data.roles.map((r) => r.role));
+  const skipped = allRoleLabels(text).filter((role) => !shown.has(role));
+  if (skipped.length) {
+    console.log(`left off the page, because an entry does not parse: ${skipped.join("; ")}. If they use the old harness:model form, run node ${join(skillDir, "..", "poteto-mode", "scripts", "migrate-sheet.mjs")} ${sheetPath}`);
+  }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(resolve(process.argv[1]))).href) {

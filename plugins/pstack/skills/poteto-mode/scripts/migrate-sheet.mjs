@@ -2,21 +2,19 @@
 import { copyFileSync, existsSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { harnesses, native, resolveEntry } from "./resolve-models.mjs";
+import { harnesses, ownProvider } from "./resolve-models.mjs";
 
 const ROLE = /^(\s*[a-z][a-z ,-]*[a-z]\s*:\s*)(\S.*)$/;
 const LEGACY = /^([a-z][a-z0-9-]*):(\S+)(\s+@\S+)?$/;
 
 // An effort written without its space, which both grammars refuse, gets the space their error message asks for.
-// The arrow is dropped when the model's own provider already runs on that harness.
+// The arrow is dropped only when the model's own provider runs on that harness, so the entry keeps its harness in every session.
 export function migrateEntry(entry) {
   const spaced = entry.includes("->") ? entry : entry.replace(/^(\S+?)@([^@\s]+)$/, "$1 @$2");
   const match = LEGACY.exec(spaced);
   if (!match || !Object.hasOwn(harnesses, match[1])) return spaced;
   const [, harness, model, effort = ""] = match;
-  let own;
-  try { own = resolveEntry({ model, harness: null }).harness ?? native; } catch { own = null; }
-  return `${model}${own === harness ? "" : `->${harness}`}${effort}`;
+  return `${model}${ownProvider(model)?.harness === harness ? "" : `->${harness}`}${effort}`;
 }
 
 export function migrateText(text) {

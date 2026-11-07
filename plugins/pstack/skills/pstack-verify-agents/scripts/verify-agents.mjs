@@ -2,7 +2,7 @@
 import { spawnSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import { harnesses, native, parseEntry, providers, resolveEntry } from "../../poteto-mode/scripts/resolve-models.mjs";
@@ -131,7 +131,8 @@ export function watch({ log, stop, panes, intervalMs = 1000, maxMs = 2 * 3600 * 
 
 export const ICONS = { done: "✅", working: "🤖", waiting: "💬" };
 
-export function judge(events, seats, { sandboxDir, userSession, icons = ICONS }) {
+// The worktree list is shared by every checkout, so it also catches an Agent-tool worktree under the coordinator's own checkout.
+export function judge(events, seats, { sandboxDir, userSession, worktrees = [], icons = ICONS }) {
   const seen = new Map();
   for (const e of events.filter((e) => e.kind === "seat")) seen.set(e.name, { ...seen.get(e.name), ...e });
   const launched = [...seen.values()];
@@ -157,7 +158,10 @@ export function judge(events, seats, { sandboxDir, userSession, icons = ICONS })
     return { entry: seat.entry, name: match.name, ok: Object.values(checks).every(Boolean), checks, labels };
   });
   const sessionNames = events.filter((e) => e.kind === "session" && e.session === userSession).map((e) => e.label);
-  const plainWorktrees = sandboxDir && existsSync(join(sandboxDir, ".claude", "worktrees")) ? readdirSync(join(sandboxDir, ".claude", "worktrees")) : [];
+  const plainWorktrees = [...new Set([
+    ...(sandboxDir && existsSync(join(sandboxDir, ".claude", "worktrees")) ? readdirSync(join(sandboxDir, ".claude", "worktrees")) : []),
+    ...worktrees.filter((path) => /[\\/]\.claude[\\/]worktrees[\\/]/.test(path)).map((path) => basename(path)),
+  ])];
   const run = {
     userSessionKept: new Set(sessionNames).size <= 1,
     noPlainWorktrees: plainWorktrees.length === 0,
@@ -189,7 +193,9 @@ export function main(argv) {
   if (command === "brief") return process.stdout.write(brief(seats())), 0;
   if (command === "watch" && values.log && values.stop && values.panes) return watch(values), 0;
   if (command === "judge" && values.log) {
-    const verdict = judge(readLog(values.log), seats(), { sandboxDir: sandboxPath(), userSession: values["user-session"] });
+    const sandboxDir = sandboxPath();
+    const worktrees = existsSync(join(sandboxDir, ".git")) ? git(sandboxDir, "worktree", "list", "--porcelain").split("\n").filter((l) => l.startsWith("worktree ")).map((l) => l.slice("worktree ".length)) : [];
+    const verdict = judge(readLog(values.log), seats(), { sandboxDir, userSession: values["user-session"], worktrees });
     console.log(JSON.stringify(verdict, null, 2));
     return verdict.ok ? 0 : 1;
   }

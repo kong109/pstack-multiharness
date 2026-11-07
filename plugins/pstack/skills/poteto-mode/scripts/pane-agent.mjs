@@ -2,7 +2,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 
@@ -69,7 +69,7 @@ export function briefText(userBrief, { run, access, name, parent }) {
   const nesting = access === "write" ? `
 ## Launching your own pane agents
 
-You may launch pane agents of your own with \`node ${script} launch ...\`. Your name prefix and multiplexer are applied for you, so \`--name fix\` launches \`${name}-fix\`. Every later \`send\`, \`wait\`, \`peek\`, and \`close\` takes the full name the launch printed. When one of your agents asks a question you cannot answer from this brief, write your own question to ${question} that quotes it and names the agent, ask your parent as above, and end your turn. When the answer arrives, pass it down with \`node ${script} send --name <full-name> --text <answer> --answer <questionId>\`.
+You may launch pane agents of your own with \`node ${script} launch ...\`. They run in your working directory, not in worktrees of their own, so give two writers separate files. Your name prefix and multiplexer are applied for you, so \`--name fix\` launches \`${name}-fix\`. Every later \`send\`, \`wait\`, \`peek\`, and \`close\` takes the full name the launch printed. When one of your agents asks a question you cannot answer from this brief, write your own question to ${question} that quotes it and names the agent, ask your parent as above, and end your turn. When the answer arrives, pass it down with \`node ${script} send --name <full-name> --text <answer> --answer <questionId>\`.
 ` : "";
   return `${userBrief.trimEnd()}
 
@@ -117,6 +117,33 @@ function readStates(root) {
   return readdirSync(root).flatMap((entry) => {
     try { return [JSON.parse(readFileSync(join(root, entry, "state.json"), "utf8"))]; } catch { return []; }
   });
+}
+
+function git(cwd, args) {
+  const r = sh("git", ["-C", cwd, ...args]);
+  if (r.status !== 0) throw new Error(`git ${args[0]} in ${cwd} failed: ${r.stderr.trim().slice(0, 300)}`);
+  return r.stdout.trim();
+}
+
+// Branched from the committed HEAD, so the worker never sees the caller's uncommitted changes.
+function addWorktree(name, from) {
+  const common = git(from, ["rev-parse", "--path-format=absolute", "--git-common-dir"]);
+  if (basename(common) !== ".git") throw new Error(`${from} is not in a repository with a .git directory, so it cannot get a worktree; pass --in-place`);
+  const repo = dirname(common);
+  const tree = { repo, path: `${repo}__worktrees/pstack-${name}`, branch: `pstack/${name}`, base: git(from, ["rev-parse", "HEAD"]) };
+  const taken = sh("git", ["-C", repo, "rev-parse", "--verify", "--quiet", `refs/heads/${tree.branch}`]).status === 0;
+  if (taken || existsSync(tree.path)) {
+    throw new Error(`${tree.branch} or ${tree.path} is left from an earlier ${name}; merge the branch, then remove the worktree and delete the branch, or launch under another --name`);
+  }
+  git(repo, ["worktree", "add", "-b", tree.branch, tree.path, tree.base]);
+  return { ...tree, cwd: resolve(tree.path, git(from, ["rev-parse", "--show-prefix"])) };
+}
+
+function removeWorktree({ repo, path, branch, base }) {
+  const removed = !existsSync(path) || sh("git", ["-C", repo, "worktree", "remove", path]).status === 0;
+  const tip = sh("git", ["-C", repo, "rev-parse", "--verify", "--quiet", `refs/heads/${branch}`]).stdout.trim();
+  const unused = removed && tip === base && sh("git", ["-C", repo, "branch", "-D", branch]).status === 0;
+  return { path, removed, branch: tip && !unused ? branch : null };
 }
 
 function herdrJson(runner, args, timeoutMs) {
@@ -503,7 +530,10 @@ function pendingQuestion(run) {
 }
 
 function conclude(state, mux, settled, { timeoutMs }) {
-  const base = { name: state.name, mux: mux.id, harness: state.harness, model: state.model, ...(settled.screenLabel && { screenLabel: settled.screenLabel }) };
+  const base = {
+    name: state.name, mux: mux.id, harness: state.harness, model: state.model,
+    ...(state.worktree && { worktree: state.worktree.path }), ...(settled.screenLabel && { screenLabel: settled.screenLabel }),
+  };
   const questionFile = join(state.run, "question.md");
   const resultFile = join(state.run, "result.md");
   const result = readIfPresent(resultFile);
@@ -559,7 +589,7 @@ function nestedName(self, given) {
 export function launch(options, deps) {
   deps = resolveDeps(deps);
   const { env } = deps;
-  const { harness, model, effort = null, access = "read", brief, cwd = process.cwd(), wait = true } = options;
+  const { harness, model, effort = null, access = "read", brief, cwd = process.cwd(), inPlace = false, wait = true } = options;
   const self = selfState(deps);
   const name = nestedName(self, options.name);
   const dir = statePath(name, env);
@@ -575,25 +605,31 @@ export function launch(options, deps) {
   if (/[,()\s]/.test(script)) throw new Error(`Helper path ${script} contains a comma, parenthesis, or space, which breaks the agent's ask-parent command; install pstack under a plain path`);
 
   ownedPrivateDir(panesRoot(env));
-  mkdirSync(run, { recursive: true });
-  const parent = parentOf(muxId, env);
-  writeFileSync(join(run, "brief.md"), briefText(readFileSync(brief, "utf8"), { run, access, name, parent }));
-  const state = {
-    name, mux: muxId, harness, model, effort, access, run, cwd: resolve(cwd), parent,
-    ids: { server: muxes[muxId].server(env) ?? null }, startedAt: new Date().toISOString(),
-  };
-  saveState(state);
-
-  const spec = harnesses[harness];
-  const promptArgs = fill(spec.prompt ?? ["{prompt}"], { prompt: launchPrompt(run) });
+  // A nested agent cannot create a worktree from inside a Codex sandbox, and its child needs its uncommitted edits, so it runs in place.
+  const worktree = access === "write" && !inPlace && !self ? addWorktree(name, resolve(cwd)) : null;
+  let state = null;
   try {
+    mkdirSync(run, { recursive: true });
+    const parent = parentOf(muxId, env);
+    writeFileSync(join(run, "brief.md"), briefText(readFileSync(brief, "utf8"), { run, access, name, parent }));
+    state = {
+      name, mux: muxId, harness, model, effort, access, run, cwd: worktree?.cwd ?? resolve(cwd), worktree, parent,
+      ids: { server: muxes[muxId].server(env) ?? null }, startedAt: new Date().toISOString(),
+    };
+    saveState(state);
+    const spec = harnesses[harness];
+    const promptArgs = fill(spec.prompt ?? ["{prompt}"], { prompt: launchPrompt(run) });
     const args = harnessArgs(harness, { model, effort, access, run });
     const started = mux.launch(state, { command: spec.command, args, cwd: state.cwd, promptArgs, promptFirst: spec.promptFirst });
-    if (!wait) return { name, mux: muxId, run, launched: true };
+    if (!wait) return { name, mux: muxId, run, launched: true, ...(worktree && { worktree: worktree.path }) };
     const settled = started ?? (mux.initial ? mux.initial(state, timeoutMs) : { kind: "rest" });
     return conclude(state, mux, withBrief(state, mux, settled, timeoutMs), { timeoutMs });
   } catch (error) {
-    try { mux.close?.(state); } finally { rmSync(run, { recursive: true, force: true }); }
+    try { if (state) mux.close?.(state); } finally {
+      rmSync(run, { recursive: true, force: true });
+      const left = worktree && removeWorktree(worktree);
+      if (left && !left.removed) error.message += `; the worktree ${left.path} has changes and was kept`;
+    }
     throw error;
   }
 }
@@ -672,16 +708,19 @@ export function close(name, { keep = false } = {}, deps) {
   const state = loadState(name, deps.env);
   const mux = muxFor(state.mux, deps);
   const closed = mux.close(state);
+  const worktree = closed && !keep && state.worktree ? removeWorktree(state.worktree) : undefined;
   if (closed && !keep) rmSync(state.run, { recursive: true, force: true });
   if (closed && keep) {
     state.closed = true;
     saveState(state);
   }
-  return { name, mux: state.mux, closed, kept: closed ? (keep ? state.run : null) : state.run };
+  return { name, mux: state.mux, closed, kept: closed ? (keep ? state.run : null) : state.run, ...(worktree && { worktree }) };
 }
 
 export function list({ env = process.env } = {}) {
-  return readStates(panesRoot(env)).map(({ name, mux, harness, model, effort, run, startedAt }) => ({ name, mux, harness, model, effort, run, startedAt }));
+  return readStates(panesRoot(env)).map(({ name, mux, harness, model, effort, run, worktree, startedAt }) => ({
+    name, mux, harness, model, effort, run, ...(worktree && { worktree: worktree.path }), startedAt,
+  }));
 }
 
 const exitCodes = { done: 0 };
@@ -694,14 +733,14 @@ export function main(argv, deps = {}) {
       name: { type: "string" }, harness: { type: "string" }, model: { type: "string" }, effort: { type: "string" },
       brief: { type: "string" }, cwd: { type: "string" }, access: { type: "string" }, mux: { type: "string" },
       "timeout-ms": { type: "string" }, "no-wait": { type: "boolean" }, text: { type: "string" },
-      keys: { type: "string" }, keep: { type: "boolean" }, answer: { type: "string" }, run: { type: "string" },
+      keys: { type: "string" }, keep: { type: "boolean" }, "in-place": { type: "boolean" }, answer: { type: "string" }, run: { type: "string" },
     },
   });
   const timeoutMs = values["timeout-ms"] === undefined ? undefined : Number(values["timeout-ms"]);
   if (timeoutMs !== undefined && !(timeoutMs > 0)) throw new Error("--timeout-ms must be a positive number of milliseconds");
   let out;
   if (command === "launch") {
-    out = launch({ ...values, timeoutMs, wait: !values["no-wait"] }, deps);
+    out = launch({ ...values, timeoutMs, inPlace: values["in-place"], wait: !values["no-wait"] }, deps);
   } else if (command === "wait") {
     out = waitFor(values.name, { timeoutMs }, deps);
   } else if (command === "send") {

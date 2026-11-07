@@ -27,7 +27,7 @@ Fix every problem you can before step 2, then plan again.
 A new harness is an entry in [`harnesses.json`](../poteto-mode/scripts/harnesses.json). Its fields are listed in [Add a harness](../poteto-mode/references/foreign-harness.md#add-a-harness). Take every flag from the harness's own `--help` and model listing, never from memory.
 
 1. `command`, and `kind`, the agent kind herdr and Workrex name it by.
-2. `providers`. Map each provider in [`providers.json`](../poteto-mode/scripts/providers.json) whose models the harness lists to the id the harness takes, such as `"openai": "openai-codex/{model}"`. A harness that lists a model as `provider/id` takes that id.
+2. `providers`. Map each provider in [`providers.json`](../poteto-mode/scripts/providers.json) whose models the harness lists to the id the harness takes, such as `"openai": "openai-codex/{model}"`. A harness that lists a model as `provider/id` takes that id. Never map `anthropic` on a harness other than `claude`, even when it lists Claude models. Anthropic's terms allow a Claude subscription only in Claude Code, so a Claude model on another harness is reported as unsupported.
 3. `model` and `effort`. Use the flags that select them in the interactive TUI, which can differ from a print or run subcommand. `efforts` lists the accepted levels, null when they vary by model. Set `effort` to null when the harness takes none, so the level goes in the model id.
 4. `promptFirst` and `prompt`. Set them from how the TUI takes its first message.
 5. `access`. `read` and `write` give the flags that stop the TUI from asking for approval. Use the harness's documented auto-approve flag. If it has no such flag, the seat will show as `blocked` in step 4. Report that as a gap instead of working around it.

@@ -380,6 +380,7 @@ test("the registry and the provider catalog agree, so the page only offers what 
     expect(Array.isArray(spec.access?.read) && Array.isArray(spec.access?.write), id).toBe(true);
     if (spec.t3) expect(spec.t3.driver, id).toBeTruthy();
     for (const served of Object.keys(spec.providers)) expect(providersJson.providers.map((p) => p.id), id).toContain(served);
+    if (id !== "claude") expect(Object.keys(spec.providers), `${id} must not serve Claude models`).not.toContain("anthropic");
   }
   for (const provider of providersJson.providers) {
     expect(Object.keys(harnesses), provider.id).toContain(provider.harness);

@@ -34,9 +34,7 @@
       "efforts": ["low", "medium", "high", "xhigh"],
       "default": "grok-4.7",
       "match": "^grok-",
-      "models": [
-        { "slug": "grok-4.7", "label": "Grok 4.7" }
-      ]
+      "models": [{ "slug": "grok-4.7", "label": "Grok 4.7" }]
     },
     {
       "id": "google",
@@ -47,7 +45,10 @@
       "match": "^gemini-",
       "models": [
         { "slug": "gemini-3.8-flash-high", "label": "Gemini 3.8 Flash (High)" },
-        { "slug": "gemini-3.8-flash-medium", "label": "Gemini 3.8 Flash (Medium)" },
+        {
+          "slug": "gemini-3.8-flash-medium",
+          "label": "Gemini 3.8 Flash (Medium)"
+        },
         { "slug": "gemini-3.8-flash-low", "label": "Gemini 3.8 Flash (Low)" }
       ]
     },

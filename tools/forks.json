@@ -18,6 +18,12 @@
       "since": "0.9.34",
       "upstream": "not-proposed"
     },
+    "plugins/pstack/skills/arena/SKILL.md": {
+      "kind": "port-feature",
+      "why": "In Rex with workrex on PATH, gives every candidate, native seats included, a Workrex worktree through the pane route, and has a pane-route seat for an auto or inherit-parent entry take the parent's own model id.",
+      "since": "0.9.138",
+      "upstream": "not-proposed"
+    },
     "plugins/pstack/skills/blast-radius/SKILL.md": {
       "kind": "policy",
       "why": "Extends the trigger to run before design when a brief asserts something about existing code.",

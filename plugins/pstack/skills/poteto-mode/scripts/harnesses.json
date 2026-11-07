@@ -122,7 +122,11 @@
   },
   "omp": {
     "command": "omp",
-    "providers": { "meta": "muse-code/{model}", "openai": "openai-codex/{model}", "xai": "xai-oauth/{model}" },
+    "providers": {
+      "meta": "muse-code/{model}",
+      "openai": "openai-codex/{model}",
+      "xai": "xai-oauth/{model}"
+    },
     "kind": "omp",
     "promptFirst": false,
     "model": ["--model", "{model}"],

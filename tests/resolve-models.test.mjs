@@ -178,3 +178,8 @@ test("the migration keeps an arrow whose harness no provider of that model owns,
     { harness: "claude", model: "opus", effort: "high" },
   ]);
 });
+
+test("an entry cut short by an unquoted -> in a shell is refused with the reason", () => {
+  for (const cut of ["muse-", "gpt-6.1-sol- @high"]) expect(() => parseEntry(cut)).toThrow("the shell read `->` as a redirect, so quote the entry");
+  expect(parseEntry("muse->omp")).toMatchObject({ model: "muse", harness: "omp" });
+});

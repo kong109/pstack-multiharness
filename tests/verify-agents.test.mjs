@@ -107,3 +107,7 @@ test("the sandbox is made once, refuses uncommitted changes, and drops only old 
   writeFileSync(join(dir, "README.md"), "edited\n");
   expect(() => sandbox({ env })).toThrow("uncommitted changes");
 });
+
+test("a seat cut short by a shell redirect is a grammar problem that says to quote it", () => {
+  expect(planSeat("muse-", { installed: all }).problems[0]).toMatchObject({ kind: "grammar", detail: expect.stringContaining("quote the entry") });
+});

@@ -24,6 +24,10 @@ export function parseEntry(entry, list = harnesses) {
   if (extra.length || (spaced !== undefined && !/^@[^@]+$/.test(spaced))) throw invalid();
   const arrow = head.indexOf("->");
   const model = arrow < 0 ? head : head.slice(0, arrow);
+  // An unquoted `muse->pi` in a shell redirects to a file named pi and leaves `muse-`; no model id ends in `-`.
+  if (arrow < 0 && model.endsWith("-")) {
+    throw invalid(`the shell read \`->\` as a redirect, so quote the entry, as in '${model}>harness', and delete the file it created, named after the harness`);
+  }
   let harness = null;
   let explicitEffort = spaced?.slice(1);
   if (arrow >= 0) {

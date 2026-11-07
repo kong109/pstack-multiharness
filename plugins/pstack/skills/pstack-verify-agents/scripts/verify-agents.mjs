@@ -178,6 +178,13 @@ const usage = `usage: verify-agents.mjs plan <entry>...
        verify-agents.mjs watch --log <file> --stop <file> --panes <dir>
        verify-agents.mjs judge --log <file> --user-session <id> <entry>...`;
 
+// stderr, because a shell redirect that caused a problem also swallows stdout.
+const report = (planned, kind) => {
+  const found = planned.flatMap(({ entry, problems }) => problems.filter((p) => !kind || p.kind === kind).map((p) => `${entry}: ${p.kind}: ${p.detail}`));
+  for (const line of found) console.error(line);
+  return found.length;
+};
+
 export function main(argv) {
   const [command, ...rest] = argv;
   const { values, positionals } = parseArgs({ args: rest, allowPositionals: true, options: {
@@ -187,10 +194,15 @@ export function main(argv) {
   if (command === "plan") {
     const planned = seats();
     console.log(JSON.stringify(planned, null, 2));
+    report(planned);
     return planned.every((s) => !s.problems.length) ? 0 : 2;
   }
   if (command === "sandbox") return console.log(JSON.stringify(sandbox(), null, 2)), 0;
-  if (command === "brief") return process.stdout.write(brief(seats())), 0;
+  if (command === "brief") {
+    const planned = seats();
+    if (report(planned, "grammar")) return 2;
+    return process.stdout.write(brief(planned)), 0;
+  }
   if (command === "watch" && values.log && values.stop && values.panes) return watch(values), 0;
   if (command === "judge" && values.log) {
     const sandboxDir = sandboxPath();

@@ -1555,3 +1555,17 @@ test("a workrex layout with no agent pane fails the launch and hands the worktre
   expect(existsSync(`${dir}__worktrees/pstack-arena-a`)).toBe(false);
   expect(existsSync(runDir())).toBe(false);
 });
+
+test("a workrex launch waits for the agent's shell to report its block, which lands after workrex add returns", () => {
+  const dir = repo();
+  const { rules, agents } = workrexRules(dir, { pane: null });
+  const clock = fakeClock();
+  const sleep = clock.sleep;
+  let slept = 0;
+  clock.sleep = (ms) => {
+    sleep(ms);
+    if (++slept === 3) writeFileSync(agents[0].words[4], `session:s1 ${rexChild}`);
+  };
+  const { runner } = scripted({ ...rexBase, ...rules, ...rexDone() });
+  expect(launch(options({ access: "write", cwd: dir }), { runner, env: rexEnv(), clock })).toMatchObject({ verdict: "done" });
+});

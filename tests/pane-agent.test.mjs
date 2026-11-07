@@ -335,6 +335,43 @@ test("--in-place and read access run in the given directory with no worktree", (
   expect(branches(dir)).toEqual(["main"]);
 });
 
+test("a relaunch under a name whose worktree or branch is left over is refused before any pane opens", () => {
+  const dir = repo();
+  const { runner } = finished();
+  launch(options({ access: "write", cwd: dir }), { runner, env: herdrEnv() });
+  writeFileSync(join(`${dir}__worktrees/pstack-arena-a`, "a.txt"), "worker edit\n");
+  close("arena-a", {}, { runner, env: herdrEnv() });
+  const again = finished();
+  expect(() => launch(options({ access: "write", cwd: dir }), { runner: again.runner, env: herdrEnv() })).toThrow("left from an earlier arena-a");
+  expect(again.calls).toEqual([]);
+  expect(existsSync(runDir())).toBe(false);
+  expect(readFileSync(join(`${dir}__worktrees/pstack-arena-a`, "a.txt"), "utf8")).toBe("worker edit\n");
+});
+
+test("a write launch from a subdirectory starts in the same subdirectory of its worktree", () => {
+  const dir = repo();
+  mkdirSync(join(dir, "pkg"));
+  writeFileSync(join(dir, "pkg", "b.txt"), "b\n");
+  gitIn(dir, "add", "pkg");
+  gitIn(dir, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "pkg");
+  const { runner, calls } = finished();
+  launch(options({ access: "write", cwd: join(dir, "pkg") }), { runner, env: herdrEnv() });
+  expect(calls[0][calls[0].indexOf("--cwd") + 1]).toBe(`${dir}__worktrees/pstack-arena-a/pkg`);
+});
+
+test("a nested write launch runs in its parent agent's directory with no worktree", () => {
+  const dir = repo();
+  const { runner } = doneHerdr();
+  launch(options({ cwd: dir }), { runner, env: herdrEnv() });
+  const childEnv = { PSTACK_PANES_DIR: join(root, "panes"), HERDR_WORKSPACE_ID: "wP", HERDR_PANE_ID: "wP:p2" };
+  const out = launch(options({ name: "fix", access: "write", cwd: dir }), { runner, env: childEnv });
+  expect(out).toMatchObject({ name: "arena-a-fix" });
+  expect(out.worktree).toBeUndefined();
+  expect(existsSync(`${dir}__worktrees`)).toBe(false);
+  expect(readFileSync(join(root, "panes", "arena-a", "brief.md"), "utf8")).not.toContain("not in worktrees of their own");
+  expect(readFileSync(join(root, "panes", "arena-a-fix", "brief.md"), "utf8")).toContain("not in worktrees of their own");
+});
+
 test("a write launch outside a git repository is refused before any pane opens", () => {
   const { runner, calls } = finished();
   expect(() => launch(options({ access: "write" }), { runner, env: herdrEnv() })).toThrow("git rev-parse");

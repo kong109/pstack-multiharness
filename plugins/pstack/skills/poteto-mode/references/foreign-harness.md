@@ -85,10 +85,11 @@ Take `--harness`, `--model`, and `--effort` from the resolver output, and omit `
 
 A `write` launch creates a git worktree for the agent and runs the agent in it, so parallel writers never share a checkout with each other or with you. Take the repository from `--cwd`.
 
-- **Location.** The worktree is `<repo>__worktrees/pstack-<name>` next to the main checkout, on a new branch `pstack/<name>`. Every verdict and `list` names it in `worktree`.
+- **Location.** The worktree is `<repo>__worktrees/pstack-<name>` next to the main checkout, on a new branch `pstack/<name>`. A `--cwd` below the repository root starts the agent in the same directory of the worktree. Every verdict and `list` names the worktree in `worktree`.
 - **Starting point.** The branch starts at the committed `HEAD` of `--cwd`. Uncommitted changes and ignored files such as `.env` or `node_modules` are not copied. Commit what the agent needs first, or name the extra setup in the brief.
 - **Taking the work.** The repository's `.git` directory is outside a Codex agent's sandbox, so its changes stay uncommitted in the worktree. Review them with `git -C <worktree> diff`, then commit them on the branch and merge it, or copy them into your checkout.
-- **Cleanup.** `close` removes a worktree with no uncommitted changes, and it deletes the branch when the branch has no new commits. It keeps a worktree with uncommitted changes and a branch with commits, and it reports what it kept in `worktree`. Delete the branch after you merge it. `close --keep` keeps the worktree as well.
+- **Cleanup.** `close` removes a worktree with no uncommitted changes, and it deletes the branch when the branch has no new commits. It keeps a worktree with uncommitted changes and a branch with commits, and it reports what it kept in `worktree`. Delete the branch after you merge it. `close --keep` keeps the worktree as well. A later launch under the same name refuses while that branch or worktree is left, so take the work, then remove both, or pick another name.
+- **Nested agents.** A pane agent's own launches run in its working directory without a worktree. A Codex agent's sandbox cannot create one, and the child needs the agent's uncommitted edits.
 - **Opt out.** `--in-place` runs a `write` agent in `--cwd` itself. Use it only for a lone writer while you edit nothing, or when `--cwd` already is a worktree made for this work. A `write` launch outside a git repository fails unless it has `--in-place`.
 
 ### Verdicts

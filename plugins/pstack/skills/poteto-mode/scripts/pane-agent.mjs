@@ -69,7 +69,7 @@ export function briefText(userBrief, { run, access, name, parent }) {
   const nesting = access === "write" ? `
 ## Launching your own pane agents
 
-You may launch pane agents of your own with \`node ${script} launch ...\`. Your name prefix and multiplexer are applied for you, so \`--name fix\` launches \`${name}-fix\`. Every later \`send\`, \`wait\`, \`peek\`, and \`close\` takes the full name the launch printed. When one of your agents asks a question you cannot answer from this brief, write your own question to ${question} that quotes it and names the agent, ask your parent as above, and end your turn. When the answer arrives, pass it down with \`node ${script} send --name <full-name> --text <answer> --answer <questionId>\`.
+You may launch pane agents of your own with \`node ${script} launch ...\`. They run in your working directory, not in worktrees of their own, so give two writers separate files. Your name prefix and multiplexer are applied for you, so \`--name fix\` launches \`${name}-fix\`. Every later \`send\`, \`wait\`, \`peek\`, and \`close\` takes the full name the launch printed. When one of your agents asks a question you cannot answer from this brief, write your own question to ${question} that quotes it and names the agent, ask your parent as above, and end your turn. When the answer arrives, pass it down with \`node ${script} send --name <full-name> --text <answer> --answer <questionId>\`.
 ` : "";
   return `${userBrief.trimEnd()}
 
@@ -131,8 +131,12 @@ function addWorktree(name, from) {
   if (basename(common) !== ".git") throw new Error(`${from} is not in a repository with a .git directory, so it cannot get a worktree; pass --in-place`);
   const repo = dirname(common);
   const tree = { repo, path: `${repo}__worktrees/pstack-${name}`, branch: `pstack/${name}`, base: git(from, ["rev-parse", "HEAD"]) };
+  const taken = sh("git", ["-C", repo, "rev-parse", "--verify", "--quiet", `refs/heads/${tree.branch}`]).status === 0;
+  if (taken || existsSync(tree.path)) {
+    throw new Error(`${tree.branch} or ${tree.path} is left from an earlier ${name}; merge the branch, then remove the worktree and delete the branch, or launch under another --name`);
+  }
   git(repo, ["worktree", "add", "-b", tree.branch, tree.path, tree.base]);
-  return tree;
+  return { ...tree, cwd: resolve(tree.path, git(from, ["rev-parse", "--show-prefix"])) };
 }
 
 function removeWorktree({ repo, path, branch, base }) {
@@ -601,28 +605,30 @@ export function launch(options, deps) {
   if (/[,()\s]/.test(script)) throw new Error(`Helper path ${script} contains a comma, parenthesis, or space, which breaks the agent's ask-parent command; install pstack under a plain path`);
 
   ownedPrivateDir(panesRoot(env));
-  const worktree = access === "write" && !inPlace ? addWorktree(name, resolve(cwd)) : null;
-  mkdirSync(run, { recursive: true });
-  const parent = parentOf(muxId, env);
-  writeFileSync(join(run, "brief.md"), briefText(readFileSync(brief, "utf8"), { run, access, name, parent }));
-  const state = {
-    name, mux: muxId, harness, model, effort, access, run, cwd: worktree?.path ?? resolve(cwd), worktree, parent,
-    ids: { server: muxes[muxId].server(env) ?? null }, startedAt: new Date().toISOString(),
-  };
-  saveState(state);
-
-  const spec = harnesses[harness];
-  const promptArgs = fill(spec.prompt ?? ["{prompt}"], { prompt: launchPrompt(run) });
+  // A nested agent cannot create a worktree from inside a Codex sandbox, and its child needs its uncommitted edits, so it runs in place.
+  const worktree = access === "write" && !inPlace && !self ? addWorktree(name, resolve(cwd)) : null;
+  let state = null;
   try {
+    mkdirSync(run, { recursive: true });
+    const parent = parentOf(muxId, env);
+    writeFileSync(join(run, "brief.md"), briefText(readFileSync(brief, "utf8"), { run, access, name, parent }));
+    state = {
+      name, mux: muxId, harness, model, effort, access, run, cwd: worktree?.cwd ?? resolve(cwd), worktree, parent,
+      ids: { server: muxes[muxId].server(env) ?? null }, startedAt: new Date().toISOString(),
+    };
+    saveState(state);
+    const spec = harnesses[harness];
+    const promptArgs = fill(spec.prompt ?? ["{prompt}"], { prompt: launchPrompt(run) });
     const args = harnessArgs(harness, { model, effort, access, run });
     const started = mux.launch(state, { command: spec.command, args, cwd: state.cwd, promptArgs, promptFirst: spec.promptFirst });
-    if (!wait) return { name, mux: muxId, run, launched: true, ...(worktree && { worktree }) };
+    if (!wait) return { name, mux: muxId, run, launched: true, ...(worktree && { worktree: worktree.path }) };
     const settled = started ?? (mux.initial ? mux.initial(state, timeoutMs) : { kind: "rest" });
     return conclude(state, mux, withBrief(state, mux, settled, timeoutMs), { timeoutMs });
   } catch (error) {
-    try { mux.close?.(state); } finally {
+    try { if (state) mux.close?.(state); } finally {
       rmSync(run, { recursive: true, force: true });
-      if (worktree) removeWorktree(worktree);
+      const left = worktree && removeWorktree(worktree);
+      if (left && !left.removed) error.message += `; the worktree ${left.path} has changes and was kept`;
     }
     throw error;
   }

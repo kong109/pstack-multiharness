@@ -54,6 +54,7 @@ export const ownProvider = (model, catalog = providers) =>
   catalog.find((p) => p.harness === model) ?? (model.includes("/") || aliases.has(model) ? undefined : providerOf(model, catalog));
 
 // A provider's harness name stands for its default model, and a model with a provider runs on that provider's harness unless the entry names one.
+// The registry maps only what a subscription allows. A `provider/model` id runs on any harness unchecked, for an operator with an API key or an open-weight model.
 // `harness` is left out when it is the session's own. A session outside the registry runs every entry without an arrow natively.
 export function resolveEntry({ model: written, harness: chosen, explicitEffort }, { defaultEffort = "session", ...given } = {}) {
   const { harnesses: list, providers: catalog, native: home } = { ...registry, ...given };
@@ -74,7 +75,7 @@ export function resolveEntry({ model: written, harness: chosen, explicitEffort }
     const template = list[harness].providers?.[provider.id];
     if (!template) {
       const serving = Object.keys(list).filter((h) => list[h].providers?.[provider.id]);
-      throw new Error(`${harness} runs no ${provider.label} models, so it cannot run ${model}${serving.length ? ` (use ${serving.map((h) => `${written}->${h}`).join(" or ")})` : ""}`);
+      throw new Error(`${harness} runs no ${provider.label} models, so it cannot run ${model}${serving.length ? ` (use ${serving.map((h) => `${written}->${h}`).join(" or ")})` : ""}; with an API key, write the id ${harness} takes, as in \`provider/${model}->${harness}\``);
     }
     id = template.replaceAll("{model}", model);
   }

@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import {
-  chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync,
+  chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
+import { spawnSync } from "node:child_process";
 import { isAbsolute, join } from "node:path";
 import {
   askParent, briefText, close, detectMux, harnessArgs, launch, launchPrompt, list, main, nudgePrompt, panesRoot, peek, script, send, sh, waitFor,
@@ -268,6 +269,85 @@ test("a failed launch tears down its tab and run directory", () => {
   expect(() => launch(options(), { runner, env: herdrEnv() })).toThrow("agent start failed");
   expect(calls.some((c) => c[2] === "close")).toBe(true);
   expect(existsSync(runDir())).toBe(false);
+});
+
+const gitIn = (cwd, ...args) => {
+  const r = spawnSync("git", ["-C", cwd, ...args], { encoding: "utf8" });
+  if (r.status !== 0) throw new Error(r.stderr);
+  return r.stdout.trim();
+};
+function repo() {
+  const dir = join(realpathSync(root), "repo");
+  mkdirSync(dir);
+  gitIn(dir, "init", "-q", "-b", "main");
+  writeFileSync(join(dir, "a.txt"), "committed\n");
+  gitIn(dir, "add", "a.txt");
+  gitIn(dir, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "init");
+  return dir;
+}
+const finished = () => scripted({ ...herdrBase, "herdr agent prompt": () => { write("result.md", "r\n"); return agent("done"); } });
+const branches = (dir) => gitIn(dir, "branch", "--format=%(refname:short)").split("\n");
+
+test("a write launch runs in a new worktree of the committed HEAD, and close removes it with its unused branch", () => {
+  const dir = repo();
+  writeFileSync(join(dir, "a.txt"), "uncommitted\n");
+  const { runner, calls } = finished();
+  const out = launch(options({ access: "write", cwd: dir }), { runner, env: herdrEnv() });
+  const tree = `${dir}__worktrees/pstack-arena-a`;
+  expect(out).toMatchObject({ verdict: "done", worktree: tree });
+  expect(calls[0]).toContain(tree);
+  expect(readFileSync(join(tree, "a.txt"), "utf8")).toBe("committed\n");
+  expect(gitIn(tree, "branch", "--show-current")).toBe("pstack/arena-a");
+  expect(list({ env: herdrEnv() })[0].worktree).toBe(tree);
+  expect(close("arena-a", {}, { runner, env: herdrEnv() }).worktree).toEqual({ path: tree, removed: true, branch: null });
+  expect(existsSync(tree)).toBe(false);
+  expect(branches(dir)).toEqual(["main"]);
+  expect(readFileSync(join(dir, "a.txt"), "utf8")).toBe("uncommitted\n");
+});
+
+test("close keeps a worktree with uncommitted changes, and keeps the branch of a worker that committed", () => {
+  const dir = repo();
+  const { runner } = finished();
+  launch(options({ access: "write", cwd: dir }), { runner, env: herdrEnv() });
+  const tree = `${dir}__worktrees/pstack-arena-a`;
+  writeFileSync(join(tree, "a.txt"), "worker edit\n");
+  expect(close("arena-a", {}, { runner, env: herdrEnv() }).worktree).toEqual({ path: tree, removed: false, branch: "pstack/arena-a" });
+  expect(readFileSync(join(tree, "a.txt"), "utf8")).toBe("worker edit\n");
+  gitIn(tree, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-am", "work");
+  gitIn(dir, "worktree", "remove", tree);
+  const writesB = scripted({ ...herdrBase, "herdr agent prompt": () => { writeFileSync(join(root, "panes", "arena-b", "result.md"), "r\n"); return agent("done"); } });
+  launch(options({ access: "write", cwd: dir, name: "arena-b" }), { runner: writesB.runner, env: herdrEnv() });
+  const second = `${dir}__worktrees/pstack-arena-b`;
+  gitIn(second, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "work");
+  expect(close("arena-b", {}, { runner: writesB.runner, env: herdrEnv() }).worktree).toEqual({ path: second, removed: true, branch: "pstack/arena-b" });
+  expect(branches(dir)).toEqual(["main", "pstack/arena-a", "pstack/arena-b"]);
+});
+
+test("--in-place and read access run in the given directory with no worktree", () => {
+  const dir = repo();
+  const { runner, calls } = finished();
+  const out = launch(options({ access: "write", cwd: dir, inPlace: true }), { runner, env: herdrEnv() });
+  expect(out.worktree).toBeUndefined();
+  expect(calls[0]).toContain(dir);
+  close("arena-a", {}, { runner, env: herdrEnv() });
+  launch(options({ cwd: dir }), { runner, env: herdrEnv() });
+  expect(existsSync(`${dir}__worktrees`)).toBe(false);
+  expect(branches(dir)).toEqual(["main"]);
+});
+
+test("a write launch outside a git repository is refused before any pane opens", () => {
+  const { runner, calls } = finished();
+  expect(() => launch(options({ access: "write" }), { runner, env: herdrEnv() })).toThrow("git rev-parse");
+  expect(calls).toEqual([]);
+  expect(existsSync(runDir())).toBe(false);
+});
+
+test("a failed write launch removes its worktree and branch", () => {
+  const dir = repo();
+  const { runner } = scripted({ ...herdrBase, "herdr agent start": failJson("exec_failed", "no codex") });
+  expect(() => launch(options({ access: "write", cwd: dir }), { runner, env: herdrEnv() })).toThrow("agent start failed");
+  expect(existsSync(`${dir}__worktrees/pstack-arena-a`)).toBe(false);
+  expect(branches(dir)).toEqual(["main"]);
 });
 
 test("launch refuses bad input before touching a multiplexer", () => {

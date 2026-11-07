@@ -2,6 +2,10 @@
 
 This file is the release changelog, with one `## <version> - <title>` entry per release, newest first. The Cursor-to-Claude rewrite rules live in [`tools/substitutions.json`](tools/substitutions.json), and the [sync boundary](CONTRIBUTING.md#the-sync-boundary) in `CONTRIBUTING.md` defines how a change to upstream's skill content is declared.
 
+## 0.9.134 - Worktrees for writing pane agents
+
+A pane agent launched with `--access write` now runs in its own git worktree, so parallel writers no longer share one checkout with each other or with the session that launched them. Before this release `pane-agent.mjs` ran every agent in `--cwd`, and nothing created a worktree for a writer. [`pane-agent.mjs`](plugins/pstack/skills/poteto-mode/scripts/pane-agent.mjs) creates `<repo>__worktrees/pstack-<name>` on a new branch `pstack/<name>` from the committed `HEAD` of `--cwd`. It names the worktree in every verdict and in `list`. `close` removes a clean worktree and deletes a branch that has no new commits. It keeps a worktree with uncommitted changes and a branch with commits, and reports what it kept. `--in-place` restores the old behavior. A writing launch outside a git repository now fails unless it passes `--in-place`. The [Worktrees](plugins/pstack/skills/poteto-mode/references/foreign-harness.md#worktrees) section of the pane route says how to take the work back. The T3 Code route is unchanged, because `delegate_task` takes no working directory.
+
 ## 0.9.133 - pstack-multiharness on 0.9.132
 
 This release ports the pstack-multiharness fork onto upstream 0.9.132. It keeps upstream's sheet grammar, with a space before `@`, a `default effort:` line, and the family names Claude Code accepts, such as `opus @xhigh`.

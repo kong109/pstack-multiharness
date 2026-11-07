@@ -149,6 +149,7 @@ test("the migration turns old harness prefixes into the arrow form and leaves ev
   expect(after).toBe("# sheet\r\nfeature: gpt-6.1-sol @xhigh, opus @high\r\narena runners: opus, muse-wonder-full-1.0 @low,gemini-3.8-flash-low\r\nswarm workers: ollama:qwen3:8b\r\ndefault effort: high\r\n");
   expect(migrateText("role: codex:my-custom @low")).toBe("role: my-custom->codex @low");
   expect(migrateText("role: muse:muse-wonder-full-1.0@max, claude-opus-5-5@high, muse->omp@max")).toBe("role: muse-wonder-full-1.0 @max, claude-opus-5-5 @high, muse->omp@max");
+  expect(migrateText("contact: me@example.com")).toBe("contact: me@example.com");
   for (const role of ["feature", "arena runners", "swarm workers"]) expect(() => resolveRole(after, role)).not.toThrow();
 });
 

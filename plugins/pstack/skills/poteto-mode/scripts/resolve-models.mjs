@@ -116,6 +116,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(resolve(pr
       throw new Error('Usage: resolve-models.mjs [--session <harness>] <sheet|-> "role" ["default-models"]');
     }
     const text = file === "-" ? "" : readFileSync(file, "utf8");
+    if (values.session && !Object.hasOwn(harnesses, values.session)) {
+      console.error(`note: ${values.session} is not a registered harness (${Object.keys(harnesses).join(", ")}), so every entry without an arrow runs natively`);
+    }
     console.log(JSON.stringify(resolveRole(text, role, defaults, { session: values.session }), null, 2));
   } catch (error) {
     console.error(error.message);

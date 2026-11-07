@@ -158,8 +158,6 @@ function releaseWorkrex({ repo, path, branch, base, workrex: handle }, keep, run
   return { path, removed: !existsSync(path), branch: branchTip(repo, branch) ? branch : null };
 }
 
-const releaseWorktree = (tree, keep, runner) => (tree.workrex ? releaseWorkrex(tree, keep, runner) : removeWorktree(tree));
-
 function herdrJson(runner, args, timeoutMs) {
   const r = runner("herdr", args, { timeoutMs: timeoutMs && timeoutMs + 15_000 });
   const text = (r.status === 0 ? r.stdout : r.stderr || r.stdout).trim();
@@ -495,7 +493,7 @@ export function rexMux({ runner, env, clock }) {
   // The shell a Workrex tab types the harness into outlives it, so the harness has exited once that shell is back in the foreground.
   const gone = (state) => {
     const process = rexBlock(runner, env, state.ids.session, state.ids.pane, "process");
-    return !process || process.last_exit !== null || (state.ids.shell === true && process.child?.pid !== undefined && process.foreground?.pid === process.child.pid);
+    return !process || process.last_exit !== null || (state.ids.shell && process.child?.pid !== undefined && process.foreground?.pid === process.child.pid);
   };
   // A done or idle record from an earlier turn stays until the harness reports again, so only one newer than the turn counts.
   const status = (state, turnAt) => {
@@ -805,7 +803,7 @@ export function launch(options, deps) {
   } catch (error) {
     try { if (state) mux.close?.(state); } finally {
       rmSync(run, { recursive: true, force: true });
-      const left = worktree && releaseWorktree(worktree, false, deps.runner);
+      const left = worktree && (worktree.workrex ? releaseWorkrex(worktree, false, deps.runner) : removeWorktree(worktree));
       if (left && !left.removed) error.message += `; the worktree ${left.path} has changes and was kept`;
     }
     throw error;

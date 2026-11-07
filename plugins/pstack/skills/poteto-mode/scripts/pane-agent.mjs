@@ -714,7 +714,7 @@ function pendingQuestion(run) {
 function conclude(state, mux, settled, { timeoutMs }) {
   const base = {
     name: state.name, mux: mux.id, harness: state.harness, model: state.model,
-    ...(state.worktree && { worktree: state.worktree.path }), ...(settled.screenLabel && { screenLabel: settled.screenLabel }),
+    ...(state.worktree && { worktree: state.worktree.path, route: state.worktree.workrex ? "workrex" : "git" }), ...(settled.screenLabel && { screenLabel: settled.screenLabel }),
   };
   const questionFile = join(state.run, "question.md");
   const resultFile = join(state.run, "result.md");

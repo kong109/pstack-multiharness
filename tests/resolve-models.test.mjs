@@ -52,35 +52,129 @@ test("CLI emits JSON and does not ignore missing files", () => {
   expect(missing.stdout).toBe("");
 });
 
-test("a registered harness prefix names another harness and keeps the model and effort", () => {
-  expect(resolveRole("role: codex:gpt-6.1-sol @xhigh, opus @high", "role")).toEqual([
+test("a model runs on its provider's harness, and the native harness is left out", () => {
+  expect(resolveRole("role: gpt-6.1-sol @xhigh, opus @high, claude-opus-5-5", "role")).toEqual([
+    { harness: "codex", model: "gpt-6.1-sol", effort: "xhigh" },
+    { model: "opus", effort: "high" },
+    { model: "claude-opus-5-5", effort: null },
+  ]);
+});
+
+test("->harness names the harness, with the effort after a space or straight after the harness", () => {
+  expect(resolveRole("role: gpt-6.1-sol->codex @xhigh, opus->claude@high", "role")).toEqual([
     { harness: "codex", model: "gpt-6.1-sol", effort: "xhigh" },
     { model: "opus", effort: "high" },
   ]);
-  expect(parseEntry("claude:opus")).toEqual({ harness: "claude", model: "opus", explicitEffort: undefined });
+  expect(parseEntry("muse->pi@max")).toEqual({ model: "muse", harness: "pi", explicitEffort: "max" });
 });
 
-test("a prefix that is not a registered harness stays part of the model id", () => {
-  expect(resolveRole("role: ollama:qwen3:8b", "role")).toEqual([{ model: "ollama:qwen3:8b", effort: null }]);
+test("a provider's harness name stands for that provider's default model", () => {
+  expect(resolveRole("role: muse @low, codex, claude @max, grok, agy", "role")).toEqual([
+    { harness: "muse", model: "muse-wonder-full-1.0", effort: "low" },
+    { harness: "codex", model: "gpt-6.1-sol", effort: null },
+    { model: "opus", effort: "max" },
+    { harness: "grok", model: "grok-4.7", effort: null },
+    { harness: "agy", model: "gemini-3.8-flash-high", effort: null },
+  ]);
+});
+
+const fixture = {
+  harnesses: {
+    claude: { effort: ["--effort", "{effort}"], providers: { anthropic: "{model}" } },
+    muse: { effort: ["--reasoning-effort", "{effort}"], providers: { meta: "{model}" } },
+    pi: { effort: ["--thinking", "{effort}"], providers: { meta: "muse/{model}", openai: "openai-codex/{model}" } },
+  },
+};
+
+test("a multi-provider harness gets the model id in its own provider namespace", () => {
+  expect(resolveRole("role: muse->pi@max, gpt-6.1-sol->pi, openai-codex/gpt-6-luna->pi @low", "role", undefined, fixture)).toEqual([
+    { harness: "pi", model: "muse/muse-wonder-full-1.0", effort: "max" },
+    { harness: "pi", model: "openai-codex/gpt-6.1-sol", effort: null },
+    { harness: "pi", model: "openai-codex/gpt-6-luna", effort: "low" },
+  ]);
+});
+
+test("a harness that serves no model of that provider fails and names one that does", () => {
+  expect(() => resolveRole("role: opus->pi", "role", undefined, fixture)).toThrow("pi runs no Anthropic (Claude Code) models, so it cannot run opus (use opus->claude)");
+  expect(() => resolveRole("role: opus->codex", "role")).toThrow("use opus->claude");
+  expect(() => resolveRole("role: muse->nope", "role")).toThrow("Unknown harness: nope");
+});
+
+test("a model no provider claims stays on the native harness unchanged", () => {
+  expect(resolveRole("role: ollama:qwen3:8b, provider/a#max", "role")).toEqual([
+    { model: "ollama:qwen3:8b", effort: null }, { model: "provider/a#max", effort: null },
+  ]);
+});
+
+test("the old harness: prefix fails with the arrow form in the message", () => {
+  expect(() => resolveRole("role: codex:gpt-6.1-sol @xhigh", "role")).toThrow("`gpt-6.1-sol->codex @xhigh`");
+  expect(() => resolveRole("role: muse:muse-wonder-full-1.0", "role")).toThrow("`muse-wonder-full-1.0->muse`");
 });
 
 test("the default effort reaches a harness entry unless that harness takes no effort", () => {
-  expect(resolveRole("default effort: high\nrole: codex:gpt-6.1-sol, agy:gemini-3.8-flash-low", "role")).toEqual([
+  expect(resolveRole("default effort: high\nrole: gpt-6.1-sol, gemini-3.8-flash-low", "role")).toEqual([
     { harness: "codex", model: "gpt-6.1-sol", effort: "high" },
     { harness: "agy", model: "gemini-3.8-flash-low", effort: null },
   ]);
 });
 
-test("a harness entry needs a concrete model", () => {
-  for (const entry of ["codex:", "codex:auto", "codex:inherit-parent @high"]) {
+test("an arrow entry needs a model, a harness, and at most one effort", () => {
+  for (const entry of ["->codex", "auto->codex", "inherit-parent->codex @high", "gpt->", "gpt->Codex", "gpt->codex@", "gpt->codex@low @high", "gpt->codex@low@high"]) {
     expect(() => resolveRole(`role: ${entry}`, "role")).toThrow("Invalid model entry");
   }
 });
 
-test("grok, agy and muse are registered harnesses, and the model id keeps its dots and dashes", () => {
-  expect(resolveRole("role: grok:grok-4.7 @xhigh, agy:gemini-3.8-flash-high, muse:muse-wonder-full-1.0 @max", "role")).toEqual([
+test("grok, agy and muse model ids keep their dots and dashes", () => {
+  expect(resolveRole("role: grok-4.7 @xhigh, gemini-3.8-flash-high, muse-wonder-full-1.0 @max", "role")).toEqual([
     { harness: "grok", model: "grok-4.7", effort: "xhigh" },
     { harness: "agy", model: "gemini-3.8-flash-high", effort: null },
     { harness: "muse", model: "muse-wonder-full-1.0", effort: "max" },
+  ]);
+});
+
+test("pi, omp and opencode give each provider's model its own id prefix", () => {
+  expect(resolveRole("role: gpt-6.1-sol->pi @low, muse->omp@max, grok->omp, gpt-6.1-sol->opencode", "role")).toEqual([
+    { harness: "pi", model: "openai-codex/gpt-6.1-sol", effort: "low" },
+    { harness: "omp", model: "muse-code/muse-wonder-full-1.0", effort: "max" },
+    { harness: "omp", model: "xai-oauth/grok-4.7", effort: null },
+    { harness: "opencode", model: "openai/gpt-6.1-sol", effort: null },
+  ]);
+  expect(() => resolveRole("role: muse->pi", "role")).toThrow("pi runs no Meta (Muse) models, so it cannot run muse-wonder-full-1.0 (use muse->muse or muse->omp)");
+});
+
+test("the migration turns old harness prefixes into the arrow form and leaves everything else as written", async () => {
+  const { migrateText } = await import("../plugins/pstack/skills/poteto-mode/scripts/migrate-sheet.mjs");
+  const before = "# sheet\r\nfeature: codex:gpt-6.1-sol @xhigh, opus @high\r\narena runners: claude:opus, muse:muse-wonder-full-1.0 @low,agy:gemini-3.8-flash-low\r\nswarm workers: ollama:qwen3:8b\r\ndefault effort: high\r\n";
+  const after = migrateText(before);
+  expect(after).toBe("# sheet\r\nfeature: gpt-6.1-sol @xhigh, opus @high\r\narena runners: opus, muse-wonder-full-1.0 @low,gemini-3.8-flash-low\r\nswarm workers: ollama:qwen3:8b\r\ndefault effort: high\r\n");
+  expect(migrateText("role: codex:my-custom @low")).toBe("role: my-custom->codex @low");
+  expect(migrateText("role: muse:muse-wonder-full-1.0@max, claude-opus-5-5@high, muse->omp@max")).toBe("role: muse-wonder-full-1.0 @max, claude-opus-5-5 @high, muse->omp@max");
+  expect(migrateText("contact: me@example.com")).toBe("contact: me@example.com");
+  for (const role of ["feature", "arena runners", "swarm workers"]) expect(() => resolveRole(after, role)).not.toThrow();
+});
+
+test("the session's own harness is the one left out, and a session outside the registry keeps bare entries native", () => {
+  const sheet = "arena runners: opus @high, opus->claude, gpt-6.1-sol @xhigh, ollama:qwen3:8b";
+  expect(resolveRole(sheet, "arena runners", undefined, { session: "codex" })).toEqual([
+    { harness: "claude", model: "opus", effort: "high" },
+    { harness: "claude", model: "opus", effort: null },
+    { model: "gpt-6.1-sol", effort: "xhigh" },
+    { model: "ollama:qwen3:8b", effort: null },
+  ]);
+  expect(resolveRole("r: gpt-5.4, gemini-2.5-pro @high, auto, grok-4.7->grok", "r", undefined, { session: "copilot" })).toEqual([
+    { model: "gpt-5.4", effort: null },
+    { model: "gemini-2.5-pro", effort: "high" },
+    { model: null, effort: null },
+    { harness: "grok", model: "grok-4.7", effort: null },
+  ]);
+  expect(() => resolveRole("r: codex:gpt-5->pi", "r")).toThrow("name the harness after the model, as in `gpt-5->pi`");
+});
+
+test("the migration keeps an arrow whose harness no provider of that model owns, so the entry runs where it did in any session", async () => {
+  const { migrateText } = await import("../plugins/pstack/skills/poteto-mode/scripts/migrate-sheet.mjs");
+  expect(migrateText("role: claude:local-thing, claude:opus @high")).toBe("role: local-thing->claude, opus @high");
+  expect(resolveRole(migrateText("role: claude:local-thing, claude:opus @high"), "role", undefined, { session: "codex" })).toEqual([
+    { harness: "claude", model: "local-thing", effort: null },
+    { harness: "claude", model: "opus", effort: "high" },
   ]);
 });

@@ -135,7 +135,7 @@ pre.out { margin: 0; font-family: var(--mono); font-size: 12.5px; white-space: p
   <header>
     <div class="eyebrow">pstack routing</div>
     <h1>Role to model map</h1>
-    <p>Each row is one pstack role. Pick the provider and model for each slot, then tick an effort level. Ticking a level clears the others in that slot. Clear every box to run at the session's own effort. Panel roles run one worker per slot, so you can add, remove or repeat slots. Load a preset to fill every role it names. Changed rows are marked. The block at the bottom is a ready message to paste back into Claude Code.</p>
+    <p>Each row is one pstack role. Pick the provider, model and harness for each slot, then tick an effort level. Ticking a level clears the others in that slot. Clear every box to run at the session's own effort. Panel roles run one worker per slot, so you can add, remove or repeat slots. Load a preset to fill every role it names. Changed rows are marked. The block at the bottom is a ready message to paste back into Claude Code.</p>
     <div class="meta" id="meta"></div>
     <div class="legend" id="legend"></div>
   </header>
@@ -163,6 +163,7 @@ pre.out { margin: 0; font-family: var(--mono); font-size: 12.5px; white-space: p
 <script>
 const DATA = /*__PSTACK_DATA__*/null;
 const PROVIDERS = DATA.providers;
+const HARNESSES = DATA.harnesses;
 const ALIASES = ["inherit-parent", "auto"];
 const PANEL = /(runners|pool|reviewers)$/;
 const NOTES = {
@@ -185,39 +186,49 @@ const NOTES = {
   "interrogate reviewers": "interrogate: one adversarial reviewer per slot."
 };
 function digest(text) { let h = 5381; for (let i = 0; i < text.length; i++) h = ((h * 33) ^ text.charCodeAt(i)) >>> 0; return h.toString(36); }
-const STORE = "pstack-effort:v3:" + DATA.sheetPath + ":" + digest(DATA.lines.join("\n"));
+const STORE = "pstack-effort:v4:" + DATA.sheetPath + ":" + digest(DATA.lines.join("\n"));
 
 function clone(x) { return JSON.parse(JSON.stringify(x)); }
 function isAlias(s) { return ALIASES.includes(s.model); }
-function byHarness(h) { return PROVIDERS.find(p => p.harness === h); }
+function byId(id) { return PROVIDERS.find(p => p.id === id); }
 function modelOf(s) {
-  const p = byHarness(s.harness);
-  return p && p.models.find(m => m.slug === s.model);
+  const p = byId(s.provider);
+  const slug = p && s.model === p.harness ? p.default : s.model;
+  return p && p.models.find(m => m.slug === slug);
 }
-function writesHarnessPrefix(s) { return !isAlias(s) && (s.prefixed || s.harness !== DATA.native); }
-function modelDefault(s) {
+function ownHarness(s) { const p = byId(s.provider); return !s.harness || Boolean(p && s.harness === p.harness); }
+function servingHarnesses(id) { return Object.keys(HARNESSES).filter(h => HARNESSES[h].providers.includes(id)); }
+function effortsOf(s) {
   const m = modelOf(s);
-  return m && !m.efforts.length ? "" : DATA.defaultEffort;
+  if (!m) return null;
+  const h = !ownHarness(s) && HARNESSES[s.harness];
+  if (!h) return m.efforts;
+  if (!h.takesEffort) return [];
+  return h.efforts || m.efforts;
+}
+function modelDefault(s) {
+  const list = effortsOf(s);
+  return list && !list.length ? "" : DATA.defaultEffort;
 }
 function clearEffort(s) { s.effort = ""; }
 function unsupportedEffort(s) {
-  const m = modelOf(s);
-  return Boolean(m && s.effort && !m.efforts.includes(s.effort));
+  const list = effortsOf(s);
+  return Boolean(list && s.effort && !list.includes(s.effort));
 }
 function entry(s) {
-  return (writesHarnessPrefix(s) ? s.harness + ":" : "") + s.model + (s.effort ? " @" + s.effort : "");
+  return s.model + (s.harness ? "->" + s.harness : "") + (s.effort ? " @" + s.effort : "");
 }
 function line(r) { return r.role + ": " + r.slots.map(entry).join(", "); }
 
 const original = DATA.roles.map(r => ({
   role: r.role, line: r.line,
-  slots: r.slots.map(s => ({ harness: s.harness || DATA.native, prefixed: Boolean(s.harness), model: s.model, effort: s.effort }))
+  slots: r.slots.map(s => ({ provider: s.provider, model: s.model, harness: s.harness, effort: s.effort }))
 }));
 let state = clone(original);
 try {
   const saved = JSON.parse(localStorage.getItem(STORE) || "null");
   const fits = saved && saved.length === original.length &&
-    saved.every((r, i) => r.role === original[i].role && r.slots.every(s => "harness" in s && "model" in s));
+    saved.every((r, i) => r.role === original[i].role && r.slots.every(s => "provider" in s && "harness" in s && "model" in s));
   if (fits) state = saved;
 } catch (e) {}
 
@@ -239,35 +250,36 @@ function renderMeta() {
   m.append(el("span", { text: "read " + DATA.generated }));
   const lg = document.getElementById("legend");
   lg.textContent = "Providers: " + PROVIDERS.map(p => p.label + " runs on " + p.harness).join("; ") +
-    ". A slot on another harness runs as a T3 Code subagent inside T3 Code, otherwise in its own herdr tab, tuios window, tmux window, or Rex tab.";
+    ". A slot can name another harness that serves its provider, written as model->harness. A slot on a harness other than " + DATA.native +
+    " runs as a T3 Code subagent inside T3 Code, otherwise in its own herdr tab, tuios window, tmux window, or Rex tab.";
 }
 
-function changeProvider(s, harness) {
-  const next = byHarness(harness);
-  s.harness = harness;
-  s.prefixed = false;
+function changeProvider(s, id) {
+  const next = byId(id);
+  s.provider = id;
+  if (s.harness && !servingHarnesses(id).includes(s.harness)) s.harness = "";
   if (!next.models.some(m => m.slug === s.model)) s.model = next.models[0].slug;
   if (unsupportedEffort(s)) clearEffort(s);
 }
 
 function providerSelect(r, s, si, ri) {
   const sel = el("select", { id: `p-${ri}-${si}`, "aria-label": `${r.role} slot ${si + 1} provider` });
-  PROVIDERS.forEach(p => {
-    const o = el("option", { value: p.harness, text: p.label });
-    if (p.harness === s.harness) o.selected = true;
-    sel.append(o);
-  });
-  if (!byHarness(s.harness)) {
-    const cur = el("option", { value: s.harness, text: "Current: " + s.harness });
+  if (!byId(s.provider)) {
+    const cur = el("option", { value: "", text: "Current: no listed provider" });
     cur.disabled = true; cur.selected = true; sel.append(cur);
   }
+  PROVIDERS.forEach(p => {
+    const o = el("option", { value: p.id, text: p.label });
+    if (p.id === s.provider) o.selected = true;
+    sel.append(o);
+  });
   sel.addEventListener("change", () => { changeProvider(s, sel.value); commit(); });
   return sel;
 }
 
 function modelSelect(r, s, si, ri) {
   const sel = el("select", { id: `m-${ri}-${si}`, "aria-label": `${r.role} slot ${si + 1} model` });
-  const provider = byHarness(s.harness);
+  const provider = byId(s.provider);
   const models = provider ? provider.models : [];
   if (!modelOf(s)) {
     const cur = el("option", { value: s.model, text: "Current: " + s.model + (provider ? " (not in the " + provider.label + " list)" : "") });
@@ -278,20 +290,48 @@ function modelSelect(r, s, si, ri) {
     if (m.slug === s.model) o.selected = true;
     sel.append(o);
   });
+  if (provider) {
+    const o = el("option", { value: provider.harness, text: provider.harness + " (default, " + provider.default + ")" });
+    if (s.model === provider.harness) o.selected = true;
+    sel.append(o);
+  }
   ALIASES.forEach(a => { const o = el("option", { value: a, text: a + " (parent session's model)" }); if (a === s.model) o.selected = true; sel.append(o); });
   sel.addEventListener("change", () => {
     s.model = sel.value;
-    if (isAlias(s)) { s.harness = DATA.native; s.prefixed = false; }
+    if (isAlias(s)) s.harness = "";
     if (s.effort && (!modelOf(s) || unsupportedEffort(s))) clearEffort(s);
     commit();
   });
   return sel;
 }
 
+function harnessSelect(r, s, si, ri) {
+  const sel = el("select", { id: `h-${ri}-${si}`, "aria-label": `${r.role} slot ${si + 1} harness` });
+  const provider = byId(s.provider);
+  const own = el("option", { value: "", text: provider.harness + " (provider's own)" });
+  if (!s.harness) own.selected = true;
+  sel.append(own);
+  const offered = servingHarnesses(provider.id);
+  offered.forEach(h => {
+    const o = el("option", { value: h, text: "->" + h });
+    if (h === s.harness) o.selected = true;
+    sel.append(o);
+  });
+  if (s.harness && !offered.includes(s.harness)) {
+    const cur = el("option", { value: s.harness, text: "Current: ->" + s.harness });
+    cur.disabled = true; cur.selected = true; sel.append(cur);
+  }
+  sel.addEventListener("change", () => {
+    s.harness = sel.value;
+    if (unsupportedEffort(s)) clearEffort(s);
+    commit();
+  });
+  return sel;
+}
+
 function effortBoxes(r, s, si, ri) {
-  const m = modelOf(s);
   const fs = el("fieldset", { class: "efforts" }, [el("legend", { text: `${r.role} slot ${si + 1} effort` })]);
-  m.efforts.forEach(e => {
+  effortsOf(s).forEach(e => {
     const id = `e-${ri}-${si}-${e}`;
     const cb = el("input", { type: "checkbox", id, value: e });
     cb.checked = s.effort === e;
@@ -302,9 +342,9 @@ function effortBoxes(r, s, si, ri) {
 }
 
 function effortNote(s) {
-  if (unsupportedEffort(s)) return `keeps effort ${s.effort}, which this model does not list`;
+  if (unsupportedEffort(s)) return `keeps effort ${s.effort}, which this ${ownHarness(s) ? "model" : "harness"} does not list`;
   if (s.effort) return "";
-  if (!modelOf(s).efforts.length) return "this harness takes no effort setting; the effort is part of the model";
+  if (!effortsOf(s).length) return "this harness takes no effort setting; the effort is part of the model";
   const inherited = modelDefault(s);
   return inherited ? `no box ticked: the sheet's default effort line sets ${inherited}` : "no box ticked: runs at the session's effort";
 }
@@ -329,12 +369,13 @@ function renderRoles() {
       if (isPanel) row.append(el("span", { class: "slot-n", text: String(si + 1) }));
       if (!isAlias(s)) row.append(providerSelect(r, s, si, ri));
       row.append(modelSelect(r, s, si, ri));
+      if (!isAlias(s) && byId(s.provider)) row.append(harnessSelect(r, s, si, ri));
       if (isAlias(s)) {
         row.append(el("span", { class: "session-note", text: "runs on the parent session's model and effort" }));
       } else if (!modelOf(s)) {
         row.append(el("span", { class: "session-note", text: "Current entry is preserved. Select a model to edit its effort." }));
       } else {
-        if (modelOf(s).efforts.length) row.append(effortBoxes(r, s, si, ri));
+        if (effortsOf(s).length) row.append(effortBoxes(r, s, si, ri));
         const note = effortNote(s);
         if (note) row.append(el("span", { class: "session-note", text: note }));
       }
@@ -395,9 +436,9 @@ function commit() { save(); renderRoles(); renderResponse(); }
 
 function presetLabel(p) { return p.scope + "/" + p.name; }
 function presetSlot(p, s) {
-  const slot = { harness: s.harness || DATA.native, prefixed: Boolean(s.harness), model: s.model, effort: s.effort };
-  const m = modelOf(slot);
-  if (!slot.effort && p.defaultEffort !== DATA.defaultEffort && !(m && !m.efforts.length)) slot.effort = p.defaultEffort;
+  const slot = { provider: s.provider, model: s.model, harness: s.harness, effort: s.effort };
+  const list = effortsOf(slot);
+  if (!slot.effort && p.defaultEffort !== DATA.defaultEffort && !(list && !list.length)) slot.effort = p.defaultEffort;
   return slot;
 }
 function loadPreset(p) {

@@ -2,34 +2,87 @@
 import { readFileSync, realpathSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { parseArgs } from "node:util";
 
 const token = /^[a-zA-Z0-9_./:#-]+$/;
+const harnessName = /^[a-z][a-z0-9-]*$/;
 
-export const harnesses = JSON.parse(readFileSync(new URL("./harnesses.json", import.meta.url), "utf8"));
+const readJson = (name) => JSON.parse(readFileSync(new URL(name, import.meta.url), "utf8"));
 
-export const takesEffort = (harness) => harnesses[harness].effort !== null;
+export const harnesses = readJson("./harnesses.json");
+export const { native, providers } = readJson("./providers.json");
+const registry = { harnesses, providers, native };
 
-export function parseEntry(entry) {
+export const takesEffort = (harness, list = harnesses) => list[harness].effort !== null;
+
+const aliases = new Set(["auto", "inherit-parent"]);
+
+export function parseEntry(entry, list = harnesses) {
   const text = entry.trim();
-  const match = text.match(/^(\S+?)(?:\s+@(\S+))?$/);
-  if (match && match[1].includes("@") && !match[2]) {
-    throw new Error(`Invalid model entry: ${text} (write the effort after a space, as in \`${text.replace("@", " @")}\`)`);
+  const invalid = (why) => new Error(`Invalid model entry: ${text}${why ? ` (${why})` : ""}`);
+  const [head, spaced, ...extra] = text.split(/\s+/);
+  if (extra.length || (spaced !== undefined && !/^@[^@]+$/.test(spaced))) throw invalid();
+  const arrow = head.indexOf("->");
+  const model = arrow < 0 ? head : head.slice(0, arrow);
+  let harness = null;
+  let explicitEffort = spaced?.slice(1);
+  if (arrow >= 0) {
+    const [name, joined, ...more] = head.slice(arrow + 2).split("@");
+    if (more.length || !harnessName.test(name) || (joined !== undefined && (!joined || explicitEffort !== undefined))) throw invalid();
+    harness = name;
+    explicitEffort ??= joined;
+  } else if (model.includes("@")) {
+    throw invalid(spaced ? "" : `write the effort after a space, as in \`${text.replace("@", " @")}\``);
   }
-  const [, head, explicitEffort] = match ?? [];
-  if (!head || !token.test(head) || (explicitEffort !== undefined && !token.test(explicitEffort))) {
-    throw new Error(`Invalid model entry: ${text}`);
+  const colon = model.indexOf(":");
+  if (colon > 0 && Object.hasOwn(list, model.slice(0, colon))) {
+    throw invalid(`name the harness after the model, as in \`${model.slice(colon + 1)}->${harness ?? model.slice(0, colon)}${spaced ? ` ${spaced}` : ""}\``);
   }
-  const colon = head.indexOf(":");
-  const harness = colon > 0 && Object.hasOwn(harnesses, head.slice(0, colon)) ? head.slice(0, colon) : null;
-  const model = harness ? head.slice(colon + 1) : head;
-  if (!model) throw new Error(`Invalid model entry: ${text}`);
-  if (harness && (model === "auto" || model === "inherit-parent")) {
-    throw new Error(`Invalid model entry: ${text} (a ${harness}: entry names a concrete model)`);
-  }
-  return { harness, model, explicitEffort };
+  if (!model || !token.test(model) || (explicitEffort !== undefined && !token.test(explicitEffort))) throw invalid();
+  if (harness && aliases.has(model)) throw invalid(`a ->${harness} entry names a model or a provider`);
+  return { model, harness, explicitEffort };
 }
 
-export function resolveRole(text, role, defaults) {
+export const providerOf = (model, catalog = providers) =>
+  catalog.find((p) => p.models.some((m) => m.slug === model) || (p.match && new RegExp(p.match).test(model)));
+
+export const ownProvider = (model, catalog = providers) =>
+  catalog.find((p) => p.harness === model) ?? (model.includes("/") || aliases.has(model) ? undefined : providerOf(model, catalog));
+
+// A provider's harness name stands for its default model, and a model with a provider runs on that provider's harness unless the entry names one.
+// `harness` is left out when it is the session's own. A session outside the registry runs every entry without an arrow natively.
+export function resolveEntry({ model: written, harness: chosen, explicitEffort }, { defaultEffort = "session", ...given } = {}) {
+  const { harnesses: list, providers: catalog, native: home } = { ...registry, ...given };
+  const session = given.session ?? home;
+  const named = catalog.find((p) => p.harness === written);
+  if (!chosen && !named && !Object.hasOwn(list, session)) {
+    const effort = explicitEffort ?? defaultEffort;
+    return { model: aliases.has(written) ? null : written, effort: effort === "session" ? null : effort };
+  }
+  const model = named ? named.default : written;
+  const provider = ownProvider(written, catalog);
+  const harness = chosen ?? provider?.harness ?? session;
+  if (!Object.hasOwn(list, harness)) {
+    throw new Error(`Unknown harness: ${harness} in ${written}->${harness} (registered: ${Object.keys(list).join(", ")})`);
+  }
+  let id = model;
+  if (provider) {
+    const template = list[harness].providers?.[provider.id];
+    if (!template) {
+      const serving = Object.keys(list).filter((h) => list[h].providers?.[provider.id]);
+      throw new Error(`${harness} runs no ${provider.label} models, so it cannot run ${model}${serving.length ? ` (use ${serving.map((h) => `${written}->${h}`).join(" or ")})` : ""}`);
+    }
+    id = template.replaceAll("{model}", model);
+  }
+  const effort = explicitEffort ?? (takesEffort(harness, list) ? defaultEffort : undefined);
+  return {
+    ...(harness !== session && { harness }),
+    model: aliases.has(id) ? null : id,
+    effort: effort === undefined || effort === "session" ? null : effort,
+  };
+}
+
+export function resolveRole(text, role, defaults, options = {}) {
   let value;
   let defaultEffort = "session";
   for (const source of text.split(/\r?\n/)) {
@@ -52,26 +105,21 @@ export function resolveRole(text, role, defaults) {
   }
   value ??= defaults;
   if (!value) throw new Error(`No mapping or defaults for role: ${role}`);
-  return value.split(",").map((entry) => {
-    const { harness, model, explicitEffort } = parseEntry(entry);
-    const inherited = harness && !takesEffort(harness) ? undefined : defaultEffort;
-    const effort = explicitEffort ?? inherited;
-    return {
-      ...(harness && { harness }),
-      model: model === "auto" || model === "inherit-parent" ? null : model,
-      effort: effort === undefined || effort === "session" ? null : effort,
-    };
-  });
+  return value.split(",").map((entry) => resolveEntry(parseEntry(entry, options.harnesses), { ...options, defaultEffort }));
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(resolve(process.argv[1]))).href) {
   try {
-    const [file, role, defaults, ...extra] = process.argv.slice(2);
+    const { values, positionals } = parseArgs({ allowPositionals: true, options: { session: { type: "string" } } });
+    const [file, role, defaults, ...extra] = positionals;
     if (!file || !role || extra.length) {
-      throw new Error('Usage: resolve-models.mjs <sheet|-> "role" ["default-models"]');
+      throw new Error('Usage: resolve-models.mjs [--session <harness>] <sheet|-> "role" ["default-models"]');
     }
     const text = file === "-" ? "" : readFileSync(file, "utf8");
-    console.log(JSON.stringify(resolveRole(text, role, defaults), null, 2));
+    if (values.session && !Object.hasOwn(harnesses, values.session)) {
+      console.error(`note: ${values.session} is not a registered harness (${Object.keys(harnesses).join(", ")}), so every entry without an arrow runs natively`);
+    }
+    console.log(JSON.stringify(resolveRole(text, role, defaults, { session: values.session }), null, 2));
   } catch (error) {
     console.error(error.message);
     process.exitCode = 1;

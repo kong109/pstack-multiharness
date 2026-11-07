@@ -4,7 +4,8 @@ import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
-import { parseSheet } from "./sheet.mjs";
+import { ownProvider, harnesses as registry } from "../../poteto-mode/scripts/resolve-models.mjs";
+import { allRoleLabels, parseSheet } from "./sheet.mjs";
 import { listPresets, presetDirectory } from "../../pstack-preset/scripts/presets.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -49,13 +50,32 @@ export function readPresets(project = process.cwd(), home = homedir()) {
   });
 }
 
-export function pageData({ sheetPath, scope, native, generated, text, catalog, presets = [] }) {
+export function providerFor(model, providers, native) {
+  if (model === "auto" || model === "inherit-parent") return providers.find((p) => p.harness === native)?.id ?? "";
+  return ownProvider(model, providers)?.id ?? "";
+}
+
+export const harnessChoices = (list) => Object.fromEntries(Object.entries(list).map(([name, spec]) => [name, {
+  providers: Object.keys(spec.providers ?? {}), takesEffort: spec.effort !== null, efforts: spec.efforts ?? null,
+}]));
+
+export function pageData({ sheetPath, scope, native, generated, text, catalog, presets = [], harnesses = registry }) {
   const { lines, roles, defaultEffort } = parseSheet(text);
   if (!roles.length) throw new Error(`no role lines found in ${sheetPath}`);
+  const withProvider = (list) => list.map((r) => ({ ...r, slots: r.slots.map((s) => ({ ...s, provider: providerFor(s.model, catalog.providers, native) })) }));
   return {
-    sheetPath, scope, native, generated, lines, roles, defaultEffort, presets,
+    sheetPath, scope, native, generated, lines, defaultEffort,
+    roles: withProvider(roles),
+    presets: presets.map((p) => ({ ...p, roles: withProvider(p.roles) })),
     providers: buildProviders(catalog),
+    harnesses: harnessChoices(harnesses),
   };
+}
+
+export function pageHtml(data) {
+  const template = readFileSync(join(skillDir, "template.html"), "utf8");
+  const json = JSON.stringify(data).replace(/</g, "\\u003c");
+  return template.replace("/*__PSTACK_DATA__*/null", () => json);
 }
 
 function main(argv) {
@@ -66,23 +86,27 @@ function main(argv) {
   if (!values.sheet || !values.out) {
     throw new Error("usage: render.mjs --sheet <models.md> --out <page.html> [--scope project|user] [--native claude|codex] [--project-root <dir>]");
   }
-  const defaults = readJson(join(skillDir, "providers.json"));
+  const defaults = readJson(join(skillDir, "..", "poteto-mode", "scripts", "providers.json"));
   const modelsPath = join(skillDir, "..", "..", "models.json");
   const available = existsSync(modelsPath) ? readJson(modelsPath).available ?? [] : [];
   const sheetPath = resolve(values.sheet);
+  const text = readFileSync(sheetPath, "utf8");
   const data = pageData({
     sheetPath,
     scope: values.scope ?? "project",
     native: values.native ?? defaults.native,
     generated: new Date().toISOString().slice(0, 16).replace("T", " "),
-    text: readFileSync(sheetPath, "utf8"),
+    text,
     catalog: { providers: defaults.providers, available, codex: codexModels() },
     presets: readPresets(resolve(values["project-root"] ?? process.cwd())),
   });
-  const template = readFileSync(join(skillDir, "template.html"), "utf8");
-  const json = JSON.stringify(data).replace(/</g, "\\u003c");
-  writeFileSync(values.out, template.replace("/*__PSTACK_DATA__*/null", () => json));
+  writeFileSync(values.out, pageHtml(data));
   console.log(`rendered ${data.roles.length} roles and ${data.presets.length} presets from ${sheetPath} -> ${resolve(values.out)}`);
+  const shown = new Set(data.roles.map((r) => r.role));
+  const skipped = allRoleLabels(text).filter((role) => !shown.has(role));
+  if (skipped.length) {
+    console.log(`left off the page, because an entry does not parse: ${skipped.join("; ")}. If they use the old harness:model form, run node ${join(skillDir, "..", "poteto-mode", "scripts", "migrate-sheet.mjs")} ${sheetPath}`);
+  }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(resolve(process.argv[1]))).href) {

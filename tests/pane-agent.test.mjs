@@ -294,7 +294,7 @@ test("a write launch runs in a new worktree of the committed HEAD, and close rem
   const { runner, calls } = finished();
   const out = launch(options({ access: "write", cwd: dir }), { runner, env: herdrEnv() });
   const tree = `${dir}__worktrees/pstack-arena-a`;
-  expect(out).toMatchObject({ verdict: "done", worktree: tree });
+  expect(out).toMatchObject({ verdict: "done", worktree: tree, route: "git" });
   expect(calls[0]).toContain(tree);
   expect(readFileSync(join(tree, "a.txt"), "utf8")).toBe("committed\n");
   expect(gitIn(tree, "branch", "--show-current")).toBe("pstack/arena-a");
@@ -406,7 +406,7 @@ test("launch refuses bad input before touching a multiplexer", () => {
   expect(() => launch(options({ name: "Arena A" }), { runner, env })).toThrow("--name must match");
   expect(() => launch(options({ harness: "nope" }), { runner, env })).toThrow("--harness must be one of");
   expect(() => launch(options({ effort: "turbo", harness: "claude", model: "m" }), { runner, env })).toThrow("Unsupported claude effort");
-  expect(() => launch(options({ effort: "high", harness: "agy", model: "gemini-3.8-flash" }), { runner, env })).toThrow("name the effort in the model id (agy:gemini-3.8-flash-high)");
+  expect(() => launch(options({ effort: "high", harness: "agy", model: "gemini-3.8-flash" }), { runner, env })).toThrow("name the effort in the model id (gemini-3.8-flash-high)");
   expect(() => launch(options({ brief: join(root, "missing.md") }), { runner, env })).toThrow("--brief must name an existing file");
   expect(() => launch(options({ access: "root" }), { runner, env })).toThrow("--access is read or write");
   expect(calls).toEqual([]);
@@ -1503,7 +1503,7 @@ test("in Rex a write agent's worktree and tab come from workrex add, and close h
   const { runner, calls } = scripted({ ...rexBase, ...rules, ...rexDone() });
   const out = launch(options({ access: "write", cwd: dir }), { runner, env: rexEnv(), clock: fakeClock() });
   const tree = `${dir}__worktrees/pstack-arena-a`;
-  expect(out).toMatchObject({ verdict: "done", result: "wrote it\n", worktree: tree });
+  expect(out).toMatchObject({ verdict: "done", result: "wrote it\n", worktree: tree, route: "workrex" });
   expect(calls.some((c) => c.slice(0, 3).join(" ") === "rex window new")).toBe(false);
   const [{ args, opts, shell, body, pwd }] = agents;
   expect(args.slice(0, 9)).toEqual(["add", "pstack/arena-a", "--name", "pstack-arena-a", "--base", gitIn(dir, "rev-parse", "HEAD"), "--background", "--local", "--agent"]);

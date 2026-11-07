@@ -5,7 +5,7 @@
 
 Lauren Tan's [pstack](https://github.com/cursor/plugins/tree/main/pstack) is an opinionated Cursor skill stack that improves agent outcomes. This is a port for Claude Code, Codex, Pi, GitHub Copilot, Muse, and other agent harnesses. It tracks upstream and also carries named policy forks, each declared in [`tools/forks.json`](tools/forks.json).
 
-This repository, pstack-multiharness, is a fork of [michael-denyer/pstack-claude](https://github.com/michael-denyer/pstack-claude). It adds three things. A role can run on another CLI harness, such as `codex:gpt-6.1-sol @xhigh`, in a pane you can watch. Role mappings can be saved and reused as presets. The `/pstack-effort` page edits the mapping. The install commands below install the fork.
+This repository, pstack-multiharness, is a fork of [michael-denyer/pstack-claude](https://github.com/michael-denyer/pstack-claude). It adds three things. A role can run on another CLI harness, such as `gpt-6.1-sol @xhigh` on Codex or `muse->pi @max`, in a pane you can watch. Role mappings can be saved and reused as presets. The `/pstack-effort` page edits the mapping. The install commands below install the fork.
 
 Tell `poteto-mode` your goal and it will invoke the correct workflow for the task. It keeps your code concise, simple and verified.
 

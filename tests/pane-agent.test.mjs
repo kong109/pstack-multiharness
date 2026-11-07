@@ -1445,3 +1445,113 @@ test("rex send --keys waits for a dialog's blocked status to clear before it set
   launch(options({ wait: false }), { runner, env: rexEnv(), clock });
   expect(send("arena-a", { keys: "Enter" }, { runner, env: rexEnv(), clock })).toMatchObject({ verdict: "done", result: "accepted\n" });
 });
+
+// Splits --agent the way Workrex does, then runs the wrapper with Rex's variables, with pwd standing in for the harness.
+function workrexRules(dir, { pane = rexChild, removeFails = false } = {}) {
+  const agents = [];
+  return {
+    agents,
+    rules: {
+      "workrex --version": text("workrex 0.1.278-rex.3\n"),
+      "workrex add": (args, opts) => {
+        const command = args[args.indexOf("--agent") + 1];
+        const words = spawnSync("sh", ["-c", `for w in ${command}; do printf '%s\\0' "$w"; done`], { encoding: "utf8" }).stdout.split("\0").slice(0, -1);
+        agents.push({ args, opts, words });
+        gitIn(opts.cwd, "worktree", "add", "-q", "-b", args[1], `${opts.cwd}__worktrees/${args[args.indexOf("--name") + 1]}`, args[args.indexOf("--base") + 1]);
+        if (pane) spawnSync(words[0], [...words.slice(1, 6), "pwd"], { env: { ...process.env, REX_SESSION: "session:s1", REX_BLOCK: pane } });
+        return text("");
+      },
+      "rex block inspect": json({ session_id: "session:s1", block: { window_id: "window:w9" } }),
+      "workrex remove": (args, opts) => {
+        if (removeFails) return { status: 1, stdout: "", stderr: "Cannot remove worktrees with uncommitted changes" };
+        gitIn(opts.cwd, "worktree", "remove", `${opts.cwd}__worktrees/${args[1]}`);
+        gitIn(opts.cwd, "branch", "-D", `pstack/${args[1].slice("pstack-".length)}`);
+        return text("");
+      },
+      "workrex close": text(""),
+    },
+  };
+}
+const rexDone = (name = "arena-a") => ({
+  [childStatus]: [json({ records: [] }), () => { writeFileSync(join(root, "panes", name, "result.md"), "wrote it\n"); return json(rexRecord("done", 4000)); }],
+});
+
+test("in Rex a write agent's worktree and tab come from workrex add, and close hands the unused worktree back to workrex remove", () => {
+  const dir = repo();
+  const { rules, agents } = workrexRules(dir);
+  const { runner, calls } = scripted({ ...rexBase, ...rules, ...rexDone() });
+  const out = launch(options({ access: "write", cwd: dir }), { runner, env: rexEnv(), clock: fakeClock() });
+  const tree = `${dir}__worktrees/pstack-arena-a`;
+  expect(out).toMatchObject({ verdict: "done", result: "wrote it\n", worktree: tree });
+  expect(calls.some((c) => c.slice(0, 3).join(" ") === "rex window new")).toBe(false);
+  const [{ args, opts, words }] = agents;
+  expect(args.slice(0, 8)).toEqual(["add", "pstack/arena-a", "--name", "pstack-arena-a", "--base", gitIn(dir, "rev-parse", "HEAD"), "--background", "--agent"]);
+  expect(opts).toMatchObject({ cwd: dir, input: "" });
+  expect(words.slice(4, 7)).toEqual([join(runDir(), "block"), tree, "codex"]);
+  expect(words.at(-1)).toContain("brief.md");
+  expect(readFileSync(join(runDir(), "block"), "utf8")).toBe(`session:s1 ${rexChild}`);
+  expect(calls.filter((c) => c[0] === "rex" && c.includes("-b")).every((c) => c.includes(rexChild))).toBe(true);
+  expect(close("arena-a", {}, { runner, env: rexEnv() }).worktree).toEqual({ path: tree, removed: true, branch: null });
+  expect(calls.filter((c) => c[0] === "workrex").map((c) => c[1])).toEqual(["--version", "add", "remove"]);
+  expect(existsSync(tree)).toBe(false);
+  expect(branches(dir)).toEqual(["main"]);
+});
+
+test("workrex keeps a worker's changes: a dirty worktree is only closed, and a branch with commits is never offered to remove", () => {
+  const dir = repo();
+  const dirty = workrexRules(dir, { removeFails: true });
+  const first = scripted({ ...rexBase, ...dirty.rules, ...rexDone() });
+  launch(options({ access: "write", cwd: dir }), { runner: first.runner, env: rexEnv(), clock: fakeClock() });
+  const tree = `${dir}__worktrees/pstack-arena-a`;
+  writeFileSync(join(tree, "new.txt"), "edit\n");
+  expect(close("arena-a", {}, { runner: first.runner, env: rexEnv() }).worktree).toEqual({ path: tree, removed: false, branch: "pstack/arena-a" });
+  expect(first.calls.filter((c) => c[0] === "workrex").map((c) => c.slice(1, 3).join(" "))).toEqual(["--version", "add pstack/arena-a", "remove pstack-arena-a", "close pstack-arena-a"]);
+  gitIn(tree, "add", "new.txt");
+  gitIn(tree, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "work");
+  const again = scripted({ ...rexBase, ...dirty.rules, ...rexDone() });
+  expect(() => launch(options({ access: "write", cwd: dir }), { runner: again.runner, env: rexEnv(), clock: fakeClock() })).toThrow("left from an earlier arena-a");
+  const committed = workrexRules(dir);
+  const second = scripted({ ...rexBase, ...committed.rules, ...rexDone("arena-b") });
+  launch(options({ name: "arena-b", access: "write", cwd: dir }), { runner: second.runner, env: rexEnv(), clock: fakeClock() });
+  const treeB = `${dir}__worktrees/pstack-arena-b`;
+  writeFileSync(join(treeB, "b.txt"), "b\n");
+  gitIn(treeB, "add", "b.txt");
+  gitIn(treeB, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "b");
+  expect(close("arena-b", {}, { runner: second.runner, env: rexEnv() }).worktree).toEqual({ path: treeB, removed: false, branch: "pstack/arena-b" });
+  expect(second.calls.filter((c) => c[0] === "workrex").map((c) => c[1])).toEqual(["--version", "add", "close"]);
+});
+
+test("without workrex on PATH a Rex write agent gets pstack's own worktree and a plain tab", () => {
+  const dir = repo();
+  const { runner, calls } = scripted({ ...rexBase, "workrex --version": { status: null, stdout: "", stderr: "spawnSync workrex ENOENT" }, ...rexDone() });
+  const out = launch(options({ access: "write", cwd: dir }), { runner, env: rexEnv(), clock: fakeClock() });
+  const tree = `${dir}__worktrees/pstack-arena-a`;
+  expect(out).toMatchObject({ verdict: "done", worktree: tree });
+  expect(calls.find((c) => c[1] === "window")).toContain(tree);
+  expect(close("arena-a", {}, { runner, env: rexEnv() }).worktree).toEqual({ path: tree, removed: true, branch: null });
+});
+
+test("a workrex tab whose shell is back in the foreground reads as gone, while the harness in it counts as running", () => {
+  const dir = repo();
+  const { rules } = workrexRules(dir);
+  const { runner } = scripted({
+    ...rexBase,
+    ...rules,
+    [childStatus]: json({ records: [] }),
+    [`rex block call -s session:s1 -b ${rexChild} process`]: [
+      json({ last_exit: null, child: { pid: 10, name: "zsh" }, foreground: { pid: 11, name: "codex" } }),
+      json({ last_exit: null, child: { pid: 10, name: "zsh" }, foreground: { pid: 10, name: "zsh" } }),
+    ],
+  });
+  expect(launch(options({ access: "write", cwd: dir }), { runner, env: rexEnv(), clock: fakeClock() })).toMatchObject({ verdict: "error" });
+});
+
+test("a workrex layout with no agent pane fails the launch and hands the worktree back", () => {
+  const dir = repo();
+  const { rules } = workrexRules(dir, { pane: null });
+  const { runner, calls } = scripted({ ...rexBase, ...rules });
+  expect(() => launch(options({ access: "write", cwd: dir }), { runner, env: rexEnv(), clock: fakeClock() })).toThrow("no pane started the agent");
+  expect(calls.filter((c) => c[0] === "workrex").map((c) => c[1])).toEqual(["--version", "add", "remove"]);
+  expect(existsSync(`${dir}__worktrees/pstack-arena-a`)).toBe(false);
+  expect(existsSync(runDir())).toBe(false);
+});

@@ -27,8 +27,8 @@ export const script = fileURLToPath(import.meta.url);
 
 export const panesRoot = (env = process.env) => resolve(env.PSTACK_PANES_DIR ?? join(realpathSync(tmpdir()), "pstack-panes"));
 
-export function sh(cmd, args, { timeoutMs, input } = {}) {
-  const r = spawnSync(cmd, args, { encoding: "utf8", timeout: timeoutMs, input, maxBuffer: 32 * 1024 * 1024 });
+export function sh(cmd, args, { timeoutMs, input, cwd } = {}) {
+  const r = spawnSync(cmd, args, { encoding: "utf8", timeout: timeoutMs, input, cwd, maxBuffer: 32 * 1024 * 1024 });
   return { status: r.status, stdout: r.stdout ?? "", stderr: r.stderr || r.error?.message || "", timedOut: r.error?.code === "ETIMEDOUT" };
 }
 
@@ -125,26 +125,40 @@ function git(cwd, args) {
   return r.stdout.trim();
 }
 
+const branchTip = (repo, branch) => sh("git", ["-C", repo, "rev-parse", "--verify", "--quiet", `refs/heads/${branch}`]).stdout.trim();
+
 // Branched from the committed HEAD, so the worker never sees the caller's uncommitted changes.
-function addWorktree(name, from) {
+function planWorktree(name, from) {
   const common = git(from, ["rev-parse", "--path-format=absolute", "--git-common-dir"]);
   if (basename(common) !== ".git") throw new Error(`${from} is not in a repository with a .git directory, so it cannot get a worktree; pass --in-place`);
   const repo = dirname(common);
   const tree = { repo, path: `${repo}__worktrees/pstack-${name}`, branch: `pstack/${name}`, base: git(from, ["rev-parse", "HEAD"]) };
-  const taken = sh("git", ["-C", repo, "rev-parse", "--verify", "--quiet", `refs/heads/${tree.branch}`]).status === 0;
-  if (taken || existsSync(tree.path)) {
+  if (branchTip(repo, tree.branch) || existsSync(tree.path)) {
     throw new Error(`${tree.branch} or ${tree.path} is left from an earlier ${name}; merge the branch, then remove the worktree and delete the branch, or launch under another --name`);
   }
-  git(repo, ["worktree", "add", "-b", tree.branch, tree.path, tree.base]);
   return { ...tree, cwd: resolve(tree.path, git(from, ["rev-parse", "--show-prefix"])) };
+}
+
+function addWorktree(tree) {
+  git(tree.repo, ["worktree", "add", "-b", tree.branch, tree.path, tree.base]);
+  return tree;
 }
 
 function removeWorktree({ repo, path, branch, base }) {
   const removed = !existsSync(path) || sh("git", ["-C", repo, "worktree", "remove", path]).status === 0;
-  const tip = sh("git", ["-C", repo, "rev-parse", "--verify", "--quiet", `refs/heads/${branch}`]).stdout.trim();
+  const tip = branchTip(repo, branch);
   const unused = removed && tip === base && sh("git", ["-C", repo, "branch", "-D", branch]).status === 0;
   return { path, removed, branch: tip && !unused ? branch : null };
 }
+
+// workrex remove asks before it drops a branch with commits, and exits 0 when stdin answers no, so it runs only on an unused branch and the outcome is read from disk.
+function releaseWorkrex({ repo, path, branch, base, workrex: handle }, keep, runner) {
+  if (!keep && branchTip(repo, branch) === base) runner("workrex", ["remove", handle], { cwd: repo, input: "" });
+  if (existsSync(path)) runner("workrex", ["close", handle], { cwd: repo, input: "" });
+  return { path, removed: !existsSync(path), branch: branchTip(repo, branch) ? branch : null };
+}
+
+const releaseWorktree = (tree, keep, runner) => (tree.workrex ? releaseWorkrex(tree, keep, runner) : removeWorktree(tree));
 
 function herdrJson(runner, args, timeoutMs) {
   const r = runner("herdr", args, { timeoutMs: timeoutMs && timeoutMs + 15_000 });
@@ -466,6 +480,10 @@ function rexScreen(runner, env, session, block) {
   const tail = rexBlock(runner, env, session, block, "blob_read", { id: head.id, offset: Math.max(0, head.total - REX_TAIL_BYTES), max_bytes: REX_TAIL_BYTES });
   return tail ? tail.data.slice(tail.data.indexOf("\n") + 1) : null;
 }
+// Workrex splits --agent into words and types them into the tab's shell, so the wrapper reports the block it runs in and then becomes the harness.
+const WORKREX_WRAP = 'printf "%s %s" "$REX_SESSION" "$REX_BLOCK" > "$1" && cd "$2" && shift 2 && exec "$@"';
+const shellWord = (word) => `'${word.replaceAll("'", "'\\''")}'`;
+
 // The root program-status record has no id. Records for subagents carry one.
 const rexStatus = (runner, env, session, block) => rexBlock(runner, env, session, block, "program_status")?.records?.find((r) => r.id === undefined) ?? null;
 
@@ -476,9 +494,10 @@ export function rexMux({ runner, env, clock }) {
     const text = rexScreen(runner, env, state.ids.session, state.ids.pane);
     return text === null ? null : screenText(text);
   };
+  // The shell a Workrex tab types the harness into outlives it, so the harness has exited once that shell is back in the foreground.
   const gone = (state) => {
     const process = rexBlock(runner, env, state.ids.session, state.ids.pane, "process");
-    return !process || process.last_exit !== null;
+    return !process || process.last_exit !== null || (state.ids.shell === true && process.child?.pid !== undefined && process.foreground?.pid === process.child.pid);
   };
   // A done or idle record from an earlier turn stays until the harness reports again, so only one newer than the turn counts.
   const status = (state, turnAt) => {
@@ -492,15 +511,34 @@ export function rexMux({ runner, env, clock }) {
     const r = rex(["send-key", ...at(state), ...keys]);
     if (r.status !== 0) throw new Error(`rex send-key failed: ${failure(r)}`);
   };
+  const openTab = (state, cwd, argv) => {
+    const session = env.REX_SESSION;
+    const r = rex(["window", "new", "-s", session, state.name, "-c", cwd, "--focus=false", "--json", "--", ...argv]);
+    let opened = null;
+    try { opened = JSON.parse(r.stdout); } catch {}
+    if (r.status !== 0 || !opened?.block_ids?.[0]) throw new Error(`rex window new failed: ${failure(r)}`);
+    return { session, window: opened.window_id, pane: opened.block_ids[0] };
+  };
+  const openWorkrex = (state, cwd, argv) => {
+    const { repo, branch, base, workrex: handle } = state.worktree;
+    const marker = join(state.run, "block");
+    const command = ["sh", "-c", WORKREX_WRAP, "sh", marker, cwd, ...argv].map(shellWord).join(" ");
+    const r = runner("workrex", ["add", branch, "--name", handle, "--base", base, "--background", "--agent", command], { cwd: repo, input: "" });
+    if (r.status !== 0) throw new Error(`workrex add failed: ${failure(r)}`);
+    const reported = () => (existsSync(marker) ? readFileSync(marker, "utf8").split(" ") : []);
+    for (let i = 0; i < 120 && reported().length < 2; i++) clock.sleep(250);
+    const [session, pane] = reported();
+    if (!pane) throw new Error(`workrex add opened ${handle}, but no pane started the agent; the Workrex panes need one with command: <agent>`);
+    const inspected = rex(["block", "inspect", "-s", session, pane, "--json"]);
+    let window = null;
+    try { window = JSON.parse(inspected.stdout).block.window_id; } catch {}
+    return { session, window, pane, shell: true };
+  };
   return {
     id: "rex",
     launch(state, { cwd, ...launchArgs }) {
-      const session = env.REX_SESSION;
-      const r = rex(["window", "new", "-s", session, state.name, "-c", cwd, "--focus=false", "--json", "--", ...harnessArgv(launchArgs)]);
-      let opened = null;
-      try { opened = JSON.parse(r.stdout); } catch {}
-      if (r.status !== 0 || !opened?.block_ids?.[0]) throw new Error(`rex window new failed: ${failure(r)}`);
-      state.ids = { ...state.ids, session, window: opened.window_id, pane: opened.block_ids[0] };
+      const argv = harnessArgv(launchArgs);
+      state.ids = { ...state.ids, ...(state.worktree?.workrex ? openWorkrex(state, cwd, argv) : openTab(state, cwd, argv)) };
       state.prompted = true;
       state.awaitTurn = true;
       state.turnAt = clock.now();
@@ -743,7 +781,9 @@ export function launch(options, deps) {
 
   ownedPrivateDir(panesRoot(env));
   // A nested agent cannot create a worktree from inside a Codex sandbox, and its child needs its uncommitted edits, so it runs in place.
-  const worktree = access === "write" && !inPlace && !self ? addWorktree(name, resolve(cwd)) : null;
+  const tree = access === "write" && !inPlace && !self ? planWorktree(name, resolve(cwd)) : null;
+  // In Rex, Workrex creates the worktree with its tab, so the project's file copies and post_create hooks run and the worker shows in its dashboard.
+  const worktree = tree && (muxId === "rex" && deps.runner("workrex", ["--version"]).status === 0 ? { ...tree, workrex: basename(tree.path) } : addWorktree(tree));
   let state = null;
   try {
     mkdirSync(run, { recursive: true });
@@ -764,7 +804,7 @@ export function launch(options, deps) {
   } catch (error) {
     try { if (state) mux.close?.(state); } finally {
       rmSync(run, { recursive: true, force: true });
-      const left = worktree && removeWorktree(worktree);
+      const left = worktree && releaseWorktree(worktree, false, deps.runner);
       if (left && !left.removed) error.message += `; the worktree ${left.path} has changes and was kept`;
     }
     throw error;
@@ -844,8 +884,10 @@ export function close(name, { keep = false } = {}, deps) {
   deps = resolveDeps(deps);
   const state = loadState(name, deps.env);
   const mux = muxFor(state.mux, deps);
+  const tree = state.worktree;
+  const released = tree?.workrex ? releaseWorkrex(tree, keep, deps.runner) : undefined;
   const closed = mux.close(state);
-  const worktree = closed && !keep && state.worktree ? removeWorktree(state.worktree) : undefined;
+  const worktree = released ?? (closed && !keep && tree ? removeWorktree(tree) : undefined);
   if (closed && !keep) rmSync(state.run, { recursive: true, force: true });
   if (closed && keep) {
     state.closed = true;

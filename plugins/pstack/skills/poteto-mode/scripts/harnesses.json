@@ -108,5 +108,39 @@
       "write": ["--yolo"]
     },
     "t3": { "driver": "muse", "options": { "reasoningEffort": "{effort}" } }
+  },
+  "pi": {
+    "command": "pi",
+    "providers": { "openai": "openai-codex/{model}" },
+    "kind": "pi",
+    "promptFirst": false,
+    "model": ["--model", "{model}"],
+    "effort": ["--thinking", "{effort}"],
+    "efforts": ["off", "minimal", "low", "medium", "high", "xhigh", "max"],
+    "runDir": [],
+    "access": { "read": [], "write": [] }
+  },
+  "omp": {
+    "command": "omp",
+    "providers": { "meta": "muse-code/{model}", "openai": "openai-codex/{model}", "xai": "xai-oauth/{model}" },
+    "kind": "omp",
+    "promptFirst": false,
+    "model": ["--model", "{model}"],
+    "effort": ["--thinking", "{effort}"],
+    "efforts": ["off", "minimal", "low", "medium", "high", "xhigh", "max"],
+    "runDir": [],
+    "access": { "read": ["--auto-approve"], "write": ["--auto-approve"] }
+  },
+  "opencode": {
+    "command": "opencode",
+    "providers": { "openai": "openai/{model}" },
+    "kind": "opencode",
+    "promptFirst": false,
+    "prompt": ["--prompt", "{prompt}"],
+    "model": ["-m", "{model}"],
+    "effort": null,
+    "efforts": null,
+    "runDir": [],
+    "access": { "read": ["--auto"], "write": ["--auto"] }
   }
 }

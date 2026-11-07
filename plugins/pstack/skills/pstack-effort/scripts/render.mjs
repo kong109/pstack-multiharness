@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
+import { providerOf, harnesses as registry } from "../../poteto-mode/scripts/resolve-models.mjs";
 import { parseSheet } from "./sheet.mjs";
 import { listPresets, presetDirectory } from "../../pstack-preset/scripts/presets.mjs";
 
@@ -49,13 +50,36 @@ export function readPresets(project = process.cwd(), home = homedir()) {
   });
 }
 
-export function pageData({ sheetPath, scope, native, generated, text, catalog, presets = [] }) {
+// Mirrors resolveEntry's provider lookup, which resolve-models.mjs does not export.
+export function providerFor(model, providers, native) {
+  if (model === "auto" || model === "inherit-parent") return providers.find((p) => p.harness === native)?.id ?? "";
+  const named = providers.find((p) => p.harness === model);
+  if (named) return named.id;
+  if (model.includes("/")) return "";
+  return providerOf(model, providers)?.id ?? "";
+}
+
+export const harnessChoices = (list) => Object.fromEntries(Object.entries(list).map(([name, spec]) => [name, {
+  providers: Object.keys(spec.providers ?? {}), takesEffort: spec.effort !== null, efforts: spec.efforts ?? null,
+}]));
+
+export function pageData({ sheetPath, scope, native, generated, text, catalog, presets = [], harnesses = registry }) {
   const { lines, roles, defaultEffort } = parseSheet(text);
   if (!roles.length) throw new Error(`no role lines found in ${sheetPath}`);
+  const withProvider = (list) => list.map((r) => ({ ...r, slots: r.slots.map((s) => ({ ...s, provider: providerFor(s.model, catalog.providers, native) })) }));
   return {
-    sheetPath, scope, native, generated, lines, roles, defaultEffort, presets,
+    sheetPath, scope, native, generated, lines, defaultEffort,
+    roles: withProvider(roles),
+    presets: presets.map((p) => ({ ...p, roles: withProvider(p.roles) })),
     providers: buildProviders(catalog),
+    harnesses: harnessChoices(harnesses),
   };
+}
+
+export function pageHtml(data) {
+  const template = readFileSync(join(skillDir, "template.html"), "utf8");
+  const json = JSON.stringify(data).replace(/</g, "\\u003c");
+  return template.replace("/*__PSTACK_DATA__*/null", () => json);
 }
 
 function main(argv) {
@@ -79,9 +103,7 @@ function main(argv) {
     catalog: { providers: defaults.providers, available, codex: codexModels() },
     presets: readPresets(resolve(values["project-root"] ?? process.cwd())),
   });
-  const template = readFileSync(join(skillDir, "template.html"), "utf8");
-  const json = JSON.stringify(data).replace(/</g, "\\u003c");
-  writeFileSync(values.out, template.replace("/*__PSTACK_DATA__*/null", () => json));
+  writeFileSync(values.out, pageHtml(data));
   console.log(`rendered ${data.roles.length} roles and ${data.presets.length} presets from ${sheetPath} -> ${resolve(values.out)}`);
 }
 

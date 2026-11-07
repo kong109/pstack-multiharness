@@ -8,7 +8,7 @@ import { runInNewContext } from "node:vm";
 import { checkForeignTarget } from "../plugins/pstack/skills/poteto-mode/scripts/foreign-launch.mjs";
 import { harnesses, resolveRole } from "../plugins/pstack/skills/poteto-mode/scripts/resolve-models.mjs";
 import { apply, parseMessage, planApply } from "../plugins/pstack/skills/pstack-effort/scripts/apply.mjs";
-import { buildProviders, codexModels, readPresets } from "../plugins/pstack/skills/pstack-effort/scripts/render.mjs";
+import { buildProviders, codexModels, pageData, pageHtml, providerFor, readPresets } from "../plugins/pstack/skills/pstack-effort/scripts/render.mjs";
 import { parseSheet, slotText } from "../plugins/pstack/skills/pstack-effort/scripts/sheet.mjs";
 
 const render = fileURLToPath(new URL("../plugins/pstack/skills/pstack-effort/scripts/render.mjs", import.meta.url));
@@ -18,14 +18,14 @@ const sheet = `# pstack model configuration
 Roles below are edited by the page.
 
 feature: opus @high
-arena runners: opus @xhigh, codex:gpt-6.1-sol @xhigh
+arena runners: opus @xhigh, gpt-6.1-sol @xhigh
 swarm workers: inherit-parent
-why synthesizer: claude:opus @medium
+why synthesizer: opus->claude @medium
 default effort: max
 session hook: off
 `;
 
-const pageSheet = sheet.replace("default effort:", "reflect tooling: ollama:qwen3:8b @high\ndefault effort:");
+const pageSheet = sheet.replace("default effort:", "reflect tooling: ollama:qwen3:8b @high\nhow explorer: muse @low, gpt-6.1-sol->codex@high\ndefault effort:");
 
 const codexCache = {
   models: [
@@ -45,20 +45,20 @@ const scratch = () => {
   return directory;
 };
 
-test("parses role lines with harness prefixes and leaves everything else alone", () => {
+test("parses role lines with harness arrows and leaves everything else alone", () => {
   const { lines, roles } = parseSheet(pageSheet);
-  expect(roles.map((r) => r.role)).toEqual(["feature", "arena runners", "swarm workers", "why synthesizer", "reflect tooling"]);
+  expect(roles.map((r) => r.role)).toEqual(["feature", "arena runners", "swarm workers", "why synthesizer", "reflect tooling", "how explorer"]);
   expect(roles[1]).toEqual({
-    role: "arena runners", line: lines.indexOf("arena runners: opus @xhigh, codex:gpt-6.1-sol @xhigh"),
-    slots: [{ harness: "", model: "opus", effort: "xhigh" }, { harness: "codex", model: "gpt-6.1-sol", effort: "xhigh" }],
+    role: "arena runners", line: lines.indexOf("arena runners: opus @xhigh, gpt-6.1-sol @xhigh"),
+    slots: [{ harness: "", model: "opus", effort: "xhigh" }, { harness: "", model: "gpt-6.1-sol", effort: "xhigh" }],
   });
-  expect(roles[3].slots[0].harness).toBe("claude");
+  expect(roles[3].slots[0]).toEqual({ harness: "claude", model: "opus", effort: "medium" });
   expect(roles[4].slots[0]).toEqual({ harness: "", model: "ollama:qwen3:8b", effort: "high" });
-  expect(roles.flatMap((r) => r.slots.map(slotText))).toContain("codex:gpt-6.1-sol @xhigh");
+  expect(roles[5].slots.map(slotText)).toEqual(["muse @low", "gpt-6.1-sol->codex @high"]);
 });
 
 test("skips a line with an entry it cannot parse", () => {
-  expect(parseSheet("feature: codex:auto\nbug-fix: opus\n").roles.map((r) => r.role)).toEqual(["bug-fix"]);
+  expect(parseSheet("feature: codex:gpt-6.1-sol\nreview: auto->codex\nbug-fix: opus\n").roles.map((r) => r.role)).toEqual(["bug-fix"]);
 });
 
 test("reads the OpenAI list from the Codex model cache and ignores hidden models", () => {
@@ -105,7 +105,7 @@ test("renders the sheet into the page with escaped data and no placeholder left"
   expect(html).not.toContain("/*__PSTACK_DATA__*/");
   expect(html).not.toContain("__SCRIPT__");
   expect(html).not.toContain("</script><b>");
-  expect(html).toContain("codex:gpt-6.1-sol @xhigh");
+  expect(html).toContain("gpt-6.1-sol @xhigh");
 });
 
 class Node {
@@ -128,7 +128,10 @@ class Node {
 }
 
 function mount(text, store = new Map(), dir = scratch()) {
-  const { html } = renderPage(text, dir);
+  return mountHtml(renderPage(text, dir).html, text, store);
+}
+
+function mountHtml(html, text, store = new Map()) {
   const script = /<script>\r?\n([\s\S]*)\r?\n<\/script>/.exec(html)[1];
   const root = new Node("root");
   for (const id of ["meta", "legend", "preset", "preset-note", "roles", "changes", "out", "reset", "copy", "status"]) { const n = new Node("div"); n.setAttribute("id", id); root.append(n); }
@@ -148,7 +151,8 @@ function mount(text, store = new Map(), dir = scratch()) {
   const press = (label, nth = 0) => root.buttons(label)[nth].fire("click");
   const rolesText = () => at("roles").textContent;
   const options = (id) => at(id).children.map((c) => c.text);
-  return { options, at, choose, tick, message, role, roleIndex, efforts, press, rolesText, has: (id) => Boolean(root.find(id)), click: (id) => at(id).fire("click"), next: () => parseMessage(message()).next };
+  const selected = (id) => at(id).children.find((c) => c.selected)?.text;
+  return { options, selected, at, choose, tick, message, role, roleIndex, efforts, press, rolesText, has: (id) => Boolean(root.find(id)), click: (id) => at(id).fire("click"), next: () => parseMessage(message()).next };
 }
 
 test("the page writes an unchanged sheet back byte for byte", () => {
@@ -157,15 +161,16 @@ test("the page writes an unchanged sheet back byte for byte", () => {
   expect(page.next()).toBe(pageSheet);
 });
 
-test("switching a slot to another harness prefixes the entry and keeps a supported effort", () => {
+test("switching a slot to another provider writes its model bare and keeps a supported effort", () => {
   const page = mount(pageSheet);
   const ri = page.roleIndex("feature");
-  page.choose(`p-${ri}-0`, "codex");
-  expect(page.role("feature")).toBe("feature: codex:gpt-6.1-sol @high");
+  page.choose(`p-${ri}-0`, "openai");
+  expect(page.role("feature")).toBe("feature: gpt-6.1-sol @high");
+  expect(resolveRole(page.next(), "feature")).toEqual([{ harness: "codex", model: "gpt-6.1-sol", effort: "high" }]);
   expect(page.efforts(ri, 0)).toEqual(["low", "high", "ultra"]);
   page.tick(`e-${ri}-0-ultra`);
-  expect(page.role("feature")).toBe("feature: codex:gpt-6.1-sol @ultra");
-  page.choose(`p-${ri}-0`, "claude");
+  expect(page.role("feature")).toBe("feature: gpt-6.1-sol @ultra");
+  page.choose(`p-${ri}-0`, "anthropic");
   expect(page.role("feature")).toBe("feature: opus");
   expect(page.message()).toContain("feature: opus @high -> opus");
 });
@@ -173,9 +178,9 @@ test("switching a slot to another harness prefixes the entry and keeps a support
 test("a valid effort survives a provider change", () => {
   const page = mount(pageSheet);
   const ri = page.roleIndex("arena runners");
-  page.choose(`p-${ri}-0`, "codex");
-  page.choose(`p-${ri}-1`, "claude");
-  expect(page.role("arena runners")).toBe("arena runners: codex:gpt-6.1-sol, opus @xhigh");
+  page.choose(`p-${ri}-0`, "openai");
+  page.choose(`p-${ri}-1`, "anthropic");
+  expect(page.role("arena runners")).toBe("arena runners: gpt-6.1-sol, opus @xhigh");
 });
 
 test("each model offers only its own effort levels", () => {
@@ -184,7 +189,7 @@ test("each model offers only its own effort levels", () => {
   expect(page.efforts(ri, 0)).toEqual(["low", "medium", "high", "xhigh", "max"]);
   page.choose(`m-${ri}-1`, "gpt-6-astra");
   expect(page.efforts(ri, 1)).toEqual(["low", "medium"]);
-  expect(page.role("arena runners")).toBe("arena runners: opus @xhigh, codex:gpt-6-astra");
+  expect(page.role("arena runners")).toBe("arena runners: opus @xhigh, gpt-6-astra");
 });
 
 test("aliases have no provider select and stay bare, and an unlisted model is preserved", () => {
@@ -193,19 +198,99 @@ test("aliases have no provider select and stay bare, and an unlisted model is pr
   expect(page.role("swarm workers")).toBe("swarm workers: inherit-parent");
   expect(page.role("reflect tooling")).toBe("reflect tooling: ollama:qwen3:8b @high");
   const ri = page.roleIndex("why synthesizer");
-  expect(page.role("why synthesizer")).toBe("why synthesizer: claude:opus @medium");
+  expect(page.role("why synthesizer")).toBe("why synthesizer: opus->claude @medium");
   page.tick(`e-${ri}-0-medium`);
-  expect(page.role("why synthesizer")).toBe("why synthesizer: claude:opus");
+  expect(page.role("why synthesizer")).toBe("why synthesizer: opus->claude");
+});
+
+test("a harness choice is written as an arrow, and the provider's own harness writes none", () => {
+  const page = mount(pageSheet);
+  const ri = page.roleIndex("feature");
+  expect(page.options(`h-${ri}-0`)).toEqual(["claude (provider's own)", "->claude"]);
+  page.choose(`h-${ri}-0`, "claude");
+  expect(page.role("feature")).toBe("feature: opus->claude @high");
+  page.choose(`h-${ri}-0`, "");
+  expect(page.role("feature")).toBe("feature: opus @high");
+  const ai = page.roleIndex("arena runners");
+  page.choose(`h-${ai}-1`, "codex");
+  expect(page.role("arena runners")).toBe("arena runners: opus @xhigh, gpt-6.1-sol->codex");
+  expect(resolveRole(page.next(), "arena runners")[1]).toEqual({ harness: "codex", model: "gpt-6.1-sol", effort: "max" });
+});
+
+test("a provider alias stays the alias, and an arrow stays an arrow, through an effort change", () => {
+  const page = mount(pageSheet);
+  const ri = page.roleIndex("how explorer");
+  expect(page.selected(`m-${ri}-0`)).toBe("muse (default, muse-wonder-full-1.0)");
+  expect(page.selected(`h-${ri}-1`)).toBe("->codex");
+  page.tick(`e-${page.roleIndex("feature")}-0-high`);
+  expect(page.next()).toContain("how explorer: muse @low, gpt-6.1-sol->codex@high\n");
+  page.tick(`e-${ri}-0-high`);
+  page.tick(`e-${ri}-1-low`);
+  expect(page.role("how explorer")).toBe("how explorer: muse @high, gpt-6.1-sol->codex @low");
+  expect(resolveRole(page.next(), "how explorer")[0]).toEqual({ harness: "muse", model: "muse-wonder-full-1.0", effort: "high" });
+});
+
+const multiHarness = {
+  ...harnesses,
+  pi: { providers: { meta: "muse/{model}", openai: "openai-codex/{model}" }, effort: ["--thinking", "{effort}"], efforts: ["low", "medium"] },
+  omp: { providers: { meta: "{model}" }, effort: null, efforts: null },
+  opencode: { providers: { openai: "openai/{model}" }, effort: ["--variant", "{effort}"], efforts: null },
+};
+
+function mountWith(list, text = pageSheet) {
+  const data = pageData({
+    sheetPath: "/x/pstack-models.md", scope: "user", native: providersJson.native, generated: "now", text,
+    catalog: { providers: providersJson.providers, available: [], codex: codexModels(cacheHome()) }, harnesses: list,
+  });
+  return mountHtml(pageHtml(data), text);
+}
+
+test("the harness list offers only the harnesses that serve the slot's provider", () => {
+  const page = mountWith(multiHarness);
+  expect(page.options(`h-${page.roleIndex("feature")}-0`)).toEqual(["claude (provider's own)", "->claude"]);
+  expect(page.options(`h-${page.roleIndex("arena runners")}-1`)).toEqual(["codex (provider's own)", "->codex", "->pi", "->opencode"]);
+  expect(page.options(`h-${page.roleIndex("how explorer")}-0`)).toEqual(["muse (provider's own)", "->muse", "->pi", "->omp"]);
+  expect(page.has(`h-${page.roleIndex("reflect tooling")}-0`)).toBe(false);
+  const real = mount(pageSheet);
+  expect(real.options(`h-${real.roleIndex("arena runners")}-1`)).toEqual(["codex (provider's own)", "->codex", "->pi", "->omp", "->opencode"]);
+});
+
+test("a harness other than the provider's own sets the effort list", () => {
+  const page = mountWith(multiHarness);
+  const ri = page.roleIndex("arena runners");
+  expect(page.efforts(ri, 1)).toEqual(["low", "high", "ultra"]);
+  page.choose(`h-${ri}-1`, "pi");
+  expect(page.efforts(ri, 1)).toEqual(["low", "medium"]);
+  expect(page.role("arena runners")).toBe("arena runners: opus @xhigh, gpt-6.1-sol->pi");
+  page.tick(`e-${ri}-1-medium`);
+  expect(page.role("arena runners")).toBe("arena runners: opus @xhigh, gpt-6.1-sol->pi @medium");
+  page.choose(`h-${ri}-1`, "opencode");
+  expect(page.efforts(ri, 1)).toEqual(["low", "high", "ultra"]);
+  expect(page.role("arena runners")).toBe("arena runners: opus @xhigh, gpt-6.1-sol->opencode");
+  const hi = page.roleIndex("how explorer");
+  page.choose(`h-${hi}-0`, "omp");
+  expect(page.efforts(hi, 0)).toEqual([]);
+  expect(page.role("how explorer")).toBe("how explorer: muse->omp, gpt-6.1-sol->codex @high");
+  expect(page.rolesText()).toContain("this harness takes no effort setting");
+});
+
+test("the page assigns each model the provider the resolver runs it under", () => {
+  const { native } = providersJson;
+  for (const model of ["opus", "claude-opus-5-5", "gpt-6.1-sol", "gpt-7", "grok-4.7", "gemini-3.8-flash-low", "muse", "codex", "claude", "ollama:qwen3:8b", "provider/a#max", "auto"]) {
+    const id = providerFor(model, providersJson.providers, native);
+    const harness = providersJson.providers.find((p) => p.id === id)?.harness ?? native;
+    expect(harness, model).toBe(resolveRole(`role: ${model}`, "role")[0].harness ?? native);
+  }
 });
 
 test("repeat and remove edit a panel's slots and reset restores the sheet", () => {
   const page = mount(pageSheet);
   const ri = page.roleIndex("arena runners");
   page.press("Repeat", 0);
-  expect(page.role("arena runners")).toBe("arena runners: opus @xhigh, opus @xhigh, codex:gpt-6.1-sol @xhigh");
+  expect(page.role("arena runners")).toBe("arena runners: opus @xhigh, opus @xhigh, gpt-6.1-sol @xhigh");
   page.press("Remove", 1);
   page.choose(`m-${ri}-0`, "sonnet");
-  expect(page.role("arena runners")).toBe("arena runners: sonnet @xhigh, codex:gpt-6.1-sol @xhigh");
+  expect(page.role("arena runners")).toBe("arena runners: sonnet @xhigh, gpt-6.1-sol @xhigh");
   page.click("reset");
   expect(page.next()).toBe(pageSheet);
 });
@@ -225,9 +310,9 @@ test("refuses an entry a dispatch would reject", () => {
 });
 
 test("lists only the roles whose entries changed", () => {
-  const next = sheet.replace("feature: opus @high", "feature: codex:gpt-6.1-sol @xhigh");
+  const next = sheet.replace("feature: opus @high", "feature: gpt-6.1-sol->codex @xhigh");
   expect(planApply(sheet, next, sheet).changes).toEqual([
-    { role: "feature", from: "opus @high", to: "codex:gpt-6.1-sol @xhigh" },
+    { role: "feature", from: "opus @high", to: "gpt-6.1-sol->codex @xhigh" },
   ]);
   expect(planApply(sheet, sheet, sheet).changes).toEqual([]);
 });
@@ -241,7 +326,7 @@ function message(root, sheetPath, next, base = readFileSync(sheetPath, "utf8")) 
   return file;
 }
 
-const twoNative = "feature: opus @high\narena runners: opus @xhigh, codex:gpt-6.1-sol @xhigh\n";
+const twoNative = "feature: opus @high\narena runners: opus @xhigh, gpt-6.1-sol @xhigh\n";
 
 test("apply backs up the sheet and writes the new one", () => {
   const root = scratch();
@@ -280,15 +365,21 @@ test("warns when the sheet routes to another harness and the shell has no multip
   apply({ message: message(root, sheetPath, twoNative.replace("@high", "@low")), env: { REX_SESSION: "session:x", REX_BLOCK: "block:y" }, log: (line) => logs.push(line) });
   expect(logs.join("\n")).toContain("wrote");
   expect(logs.join("\n")).not.toContain("run as T3 Code subagents");
+  const native = "feature: opus->claude @high\n";
+  writeFileSync(sheetPath, native);
+  logs.length = 0;
+  apply({ message: message(root, sheetPath, native.replace("@high", "@low")), env: {}, log: (line) => logs.push(line) });
+  expect(logs.join("\n")).toContain("wrote");
+  expect(logs.join("\n")).not.toContain("run as T3 Code subagents");
 });
 
 test("the registry and the provider catalog agree, so the page only offers what a launch accepts", () => {
   for (const [id, spec] of Object.entries(harnesses)) {
     expect(spec.kind, id).toBeTruthy();
     expect(spec.command, id).toBeTruthy();
-    expect(spec.access?.read?.length, id).toBeGreaterThan(0);
-    expect(spec.access?.write?.length, id).toBeGreaterThan(0);
-    expect(spec.t3?.driver, id).toBeTruthy();
+    expect(Array.isArray(spec.access?.read) && Array.isArray(spec.access?.write), id).toBe(true);
+    if (spec.t3) expect(spec.t3.driver, id).toBeTruthy();
+    for (const served of Object.keys(spec.providers)) expect(providersJson.providers.map((p) => p.id), id).toContain(served);
   }
   for (const provider of providersJson.providers) {
     expect(Object.keys(harnesses), provider.id).toContain(provider.harness);
@@ -304,13 +395,13 @@ test("the registry and the provider catalog agree, so the page only offers what 
 test("a slot on Antigravity offers no effort levels and writes an entry the resolver and routing accept", () => {
   const page = mount(sheet);
   const ri = page.roleIndex("feature");
-  page.choose(`p-${ri}-0`, "agy");
-  expect(page.role("feature")).toBe("feature: agy:gemini-3.8-flash-high");
+  page.choose(`p-${ri}-0`, "google");
+  expect(page.role("feature")).toBe("feature: gemini-3.8-flash-high");
   expect(page.efforts(ri, 0)).toEqual([]);
-  expect(page.options(`m-${ri}-0`)).toEqual(["Gemini 3.8 Flash (High)", "Gemini 3.8 Flash (Medium)", "Gemini 3.8 Flash (Low)", "inherit-parent (parent session's model)", "auto (parent session's model)"]);
+  expect(page.options(`m-${ri}-0`)).toEqual(["Gemini 3.8 Flash (High)", "Gemini 3.8 Flash (Medium)", "Gemini 3.8 Flash (Low)", "agy (default, gemini-3.8-flash-high)", "inherit-parent (parent session's model)", "auto (parent session's model)"]);
   expect(page.rolesText()).toContain("this harness takes no effort setting; the effort is part of the model");
   page.choose(`m-${ri}-0`, "gemini-3.8-flash-low");
-  expect(page.role("feature")).toBe("feature: agy:gemini-3.8-flash-low");
+  expect(page.role("feature")).toBe("feature: gemini-3.8-flash-low");
   const pasted = parseMessage(page.message());
   expect(resolveRole(pasted.next, "feature")).toEqual([{ harness: "agy", model: "gemini-3.8-flash-low", effort: null }]);
   expect(planApply(sheet, pasted.next, pasted.base).changes.map((c) => c.role)).toEqual(["feature"]);
@@ -320,15 +411,15 @@ test("apply writes an Antigravity slot that replaced an effort-bearing one", () 
   const root = scratch();
   const sheetPath = join(root, "pstack-models.md");
   writeFileSync(sheetPath, twoNative);
-  const next = twoNative.replace("codex:gpt-6.1-sol @xhigh", "agy:gemini-3.8-flash-high");
+  const next = twoNative.replace("gpt-6.1-sol @xhigh", "gemini-3.8-flash-high");
   apply({ message: message(root, sheetPath, next), env: { TUIOS_ENV: "1" }, log: () => {} });
   expect(resolveRole(readFileSync(sheetPath, "utf8"), "arena runners")).toEqual([
     { model: "opus", effort: "xhigh" },
     { harness: "agy", model: "gemini-3.8-flash-high", effort: null },
   ]);
-  const stuck = twoNative.replace("codex:gpt-6.1-sol @xhigh", "agy:gemini-3.8-flash-high @xhigh");
+  const stuck = twoNative.replace("gpt-6.1-sol @xhigh", "gemini-3.8-flash-high @xhigh");
   expect(() => apply({ message: message(root, sheetPath, stuck, next), env: {}, log: () => {} }))
-    .toThrow("name the effort in the model id (agy:gemini-3.8-flash-high-xhigh)");
+    .toThrow("agy takes no effort setting; name the effort in the model id");
   expect(readFileSync(sheetPath, "utf8")).toBe(next);
 });
 
@@ -351,7 +442,7 @@ test("a cleared box inherits the sheet's default effort, and the page says which
 
 test("an effort the model does not list is kept and called out", () => {
   const page = mount(pageSheet);
-  expect(page.role("arena runners")).toContain("codex:gpt-6.1-sol @xhigh");
+  expect(page.role("arena runners")).toContain("gpt-6.1-sol @xhigh");
   expect(page.rolesText()).toContain("keeps effort xhigh, which this model does not list");
 });
 
@@ -440,7 +531,7 @@ test("apply keeps a sheet's code fence and CRLF endings intact", () => {
 const userPreset = `# pstack model configuration
 
 feature: opus
-arena runners: codex:gpt-6-astra, sonnet
+arena runners: gpt-6-astra, sonnet
 swarm workers: sonnet @low
 bug-fix: opus @low
 default effort: medium
@@ -453,7 +544,7 @@ function presetTree(root = scratch()) {
   mkdirSync(project, { recursive: true });
   writeFileSync(join(user, "mid.md"), userPreset);
   writeFileSync(join(user, "empty.md"), "# nothing here\n");
-  writeFileSync(join(project, "solo.md"), "feature: codex:gpt-6.1-sol @ultra\n");
+  writeFileSync(join(project, "solo.md"), "feature: gpt-6.1-sol @ultra\n");
   return root;
 }
 
@@ -463,7 +554,7 @@ test("reads user and project presets with their roles and effort lines", () => {
   expect(presets.map((p) => `${p.scope}/${p.name}`)).toEqual(["user/mid", "project/solo"]);
   expect(presets[0].defaultEffort).toBe("medium");
   expect(presets[0].roles[1]).toEqual({ role: "arena runners", slots: [
-    { harness: "codex", model: "gpt-6-astra", effort: "" }, { harness: "", model: "sonnet", effort: "" },
+    { harness: "", model: "gpt-6-astra", effort: "" }, { harness: "", model: "sonnet", effort: "" },
   ] });
 });
 
@@ -478,16 +569,16 @@ test("loading a preset fills the roles it names and keeps the rest", () => {
   const page = mount(sheet, new Map(), presetTree());
   page.choose("preset", "0");
   expect(page.role("feature")).toBe("feature: opus @medium");
-  expect(page.role("arena runners")).toBe("arena runners: codex:gpt-6-astra @medium, sonnet @medium");
+  expect(page.role("arena runners")).toBe("arena runners: gpt-6-astra @medium, sonnet @medium");
   expect(page.role("swarm workers")).toBe("swarm workers: sonnet @low");
-  expect(page.role("why synthesizer")).toBe("why synthesizer: claude:opus @medium");
+  expect(page.role("why synthesizer")).toBe("why synthesizer: opus->claude @medium");
   expect(page.message()).toContain("changes: 3");
   expect(page.at("preset-note").textContent).toBe(
     "Loaded user/mid. Not in the preset, kept as is: why synthesizer. Not on this sheet, skipped: bug-fix.");
   const pasted = parseMessage(page.message());
   expect(planApply(sheet, pasted.next, pasted.base).changes.map((c) => c.role)).toEqual(["feature", "arena runners", "swarm workers"]);
   page.choose("preset", "1");
-  expect(page.role("feature")).toBe("feature: codex:gpt-6.1-sol @ultra");
+  expect(page.role("feature")).toBe("feature: gpt-6.1-sol @ultra");
   page.click("reset");
   expect(page.next()).toBe(sheet);
   expect(page.at("preset-note").textContent).toBe("");

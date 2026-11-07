@@ -28,9 +28,10 @@ test("a seat resolves at low effort unless the entry names one, and a harness wi
 });
 
 test("each kind of problem is named, and an unregistered harness says whether it is installed", () => {
-  expect(planSeat("muse->pi", { installed: (c) => c === "pi" }).problems).toEqual([
-    expect.objectContaining({ kind: "unregistered", harness: "pi", installed: true }),
+  expect(planSeat("muse->kimi", { installed: (c) => c === "kimi" }).problems).toEqual([
+    expect.objectContaining({ kind: "unregistered", harness: "kimi", installed: true }),
   ]);
+  expect(planSeat("muse->pi", { installed: all }).problems[0]).toMatchObject({ kind: "provider" });
   expect(planSeat("opus->codex", { installed: all }).problems[0].kind).toBe("provider");
   expect(planSeat("grok @max", { installed: all }).problems[0].kind).toBe("effort");
   expect(planSeat("codex:gpt-6.1-sol", { installed: all }).problems[0]).toMatchObject({ kind: "grammar" });

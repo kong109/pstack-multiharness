@@ -15,7 +15,7 @@ export const protocolPointer = `Read the poteto-mode instructions at ${skill} be
 export function checkForeignTarget(label, { harness, model, effort }) {
   const { efforts } = harnesses[harness];
   if (effort !== null && !takesEffort(harness)) {
-    throw new Error(`${harness} takes no effort setting; name the effort in the model id (${harness}:${model}-${effort}) for ${label}`);
+    throw new Error(`${harness} takes no effort setting; name the effort in the model id (${model}-${effort}) for ${label}`);
   }
   if (effort !== null && efforts && !efforts.includes(effort)) {
     throw new Error(`Unsupported ${harness} effort for ${label}: ${effort} (use ${efforts.join(", ")})`);

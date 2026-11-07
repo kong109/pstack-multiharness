@@ -4,7 +4,7 @@ Start with the [README](../README.md) for installation and your first task.
 
 ## Slash commands
 
-The package includes 69 skill directories: 45 public skills and 24 `principle-*` references. Claude Code uses `/pstack:<name>`, Pi uses `/skill:<name>`, and Muse lists each user-invocable skill as `/<name>`. In Codex, mention a skill with `$<name>`, such as `$poteto-mode`, or pick one from `/skills`.
+The package includes 70 skill directories: 46 public skills and 24 `principle-*` references. Claude Code uses `/pstack:<name>`, Pi uses `/skill:<name>`, and Muse lists each user-invocable skill as `/<name>`. In Codex, mention a skill with `$<name>`, such as `$poteto-mode`, or pick one from `/skills`.
 
 Find each skill's instructions in the [skills tree](../plugins/pstack/skills/).
 

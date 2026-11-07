@@ -53,21 +53,23 @@ export function planApply(current, next, base) {
     throw new Error(`refused: ${drifted.join(", ")} changed in the file after the page was rendered. Render the page again and redo those edits.`);
   }
   const text = lines.join("\n");
+  let foreign = false;
   for (const role of allRoleLabels(text)) {
     for (const { harness = native, model, effort } of resolveRole(text, role)) {
+      foreign ||= harness !== native;
       if (harness === "claude" && model?.startsWith("claude-")) {
         throw new Error(`${role}: ${model} is a full model ID, which the Agent tool rejects; write the family name, such as ${model.split("-")[1]}`);
       }
       checkForeignTarget(role, { harness, model: model ?? "inherit-parent", effort });
     }
   }
-  return { changes, text };
+  return { changes, text, foreign };
 }
 
 export function apply({ message, dryRun = false, env = process.env, log = console.log }) {
   const { sheetPath, base, next } = parseMessage(readFileSync(message, "utf8"));
   if (!existsSync(sheetPath)) throw new Error(`sheet not found: ${sheetPath}`);
-  const { changes, text } = planApply(readFileSync(sheetPath, "utf8"), next, base);
+  const { changes, text, foreign } = planApply(readFileSync(sheetPath, "utf8"), next, base);
   changes.forEach((c) => log(`${c.role}: ${c.from} -> ${c.to}`));
   if (!changes.length) log("no role changed");
   if (dryRun) return { changes };
@@ -76,7 +78,6 @@ export function apply({ message, dryRun = false, env = process.env, log = consol
   copyFileSync(sheetPath, backup);
   writeFileSync(sheetPath, text);
   log(`wrote ${sheetPath} (backup ${backup})`);
-  const foreign = parseSheet(text).roles.some((r) => r.slots.some((s) => s.harness && s.harness !== native));
   if (foreign && detectedMuxes(env).length === 0) {
     log("note: this sheet routes roles to another harness. Inside T3 Code those roles run as T3 Code subagents. Elsewhere they need herdr, tuios, tmux, or Rex, and this shell runs in none of them");
   }

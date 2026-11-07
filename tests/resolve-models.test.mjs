@@ -131,3 +131,22 @@ test("grok, agy and muse model ids keep their dots and dashes", () => {
     { harness: "muse", model: "muse-wonder-full-1.0", effort: "max" },
   ]);
 });
+
+test("pi, omp and opencode give each provider's model its own id prefix", () => {
+  expect(resolveRole("role: gpt-6.1-sol->pi @low, muse->omp@max, grok->omp, gpt-6.1-sol->opencode", "role")).toEqual([
+    { harness: "pi", model: "openai-codex/gpt-6.1-sol", effort: "low" },
+    { harness: "omp", model: "muse-code/muse-wonder-full-1.0", effort: "max" },
+    { harness: "omp", model: "xai-oauth/grok-4.7", effort: null },
+    { harness: "opencode", model: "openai/gpt-6.1-sol", effort: null },
+  ]);
+  expect(() => resolveRole("role: muse->pi", "role")).toThrow("pi runs no Meta (Muse) models, so it cannot run muse-wonder-full-1.0 (use muse->muse or muse->omp)");
+});
+
+test("the migration turns old harness prefixes into the arrow form and leaves everything else as written", async () => {
+  const { migrateText } = await import("../plugins/pstack/skills/poteto-mode/scripts/migrate-sheet.mjs");
+  const before = "# sheet\r\nfeature: codex:gpt-6.1-sol @xhigh, opus @high\r\narena runners: claude:opus, muse:muse-wonder-full-1.0 @low,agy:gemini-3.8-flash-low\r\nswarm workers: ollama:qwen3:8b\r\ndefault effort: high\r\n";
+  const after = migrateText(before);
+  expect(after).toBe("# sheet\r\nfeature: gpt-6.1-sol @xhigh, opus @high\r\narena runners: opus, muse-wonder-full-1.0 @low,gemini-3.8-flash-low\r\nswarm workers: ollama:qwen3:8b\r\ndefault effort: high\r\n");
+  expect(migrateText("role: codex:my-custom @low")).toBe("role: my-custom->codex @low");
+  for (const role of ["feature", "arena runners", "swarm workers"]) expect(() => resolveRole(after, role)).not.toThrow();
+});

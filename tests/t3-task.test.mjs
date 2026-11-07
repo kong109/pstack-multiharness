@@ -81,7 +81,7 @@ test("the request id is stable for a retry and changes with the brief or the tar
 
 test("an effort the harness cannot take is refused, and one it lists is accepted", () => {
   expect(() => t3Task(request({ harness: "agy", model: "gemini-3.8-flash", effort: "high" })))
-    .toThrow("agy takes no effort setting; name the effort in the model id (agy:gemini-3.8-flash-high)");
+    .toThrow("agy takes no effort setting; name the effort in the model id (gemini-3.8-flash-high)");
   expect(() => t3Task(request({ effort: "minimal" }))).toThrow("Unsupported grok effort");
   expect(() => t3Task(request({ harness: "muse", model: "m", effort: "minimal" }))).not.toThrow();
 });

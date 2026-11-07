@@ -42,7 +42,7 @@ export function parseEntry(entry, list = harnesses) {
   return { model, harness, explicitEffort };
 }
 
-const providerOf = (model, catalog) =>
+export const providerOf = (model, catalog = providers) =>
   catalog.find((p) => p.models.some((m) => m.slug === model) || (p.match && new RegExp(p.match).test(model)));
 
 // A provider's harness name stands for its default model, and a model with a provider runs on that provider's harness unless the entry names one.

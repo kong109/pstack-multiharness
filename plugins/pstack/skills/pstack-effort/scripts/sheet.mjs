@@ -11,7 +11,7 @@ function parseSlot(raw) {
   }
 }
 
-export const slotText = ({ harness, model, effort }) => `${harness ? `${harness}:` : ""}${model}${effort ? ` @${effort}` : ""}`;
+export const slotText = ({ harness, model, effort }) => `${model}${harness ? `->${harness}` : ""}${effort ? ` @${effort}` : ""}`;
 
 const ROLE_LINE = /^\s*([a-z][a-z ,\-]*[a-z])\s*:\s*(\S.*)$/;
 

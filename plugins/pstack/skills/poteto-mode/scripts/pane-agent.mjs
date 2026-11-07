@@ -144,16 +144,20 @@ function addWorktree(tree) {
   return tree;
 }
 
-function removeWorktree({ repo, path, branch, base }) {
-  const removed = !existsSync(path) || sh("git", ["-C", repo, "worktree", "remove", path]).status === 0;
+function removeWorktree({ repo, path, branch, base }, discard) {
+  const removed = !existsSync(path) || sh("git", ["-C", repo, "worktree", "remove", ...(discard ? ["--force"] : []), path]).status === 0;
   const tip = branchTip(repo, branch);
-  const unused = removed && tip === base && sh("git", ["-C", repo, "branch", "-D", branch]).status === 0;
+  const unused = removed && (discard || tip === base) && sh("git", ["-C", repo, "branch", "-D", branch]).status === 0;
   return { path, removed, branch: tip && !unused ? branch : null };
 }
 
-// workrex remove asks before it drops a branch with commits, and exits 0 when stdin answers no, so it runs only on an unused branch and the outcome is read from disk.
-function releaseWorkrex({ repo, path, branch, base, workrex: handle }, keep, runner) {
-  if (!keep && branchTip(repo, branch) === base) runner("workrex", ["remove", handle], { cwd: repo, input: "" });
+// workrex remove asks before it drops a branch with commits, and exits 0 when stdin answers no, so without --force it runs only on an unused branch and the outcome is read from disk.
+// With --force it deletes whatever branch the worktree has checked out, which an agent may have switched, so a discard keeps that and deletes only its own branch.
+function releaseWorkrex({ repo, path, branch, base, workrex: handle }, { keep, discard }, runner) {
+  if (discard) {
+    runner("workrex", ["remove", "--force", "--keep-branch", handle], { cwd: repo, input: "" });
+    if (!existsSync(path)) sh("git", ["-C", repo, "branch", "-D", branch]);
+  } else if (!keep && branchTip(repo, branch) === base) runner("workrex", ["remove", handle], { cwd: repo, input: "" });
   if (existsSync(path)) runner("workrex", ["close", handle], { cwd: repo, input: "" });
   return { path, removed: !existsSync(path), branch: branchTip(repo, branch) ? branch : null };
 }
@@ -883,20 +887,23 @@ export function peek(name, deps) {
   return { name, screen: muxFor(state.mux, deps).peek(state) };
 }
 
-export function close(name, { keep = false } = {}, deps) {
+export function close(name, { keep = false, discard = false } = {}, deps) {
+  if (keep && discard) throw new Error("close takes --keep or --discard, not both");
   deps = resolveDeps(deps);
   const state = loadState(name, deps.env);
   const mux = muxFor(state.mux, deps);
   const tree = state.worktree;
   // The tab closes first, because workrex remove deletes the worktree by force after its checks and a running agent could write in between.
   const closed = mux.close(state);
-  const worktree = closed && tree && (tree.workrex ? releaseWorkrex(tree, keep, deps.runner) : !keep && removeWorktree(tree));
-  if (closed && !keep) rmSync(state.run, { recursive: true, force: true });
-  if (closed && keep) {
+  const worktree = closed && tree && (tree.workrex ? releaseWorkrex(tree, { keep, discard }, deps.runner) : !keep && removeWorktree(tree, discard));
+  // A discard that left the worktree or branch keeps the run directory, so close --discard can run again.
+  const retain = keep || (discard && worktree && (!worktree.removed || worktree.branch));
+  if (closed && !retain) rmSync(state.run, { recursive: true, force: true });
+  if (closed && retain) {
     state.closed = true;
     saveState(state);
   }
-  return { name, mux: state.mux, closed, kept: closed ? (keep ? state.run : null) : state.run, ...(worktree && { worktree }) };
+  return { name, mux: state.mux, closed, kept: closed ? (retain ? state.run : null) : state.run, ...(worktree && { worktree }) };
 }
 
 export function list({ env = process.env } = {}) {
@@ -915,7 +922,7 @@ export function main(argv, deps = {}) {
       name: { type: "string" }, harness: { type: "string" }, model: { type: "string" }, effort: { type: "string" },
       brief: { type: "string" }, cwd: { type: "string" }, access: { type: "string" }, mux: { type: "string" },
       "timeout-ms": { type: "string" }, "no-wait": { type: "boolean" }, text: { type: "string" },
-      keys: { type: "string" }, keep: { type: "boolean" }, "in-place": { type: "boolean" }, answer: { type: "string" }, run: { type: "string" },
+      keys: { type: "string" }, keep: { type: "boolean" }, discard: { type: "boolean" }, "in-place": { type: "boolean" }, answer: { type: "string" }, run: { type: "string" },
     },
   });
   const timeoutMs = values["timeout-ms"] === undefined ? undefined : Number(values["timeout-ms"]);
@@ -932,7 +939,7 @@ export function main(argv, deps = {}) {
   } else if (command === "peek") {
     out = peek(values.name, deps);
   } else if (command === "close") {
-    out = close(values.name, { keep: values.keep }, deps);
+    out = close(values.name, { keep: values.keep, discard: values.discard }, deps);
   } else if (command === "list") {
     out = list(deps);
   } else {

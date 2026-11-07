@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import { checkForeignTarget } from "../../poteto-mode/scripts/foreign-launch.mjs";
+import { detectedMuxes } from "../../poteto-mode/scripts/pane-agent.mjs";
 import { resolveRole } from "../../poteto-mode/scripts/resolve-models.mjs";
 import { parseSheet, allRoleLabels, slotText } from "./sheet.mjs";
 
@@ -76,8 +77,8 @@ export function apply({ message, dryRun = false, env = process.env, log = consol
   writeFileSync(sheetPath, text);
   log(`wrote ${sheetPath} (backup ${backup})`);
   const foreign = parseSheet(text).roles.some((r) => r.slots.some((s) => s.harness && s.harness !== native));
-  if (foreign && !env.HERDR_ENV && !env.HERDR_PANE_ID && env.TUIOS_ENV !== "1" && !env.TMUX) {
-    log("note: this sheet routes roles to another harness. Inside T3 Code those roles run as T3 Code subagents. Elsewhere they need herdr, tuios, or tmux, and this shell runs in none of them");
+  if (foreign && detectedMuxes(env).length === 0) {
+    log("note: this sheet routes roles to another harness. Inside T3 Code those roles run as T3 Code subagents. Elsewhere they need herdr, tuios, tmux, or Rex, and this shell runs in none of them");
   }
   return { changes, backup };
 }

@@ -41,7 +41,7 @@ The Codex home directory is `$CODEX_HOME` when that variable is set and `~/.code
 
 Enumerate the model names the `Agent` tool's `model` parameter accepts in this session. That is the dependable source. On Claude Code they are the family names listed in [Models](#models) below, each running that family's current model, and a full model ID is rejected. The default panel is listed there too. The panel is chosen for cross-family diversity. Ask the user to confirm or paste any additional slugs they want available. Never write a real slug you have not confirmed is available. The aliases `inherit-parent` and `auto` are always valid even though they are not detected slugs. Both mean the role runs on the parent session's model, which the `Agent` call expresses by omitting `model`.
 
-Also detect the other CLI harnesses a role can run on with `command -v claude codex grok agy muse`, and whether this session has T3 Code's `delegate_task` tool or runs inside herdr, tuios, or tmux (`HERDR_ENV`, `TUIOS_ENV`, `TMUX`). An entry such as `codex:gpt-6.1-sol @xhigh` runs on that harness through [foreign-harness subagents](../poteto-mode/references/foreign-harness.md), so offer the installed harnesses' models only when one of those routes exists.
+Also detect the other CLI harnesses a role can run on with `command -v claude codex grok agy muse`, and whether this session has T3 Code's `delegate_task` tool or runs inside herdr, tuios, tmux, or Rex (`HERDR_ENV`, `TUIOS_ENV`, `TMUX`, `REX_SESSION`). An entry such as `codex:gpt-6.1-sol @xhigh` runs on that harness through [foreign-harness subagents](../poteto-mode/references/foreign-harness.md), so offer the installed harnesses' models only when one of those routes exists.
 
 ### 2. Load current state
 

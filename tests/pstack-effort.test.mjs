@@ -274,7 +274,12 @@ test("warns when the sheet routes to another harness and the shell has no multip
   const logs = [];
   apply({ message: message(root, sheetPath, twoNative.replace("@high", "@low")), env: {}, log: (line) => logs.push(line) });
   expect(logs.join("\n")).toContain("run as T3 Code subagents");
-  expect(logs.join("\n")).toContain("need herdr, tuios, or tmux, and this shell runs in none of them");
+  expect(logs.join("\n")).toContain("need herdr, tuios, tmux, or Rex, and this shell runs in none of them");
+  writeFileSync(sheetPath, twoNative);
+  logs.length = 0;
+  apply({ message: message(root, sheetPath, twoNative.replace("@high", "@low")), env: { REX_SESSION: "session:x", REX_BLOCK: "block:y" }, log: (line) => logs.push(line) });
+  expect(logs.join("\n")).toContain("wrote");
+  expect(logs.join("\n")).not.toContain("run as T3 Code subagents");
 });
 
 test("the registry and the provider catalog agree, so the page only offers what a launch accepts", () => {

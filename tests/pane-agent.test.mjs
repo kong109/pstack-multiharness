@@ -1483,8 +1483,10 @@ function workrexRules(dir, { pane = rexChild, removeFails = false, trees = `${di
         const force = args.includes("--force");
         const handle = args.at(-1);
         if (removeFails && !force) return { status: 1, stdout: "", stderr: "Cannot remove worktrees with uncommitted changes" };
-        gitIn(opts.cwd, "worktree", "remove", ...(force ? ["--force"] : []), `${trees}/${handle}`);
-        gitIn(opts.cwd, "branch", "-D", `pstack/${handle.slice("pstack-".length)}`);
+        const tree = `${trees}/${handle}`;
+        const checkedOut = gitIn(tree, "branch", "--show-current");
+        gitIn(opts.cwd, "worktree", "remove", ...(force ? ["--force"] : []), tree);
+        if (!args.includes("--keep-branch")) gitIn(opts.cwd, "branch", "-D", checkedOut);
         return text("");
       },
       "workrex close": text(""),
@@ -1545,16 +1547,31 @@ test("workrex keeps a worker's changes: a dirty worktree is only closed, and a b
   expect(second.calls.filter((c) => c[0] === "workrex").map((c) => c[1])).toEqual(["--version", "add", "close"]);
 });
 
-test("workrex close --discard hands a worktree with changes and commits to workrex remove --force", () => {
+test("workrex close --discard hands a worktree with changes and commits to workrex remove --force, and deletes only its own branch", () => {
   const dir = repo();
   const rules = workrexRules(dir, { removeFails: true });
-  const { runner, calls } = scripted({ ...rexBase, ...rules.rules, ...rexDone() });
+  const { runner } = scripted({ ...rexBase, ...rules.rules, ...rexDone() });
   launch(options({ access: "write", cwd: dir }), { runner, env: rexEnv(), clock: fakeClock() });
   const tree = `${dir}__worktrees/pstack-arena-a`;
   gitIn(tree, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "work");
+  gitIn(tree, "switch", "-q", "-c", "release");
   writeFileSync(join(tree, "new.txt"), "edit\n");
-  expect(close("arena-a", { discard: true }, { runner, env: rexEnv() }).worktree).toEqual({ path: tree, removed: true, branch: null });
-  expect(calls.filter((c) => c[0] === "workrex").map((c) => c.slice(1).join(" "))).toContain("remove --force pstack-arena-a");
+  expect(close("arena-a", { discard: true }, { runner, env: rexEnv() })).toMatchObject({ kept: null, worktree: { path: tree, removed: true, branch: null } });
+  expect(existsSync(tree)).toBe(false);
+  expect(branches(dir)).toEqual(["main", "release"]);
+});
+
+test("a discard that cannot remove the worktree keeps the run directory, so close --discard can run again", () => {
+  const dir = repo();
+  const fails = { ...workrexRules(dir).rules, "workrex remove": { status: 1, stdout: "", stderr: "busy" } };
+  const first = scripted({ ...rexBase, ...fails, ...rexDone() });
+  launch(options({ access: "write", cwd: dir }), { runner: first.runner, env: rexEnv(), clock: fakeClock() });
+  const tree = `${dir}__worktrees/pstack-arena-a`;
+  writeFileSync(join(tree, "new.txt"), "edit\n");
+  const out = close("arena-a", { discard: true }, { runner: first.runner, env: rexEnv() });
+  expect(out).toMatchObject({ kept: join(root, "panes", "arena-a"), worktree: { path: tree, removed: false, branch: "pstack/arena-a" } });
+  const again = scripted({ ...rexBase, ...workrexRules(dir).rules });
+  expect(close("arena-a", { discard: true }, { runner: again.runner, env: rexEnv() })).toMatchObject({ kept: null, worktree: { removed: true, branch: null } });
   expect(branches(dir)).toEqual(["main"]);
 });
 

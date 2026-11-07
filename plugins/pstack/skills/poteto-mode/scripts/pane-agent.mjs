@@ -152,9 +152,12 @@ function removeWorktree({ repo, path, branch, base }, discard) {
 }
 
 // workrex remove asks before it drops a branch with commits, and exits 0 when stdin answers no, so without --force it runs only on an unused branch and the outcome is read from disk.
+// With --force it deletes whatever branch the worktree has checked out, which an agent may have switched, so a discard keeps that and deletes only its own branch.
 function releaseWorkrex({ repo, path, branch, base, workrex: handle }, { keep, discard }, runner) {
-  if (discard) runner("workrex", ["remove", "--force", handle], { cwd: repo, input: "" });
-  else if (!keep && branchTip(repo, branch) === base) runner("workrex", ["remove", handle], { cwd: repo, input: "" });
+  if (discard) {
+    runner("workrex", ["remove", "--force", "--keep-branch", handle], { cwd: repo, input: "" });
+    if (!existsSync(path)) sh("git", ["-C", repo, "branch", "-D", branch]);
+  } else if (!keep && branchTip(repo, branch) === base) runner("workrex", ["remove", handle], { cwd: repo, input: "" });
   if (existsSync(path)) runner("workrex", ["close", handle], { cwd: repo, input: "" });
   return { path, removed: !existsSync(path), branch: branchTip(repo, branch) ? branch : null };
 }
@@ -893,12 +896,14 @@ export function close(name, { keep = false, discard = false } = {}, deps) {
   // The tab closes first, because workrex remove deletes the worktree by force after its checks and a running agent could write in between.
   const closed = mux.close(state);
   const worktree = closed && tree && (tree.workrex ? releaseWorkrex(tree, { keep, discard }, deps.runner) : !keep && removeWorktree(tree, discard));
-  if (closed && !keep) rmSync(state.run, { recursive: true, force: true });
-  if (closed && keep) {
+  // A discard that left the worktree or branch keeps the run directory, so close --discard can run again.
+  const retain = keep || (discard && worktree && (!worktree.removed || worktree.branch));
+  if (closed && !retain) rmSync(state.run, { recursive: true, force: true });
+  if (closed && retain) {
     state.closed = true;
     saveState(state);
   }
-  return { name, mux: state.mux, closed, kept: closed ? (keep ? state.run : null) : state.run, ...(worktree && { worktree }) };
+  return { name, mux: state.mux, closed, kept: closed ? (retain ? state.run : null) : state.run, ...(worktree && { worktree }) };
 }
 
 export function list({ env = process.env } = {}) {

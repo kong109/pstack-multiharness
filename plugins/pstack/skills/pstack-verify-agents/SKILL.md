@@ -40,7 +40,7 @@ Add a test case to `tests/resolve-models.test.mjs` for the new provider mapping.
 
 1. Run `verify-agents.mjs sandbox`. It creates or reuses a scratch repository at a fixed path, refuses one with uncommitted changes, and deletes its branches older than 24 hours. A fixed path keeps per-folder trust records, so a harness such as Grok asks only on the first run.
 2. Pick a run directory in your scratch space, such as `<scratch>/verify-<time>/`. Put `panes/`, `log.jsonl`, and `brief.md` there.
-3. Run `verify-agents.mjs brief <entries> > <run>/brief.md`. The brief gives the coordinator a task only. It never says which skill, script, or flags to use, because the run checks that pstack's own instructions lead there.
+3. Run `verify-agents.mjs brief <entries> > <run>/brief.md`. If it exits non-zero, fix the entries it names on stderr and run it again, because a refused brief leaves `brief.md` empty. The brief gives the coordinator a task only. It never says which skill, script, or flags to use, because the run checks that pstack's own instructions lead there.
 4. Start the recorder with `run_in_background: true`:
 
    ```sh

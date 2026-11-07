@@ -207,7 +207,9 @@ export function main(argv) {
   if (command === "judge" && values.log) {
     const sandboxDir = sandboxPath();
     const worktrees = existsSync(join(sandboxDir, ".git")) ? git(sandboxDir, "worktree", "list", "--porcelain").split("\n").filter((l) => l.startsWith("worktree ")).map((l) => l.slice("worktree ".length)) : [];
-    const verdict = judge(readLog(values.log), seats(), { sandboxDir, userSession: values["user-session"], worktrees });
+    const planned = seats();
+    if (report(planned, "grammar")) return 2;
+    const verdict = judge(readLog(values.log), planned, { sandboxDir, userSession: values["user-session"], worktrees });
     console.log(JSON.stringify(verdict, null, 2));
     return verdict.ok ? 0 : 1;
   }

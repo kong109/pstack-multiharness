@@ -26,7 +26,7 @@ Say which one is active and why in your reply.
 2. Publish it with the Artifact tool (`icon: "sliders"`). On a first publish in a new session, first `list` the user's artifacts. If one titled "Pstack Effort Map" exists, `read` it and publish to its `url`, so the user keeps one link.
 3. Reply with the link and the current map as a short table of role and entries. Tell the user to pick providers, models and effort boxes, copy the message at the bottom, and paste it back.
 
-Each slot has a provider select, a model select, a harness select, and effort checkboxes. A slot is written as `model`, then `->harness` when the slot names one, then ` @effort`, as in `gpt-6.1-sol->codex @xhigh`.
+Each slot has a provider select, a model select, a harness select, and effort checkboxes. A slot is written as `model`, then `->harness` when the slot names one, then a space and `@effort`, as in `gpt-6.1-sol->codex @xhigh`.
 
 - **Presets.** A select at the top lists the presets as `user/NAME` and `project/NAME`. Choosing one fills every role the preset names with its entries and keeps the rest of the sheet's roles as they are. A preset role the sheet lacks is skipped, since the page edits only existing role lines, and the page names both lists. A preset entry with no effort takes the preset's `default effort` line, written as an explicit `@level` when it differs from the sheet's. A preset whose default is `session` cannot override a sheet default level, so those entries take the sheet's default. The result is an ordinary edit: change slots after it, or reset.
 

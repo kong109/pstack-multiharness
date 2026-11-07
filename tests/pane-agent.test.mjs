@@ -1447,7 +1447,7 @@ test("rex send --keys waits for a dialog's blocked status to clear before it set
 });
 
 // Runs the --agent script with Rex's variables, with true standing in for the harness.
-function workrexRules(dir, { pane = rexChild, removeFails = false } = {}) {
+function workrexRules(dir, { pane = rexChild, removeFails = false, trees = `${dir}__worktrees` } = {}) {
   const agents = [];
   return {
     agents,
@@ -1456,10 +1456,11 @@ function workrexRules(dir, { pane = rexChild, removeFails = false } = {}) {
       "workrex add": (args, opts) => {
         const [shell, script] = args[args.indexOf("--agent") + 1].split(" ");
         const body = readFileSync(script.slice(1, -1), "utf8");
-        agents.push({ args, opts, shell, body, marker: join(runDir(), "block") });
-        gitIn(opts.cwd, "worktree", "add", "-q", "-b", args[1], `${opts.cwd}__worktrees/${args[args.indexOf("--name") + 1]}`, args[args.indexOf("--base") + 1]);
+        const tree = `${trees}/${args[args.indexOf("--name") + 1]}`;
+        agents.push({ args, opts, shell, body, tree, marker: join(runDir(), "block") });
+        gitIn(opts.cwd, "worktree", "add", "-q", "-b", args[1], tree, args[args.indexOf("--base") + 1]);
         if (pane) {
-          const ran = spawnSync("sh", ["-c", body.replace(/exec .*\n$/, "exec pwd\n")], { encoding: "utf8", env: { ...process.env, REX_SESSION: "session:s1", REX_BLOCK: pane } });
+          const ran = spawnSync("sh", ["-c", body.replace(/exec .*\n$/, "exec pwd\n")], { cwd: tree, encoding: "utf8", env: { ...process.env, REX_SESSION: "session:s1", REX_BLOCK: pane } });
           agents.at(-1).pwd = ran.stdout.trim();
         }
         return text("");
@@ -1467,7 +1468,7 @@ function workrexRules(dir, { pane = rexChild, removeFails = false } = {}) {
       "rex block inspect": json({ session_id: "session:s1", block: { window_id: "window:w9" } }),
       "workrex remove": (args, opts) => {
         if (removeFails) return { status: 1, stdout: "", stderr: "Cannot remove worktrees with uncommitted changes" };
-        gitIn(opts.cwd, "worktree", "remove", `${opts.cwd}__worktrees/${args[1]}`);
+        gitIn(opts.cwd, "worktree", "remove", `${trees}/${args[1]}`);
         gitIn(opts.cwd, "branch", "-D", `pstack/${args[1].slice("pstack-".length)}`);
         return text("");
       },
@@ -1488,16 +1489,19 @@ test("in Rex a write agent's worktree and tab come from workrex add, and close h
   expect(out).toMatchObject({ verdict: "done", result: "wrote it\n", worktree: tree });
   expect(calls.some((c) => c.slice(0, 3).join(" ") === "rex window new")).toBe(false);
   const [{ args, opts, shell, body, pwd }] = agents;
-  expect(args.slice(0, 8)).toEqual(["add", "pstack/arena-a", "--name", "pstack-arena-a", "--base", gitIn(dir, "rev-parse", "HEAD"), "--background", "--agent"]);
-  expect(args[8].length).toBeLessThan(400);
+  expect(args.slice(0, 9)).toEqual(["add", "pstack/arena-a", "--name", "pstack-arena-a", "--base", gitIn(dir, "rev-parse", "HEAD"), "--background", "--local", "--agent"]);
+  expect(args[9].length).toBeLessThan(400);
   expect(opts).toMatchObject({ cwd: dir, input: "" });
   expect(shell).toBe("sh");
   expect(pwd).toBe(tree);
   expect(body).toMatch(/exec 'codex' '-m' 'gpt-6\.1-sol' .*brief\.md.*'\n$/);
-  expect(readFileSync(join(runDir(), "block"), "utf8")).toBe(`session:s1 ${rexChild}`);
+  expect(readFileSync(join(runDir(), "block"), "utf8")).toBe(`session:s1\n${rexChild}\n${tree}\n`);
   expect(calls.filter((c) => c[0] === "rex" && c.includes("-b")).every((c) => c.includes(rexChild))).toBe(true);
   expect(close("arena-a", {}, { runner, env: rexEnv() }).worktree).toEqual({ path: tree, removed: true, branch: null });
   expect(calls.filter((c) => c[0] === "workrex").map((c) => c[1])).toEqual(["--version", "add", "remove"]);
+  const closedAt = calls.findIndex((c) => c.slice(0, 3).join(" ") === "rex window close");
+  expect(closedAt).toBeGreaterThan(-1);
+  expect(closedAt).toBeLessThan(calls.findIndex((c) => c[1] === "remove"));
   expect(existsSync(tree)).toBe(false);
   expect(branches(dir)).toEqual(["main"]);
 });
@@ -1569,8 +1573,25 @@ test("a workrex launch waits for the agent's shell to report its block, which la
   let slept = 0;
   clock.sleep = (ms) => {
     sleep(ms);
-    if (++slept === 3) writeFileSync(agents[0].marker, `session:s1 ${rexChild}`);
+    if (++slept === 3) writeFileSync(agents[0].marker, `session:s1\n${rexChild}\n${agents[0].tree}\n`);
   };
   const { runner } = scripted({ ...rexBase, ...rules, ...rexDone() });
   expect(launch(options({ access: "write", cwd: dir }), { runner, env: rexEnv(), clock })).toMatchObject({ verdict: "done" });
+});
+
+test("a workrex worktree_dir elsewhere moves the agent there, and close follows it", () => {
+  const dir = repo();
+  const elsewhere = join(realpathSync(root), "wt-elsewhere");
+  mkdirSync(elsewhere);
+  mkdirSync(join(dir, "pkg"));
+  writeFileSync(join(dir, "pkg", "p.txt"), "p\n");
+  gitIn(dir, "add", "pkg");
+  gitIn(dir, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "pkg");
+  const { rules, agents } = workrexRules(dir, { trees: elsewhere });
+  const { runner } = scripted({ ...rexBase, ...rules, ...rexDone() });
+  const tree = join(elsewhere, "pstack-arena-a");
+  expect(launch(options({ access: "write", cwd: join(dir, "pkg") }), { runner, env: rexEnv(), clock: fakeClock() })).toMatchObject({ verdict: "done", worktree: tree });
+  expect(agents[0].pwd).toBe(join(tree, "pkg"));
+  expect(close("arena-a", {}, { runner, env: rexEnv() }).worktree).toEqual({ path: tree, removed: true, branch: null });
+  expect(existsSync(tree)).toBe(false);
 });

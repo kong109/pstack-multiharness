@@ -2,7 +2,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 
@@ -520,14 +520,18 @@ export function rexMux({ runner, env, clock }) {
     const marker = join(state.run, "block");
     const script = join(state.run, "agent.sh");
     // Workrex types --agent into the tab's shell, and a long line typed ahead of the shell gets cut, so the argv waits in a script.
-    // The script reports the block it runs in, which Workrex does not print, then becomes the harness.
-    writeFileSync(script, `printf '%s %s' "$REX_SESSION" "$REX_BLOCK" > ${shellWord(marker)}\ncd ${shellWord(cwd)} && exec ${argv.map(shellWord).join(" ")}\n`);
-    const r = runner("workrex", ["add", branch, "--name", handle, "--base", base, "--background", "--agent", `sh ${shellWord(script)}`], { cwd: repo, input: "" });
+    // The script reports the block it runs in, which Workrex does not print, and the worktree it starts in, which worktree_dir can move, then becomes the harness.
+    const sub = relative(state.worktree.path, cwd) || ".";
+    writeFileSync(script, `printf '%s\\n%s\\n%s\\n' "$REX_SESSION" "$REX_BLOCK" "$(pwd -P)" > ${shellWord(marker)}\ncd ${shellWord(sub)} && exec ${argv.map(shellWord).join(" ")}\n`);
+    rmSync(marker, { force: true });
+    const r = runner("workrex", ["add", branch, "--name", handle, "--base", base, "--background", "--local", "--agent", `sh ${shellWord(script)}`], { cwd: repo, input: "" });
     if (r.status !== 0) throw new Error(`workrex add failed: ${failure(r)}`);
-    const reported = () => (existsSync(marker) ? readFileSync(marker, "utf8").split(" ") : []);
-    for (let i = 0; i < 120 && reported().length < 2; i++) clock.sleep(250);
-    const [session, pane] = reported();
-    if (!pane) throw new Error(`workrex add opened ${handle}, but no pane started the agent; the Workrex panes need one with command: <agent>`);
+    const reported = () => (existsSync(marker) ? readFileSync(marker, "utf8").split("\n") : []);
+    for (let i = 0; i < 120 && reported().length < 4; i++) clock.sleep(250);
+    const [session, pane, root] = reported();
+    if (!root) throw new Error(`workrex add opened ${handle}, but no pane started the agent; the Workrex panes need one with command: <agent>, and Workrex's sandbox is not supported`);
+    Object.assign(state.worktree, { path: root, cwd: resolve(root, sub) });
+    state.cwd = state.worktree.cwd;
     const inspected = rex(["block", "inspect", "-s", session, pane, "--json"]);
     let window = null;
     try { window = JSON.parse(inspected.stdout).block.window_id; } catch {}
@@ -884,9 +888,9 @@ export function close(name, { keep = false } = {}, deps) {
   const state = loadState(name, deps.env);
   const mux = muxFor(state.mux, deps);
   const tree = state.worktree;
-  const released = tree?.workrex ? releaseWorkrex(tree, keep, deps.runner) : undefined;
+  // The tab closes first, because workrex remove deletes the worktree by force after its checks and a running agent could write in between.
   const closed = mux.close(state);
-  const worktree = released ?? (closed && !keep && tree ? removeWorktree(tree) : undefined);
+  const worktree = closed && tree && (tree.workrex ? releaseWorkrex(tree, keep, deps.runner) : !keep && removeWorktree(tree));
   if (closed && !keep) rmSync(state.run, { recursive: true, force: true });
   if (closed && keep) {
     state.closed = true;

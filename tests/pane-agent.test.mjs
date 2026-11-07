@@ -1326,7 +1326,7 @@ const json = (body) => text(JSON.stringify(body));
 const rexBase = {
   "rex window new": json({ window_id: "window:w1", block_ids: [rexChild], revision: 3 }),
   "rex block call -s session:s1 -b block:01a1b355-92eb-7338-a20c-ed13e0cfdb46 process": json({ last_exit: null }),
-  "rex capture": text("codex screen\n"),
+  [`rex block call -s session:s1 -b ${"block:01a1b355-92eb-7338-a20c-ed13e0cfdb46"} format`]: text(JSON.stringify({ content: "codex screen\n" })),
   "rex send": text(""),
   "rex send-key": text(""),
   "rex window close": text(""),
@@ -1371,7 +1371,7 @@ test("a rex done record from the turn before a send is ignored until the harness
 });
 
 test("rex returns blocked with the screen when the harness reports blocked, and error when its block is gone", () => {
-  const blocked = scripted({ ...rexBase, [childStatus]: json(rexRecord("blocked", 1)), "rex capture": text("Allow this command?\n") });
+  const blocked = scripted({ ...rexBase, [childStatus]: json(rexRecord("blocked", 1)), [`rex block call -s session:s1 -b ${rexChild} format`]: json({ content: "Allow this command?\n" }) });
   expect(launch(options(), { runner: blocked.runner, env: rexEnv(), clock: fakeClock() }))
     .toMatchObject({ verdict: "blocked", screen: "Allow this command?" });
   close("arena-a", {}, { runner: blocked.runner, env: rexEnv() });
@@ -1384,7 +1384,7 @@ test("rex returns blocked with the screen when the harness reports blocked, and 
 });
 
 test("a rex harness that reports no status settles on its screen, as on tmux", () => {
-  const { runner } = scripted({ ...rexBase, [childStatus]: json({ records: [] }), "rex capture": [text("banner"), text("Trust this folder?")] });
+  const { runner } = scripted({ ...rexBase, [childStatus]: json({ records: [] }), [`rex block call -s session:s1 -b ${rexChild} format`]: [json({ content: "banner" }), json({ content: "Trust this folder?" })] });
   const out = launch(options(), { runner, env: rexEnv(), clock: fakeClock() });
   expect(out).toMatchObject({ verdict: "idle", screen: "Trust this folder?" });
 });
@@ -1414,4 +1414,34 @@ test("rex ask-parent types into an idle parent block and types nothing into a bl
     ] : []);
     close("arena-a", {}, { runner, env: rexEnv() });
   }
+});
+
+test("rex reads only the tail of a long scrollback, dropping the partial first line", () => {
+  const { runner, calls } = scripted({
+    ...rexBase,
+    [childStatus]: json({ records: [] }),
+    [`rex block call -s session:s1 -b ${rexChild} format`]: json({ content: "oldest", id: 9, total: 200_000 }),
+    [`rex block call -s session:s1 -b ${rexChild} blob_read`]: json({ id: 9, data: "tial line\nnewest line\n", eof: true }),
+  });
+  launch(options({ wait: false }), { runner, env: rexEnv(), clock: fakeClock() });
+  expect(peek("arena-a", { runner, env: rexEnv() }).screen).toBe("newest line");
+  const read = calls.find((c) => c.includes("blob_read"));
+  expect(JSON.parse(read.at(-1))).toEqual({ id: 9, offset: 200_000 - 65_536, max_bytes: 65_536 });
+});
+
+test("rex send --keys waits for a dialog's blocked status to clear before it settles", () => {
+  const clock = fakeClock();
+  let polled = 0;
+  const { runner } = scripted({
+    ...rexBase,
+    [childStatus]: () => {
+      polled += 1;
+      if (polled <= 3) return json(rexRecord("blocked", 0));
+      if (polled === 4) return json(rexRecord("working", clock.now()));
+      write("result.md", "accepted\n");
+      return json(rexRecord("done", clock.now()));
+    },
+  });
+  launch(options({ wait: false }), { runner, env: rexEnv(), clock });
+  expect(send("arena-a", { keys: "Enter" }, { runner, env: rexEnv(), clock })).toMatchObject({ verdict: "done", result: "accepted\n" });
 });

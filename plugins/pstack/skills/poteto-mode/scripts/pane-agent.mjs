@@ -331,7 +331,6 @@ const TMUX_KEYS = { esc: "Escape", escape: "Escape" };
 
 const failure = (r) => (r.stderr || r.stdout).trim().slice(0, 300);
 
-// tmux and Rex both settle a turn by watching the screen. A harness that reports Rex program status steers the watch with it.
 function screenWatch({ runner, env, clock, screen, gone, status = () => null }) {
   const begun = (state) => {
     if (!state.awaitTurn) return;
@@ -455,10 +454,18 @@ export function tmuxMux({ runner, env, clock }) {
 
 const REX_KEYS = { esc: "escape", bspace: "backspace", "c-c": "ctrl+c" };
 const rexBin = (env) => (env.REX_BIN_DIR ? join(env.REX_BIN_DIR, "rex") : "rex");
-const rexBlock = (runner, env, session, block, method) => {
-  const r = runner(rexBin(env), ["block", "call", "-s", session, "-b", block, method]);
+const REX_TAIL_BYTES = 65_536;
+const rexBlock = (runner, env, session, block, method, args) => {
+  const r = runner(rexBin(env), ["block", "call", "-s", session, "-b", block, method, ...(args ? [JSON.stringify(args)] : [])]);
   try { return r.status === 0 ? JSON.parse(r.stdout) : null; } catch { return null; }
 };
+// format returns the start of the scrollback, which can run to megabytes, so read only its tail.
+function rexScreen(runner, env, session, block) {
+  const head = rexBlock(runner, env, session, block, "format", { format: "text", trim: true, unwrap: true, max_bytes: REX_TAIL_BYTES });
+  if (!head || head.id === undefined) return head?.content ?? null;
+  const tail = rexBlock(runner, env, session, block, "blob_read", { id: head.id, offset: Math.max(0, head.total - REX_TAIL_BYTES), max_bytes: REX_TAIL_BYTES });
+  return tail ? tail.data.slice(tail.data.indexOf("\n") + 1) : null;
+}
 // The root program-status record has no id. Records for subagents carry one.
 const rexStatus = (runner, env, session, block) => rexBlock(runner, env, session, block, "program_status")?.records?.find((r) => r.id === undefined) ?? null;
 
@@ -466,8 +473,8 @@ export function rexMux({ runner, env, clock }) {
   const rex = (args) => runner(rexBin(env), args);
   const at = (state) => ["-s", state.ids.session, "-b", state.ids.pane];
   const screen = (state) => {
-    const r = rex(["capture", ...at(state), "--trim", "--unwrap"]);
-    return r.status === 0 ? screenText(r.stdout) : null;
+    const text = rexScreen(runner, env, state.ids.session, state.ids.pane);
+    return text === null ? null : screenText(text);
   };
   const gone = (state) => {
     const process = rexBlock(runner, env, state.ids.session, state.ids.pane, "process");
@@ -517,12 +524,13 @@ export function rexMux({ runner, env, clock }) {
     wait: (state, timeoutMs) => settle(state, { fresh: turnPending(state, clock.now()), timeoutMs, turnAt: state.turnAt }),
     keys(state, keys, timeoutMs) {
       press(state, keys.map((k) => (k.length === 1 ? k : REX_KEYS[k.toLowerCase()] ?? k.toLowerCase())));
+      for (let i = 0; i < 20 && rexStatus(runner, env, state.ids.session, state.ids.pane)?.state === "blocked"; i++) clock.sleep(250);
       return settle(state, { fresh: Boolean(state.awaitTurn), timeoutMs });
     },
     alive: (state) => !gone(state),
     peek(state) {
-      const r = rex(["capture", ...at(state), "--trim", "--unwrap"]);
-      return r.status === 0 ? screenText(r.stdout) : `(unreadable: ${failure(r).slice(0, 200)})`;
+      const text = rexScreen(runner, env, state.ids.session, state.ids.pane);
+      return text === null ? "(unreadable: rex format failed)" : screenText(text);
     },
     close(state) {
       if (!state.ids?.window) return true;
@@ -532,7 +540,6 @@ export function rexMux({ runner, env, clock }) {
 }
 
 function screenBlocked({ runner, env }, text) {
-  if (!classifierEnabled(env)) return false;
   if (text === null) return true;
   const classified = classifyScreen(screenText(text), { runner, env });
   return !classified || classified.label === "dialog_open" || classified.confidence < PARENT_CLEAR_MIN_CONFIDENCE;
@@ -598,8 +605,7 @@ const muxes = {
       const record = rexStatus(deps.runner, deps.env, parent.session, parent.pane);
       if (record) return record.state === "blocked";
       if (!classifierEnabled(deps.env)) return false;
-      const r = deps.runner(rexBin(deps.env), ["capture", "-s", parent.session, "-b", parent.pane, "--trim", "--unwrap"]);
-      return screenBlocked(deps, r.status === 0 ? r.stdout : null);
+      return screenBlocked(deps, rexScreen(deps.runner, deps.env, parent.session, parent.pane));
     },
     typeInto({ runner, env, clock }, parent, line) {
       const at = ["-s", parent.session, "-b", parent.pane];

@@ -375,7 +375,7 @@ describe("denylistHits", () => {
 
   test("a slug passes only in a file its entry allows", () => {
     const catalog = '{ "slug": "grok-4.7" }, { "slug": "gemini-3.8-flash-high" }';
-    expect(denylistHits("skills/pstack-effort/providers.json", catalog, RULES.denylist)).toEqual([]);
+    expect(denylistHits("skills/poteto-mode/scripts/providers.json", catalog, RULES.denylist)).toEqual([]);
     expect(denylistHits("skills/pstack-effort/SKILL.md", catalog, RULES.denylist)).toHaveLength(2);
   });
 

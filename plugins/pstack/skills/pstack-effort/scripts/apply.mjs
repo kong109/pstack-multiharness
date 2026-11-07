@@ -8,7 +8,7 @@ import { detectedMuxes } from "../../poteto-mode/scripts/pane-agent.mjs";
 import { resolveRole } from "../../poteto-mode/scripts/resolve-models.mjs";
 import { parseSheet, allRoleLabels, slotText } from "./sheet.mjs";
 
-const { native } = JSON.parse(readFileSync(new URL("../providers.json", import.meta.url), "utf8"));
+const { native } = JSON.parse(readFileSync(new URL("../../poteto-mode/scripts/providers.json", import.meta.url), "utf8"));
 
 const field = (message, name) => new RegExp(String.raw`^${name}:[ \t]*(.+)$`, "m").exec(message)?.[1]?.trim();
 

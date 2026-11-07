@@ -538,7 +538,7 @@
       "token": "grok-",
       "hint": "Cursor model slug; point at the Models section, or add a substitution rule for the phrase",
       "allow": [
-        "skills/pstack-effort/providers.json"
+        "skills/poteto-mode/scripts/providers.json"
       ]
     },
     {
@@ -549,7 +549,7 @@
       "regex": "\\b(?:claude|gpt|gemini|composer)-[0-9a-z.-]*-(?:max|fast|xhigh|high|medium|low|thinking)\\b",
       "hint": "Cursor model slug with an effort suffix; point at the Models section, or add a substitution rule for the phrase",
       "allow": [
-        "skills/pstack-effort/providers.json"
+        "skills/poteto-mode/scripts/providers.json"
       ]
     },
     {

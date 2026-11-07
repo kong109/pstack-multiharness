@@ -66,7 +66,7 @@ function main(argv) {
   if (!values.sheet || !values.out) {
     throw new Error("usage: render.mjs --sheet <models.md> --out <page.html> [--scope project|user] [--native claude|codex] [--project-root <dir>]");
   }
-  const defaults = readJson(join(skillDir, "providers.json"));
+  const defaults = readJson(join(skillDir, "..", "poteto-mode", "scripts", "providers.json"));
   const modelsPath = join(skillDir, "..", "..", "models.json");
   const available = existsSync(modelsPath) ? readJson(modelsPath).available ?? [] : [];
   const sheetPath = resolve(values.sheet);

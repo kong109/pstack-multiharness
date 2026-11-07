@@ -12,7 +12,7 @@ import { buildProviders, codexModels, readPresets } from "../plugins/pstack/skil
 import { parseSheet, slotText } from "../plugins/pstack/skills/pstack-effort/scripts/sheet.mjs";
 
 const render = fileURLToPath(new URL("../plugins/pstack/skills/pstack-effort/scripts/render.mjs", import.meta.url));
-const providersJson = JSON.parse(readFileSync(new URL("../plugins/pstack/skills/pstack-effort/providers.json", import.meta.url), "utf8"));
+const providersJson = JSON.parse(readFileSync(new URL("../plugins/pstack/skills/poteto-mode/scripts/providers.json", import.meta.url), "utf8"));
 
 const sheet = `# pstack model configuration
 Roles below are edited by the page.

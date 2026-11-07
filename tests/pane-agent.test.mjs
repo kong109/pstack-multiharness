@@ -294,7 +294,7 @@ test("a write launch runs in a new worktree of the committed HEAD, and close rem
   const { runner, calls } = finished();
   const out = launch(options({ access: "write", cwd: dir }), { runner, env: herdrEnv() });
   const tree = `${dir}__worktrees/pstack-arena-a`;
-  expect(out).toMatchObject({ verdict: "done", worktree: tree });
+  expect(out).toMatchObject({ verdict: "done", worktree: tree, route: "git" });
   expect(calls[0]).toContain(tree);
   expect(readFileSync(join(tree, "a.txt"), "utf8")).toBe("committed\n");
   expect(gitIn(tree, "branch", "--show-current")).toBe("pstack/arena-a");
@@ -1503,7 +1503,7 @@ test("in Rex a write agent's worktree and tab come from workrex add, and close h
   const { runner, calls } = scripted({ ...rexBase, ...rules, ...rexDone() });
   const out = launch(options({ access: "write", cwd: dir }), { runner, env: rexEnv(), clock: fakeClock() });
   const tree = `${dir}__worktrees/pstack-arena-a`;
-  expect(out).toMatchObject({ verdict: "done", result: "wrote it\n", worktree: tree });
+  expect(out).toMatchObject({ verdict: "done", result: "wrote it\n", worktree: tree, route: "workrex" });
   expect(calls.some((c) => c.slice(0, 3).join(" ") === "rex window new")).toBe(false);
   const [{ args, opts, shell, body, pwd }] = agents;
   expect(args.slice(0, 9)).toEqual(["add", "pstack/arena-a", "--name", "pstack-arena-a", "--base", gitIn(dir, "rev-parse", "HEAD"), "--background", "--local", "--agent"]);

@@ -1,12 +1,12 @@
 # Foreign-harness subagents
 
-A role entry can name another CLI harness, as in `codex:gpt-6.1-sol @xhigh`. The prefix must be a harness in the [registry](../scripts/harnesses.json), and the entry must name a concrete model. A prefix that is not registered stays part of the model id. Run the [resolver](../scripts/resolve-models.mjs) on the active sheet to read a role's entries as JSON:
+A role entry is `model[->harness] [@effort]`. A model runs on its provider's harness, so `gpt-6.1-sol @xhigh` runs on Codex. `->harness` names another harness that serves that provider, as in `gpt-6.1-sol->opencode @high`, and the effort may follow the harness directly, as in `muse->pi@max`. A provider's harness name stands for its default model, so `muse` is Muse's default model on Muse. A model no provider claims stays on the native harness unchanged. [providers.json](../scripts/providers.json) lists the providers, their default models, and the patterns that claim a model. Each harness in the [registry](../scripts/harnesses.json) lists the providers it serves and the model id it gives each, so a multi-provider harness gets the id in its own namespace. The old `codex:gpt-6.1-sol` prefix fails, with the arrow form in the message. Run the [resolver](../scripts/resolve-models.mjs) on the active sheet to read a role's entries as JSON:
 
 ```sh
 node /path/to/poteto-mode/scripts/resolve-models.mjs /path/to/pstack-models.md "arena runners" "<the skill's default models>"
 ```
 
-It returns one object per entry, in order, with `harness` on entries that name one, `model` (null for `inherit-parent` and `auto`), and `effort`, which is the entry's `@level` or the sheet's `default effort` line, and null for `session`. A harness whose registry `effort` is null names the effort in its model id, so the default effort skips it. An entry with no `harness`, or with the harness the current session runs on, dispatches natively, as the calling skill's Models and Reasoning effort sections say. Every other entry runs on its own harness, either as a T3 Code subagent or in the real TUI of that harness, in a pane the user can watch. That covers a Codex parent that resolves a `claude:` entry and a Claude Code parent that resolves a `codex:` entry.
+It returns one object per entry, in order, with `harness` on entries that name one, `model` (null for `inherit-parent` and `auto`), and `effort`, which is the entry's `@level` or the sheet's `default effort` line, and null for `session`. A harness whose registry `effort` is null names the effort in its model id, so the default effort skips it. An entry with no `harness`, or with the harness the current session runs on, dispatches natively, as the calling skill's Models and Reasoning effort sections say. Every other entry runs on its own harness, either as a T3 Code subagent or in the real TUI of that harness, in a pane the user can watch. That covers a Codex parent that resolves a Claude model and a Claude Code parent that resolves a Codex model.
 
 Never run a foreign entry through a one-shot mode such as `codex exec` or `claude -p`, and never through the `Agent` tool.
 
@@ -14,7 +14,7 @@ Never run a foreign entry through a one-shot mode such as `codex exec` or `claud
 
 Take the first that applies.
 
-1. No `harness`, or the session's own harness. Dispatch natively.
+1. No `harness`, or the session's own harness. Dispatch natively, except for a `write` worker in Rex with `workrex` on `PATH`. Launch that one on the [pane route](#pane-route) with the session's own harness, so Workrex makes its worktree and the user sees its tab. Never give it the `Agent` tool's `isolation: "worktree"`, which makes a plain git worktree under `.claude/worktrees/`.
 2. T3 Code. This session has the `delegate_task` tool from the `t3-code` MCP server, whose name may carry a prefix such as `mcp__t3-code__delegate_task`. `orchestrator_capabilities` lists a provider whose `driverKind` is the entry's `t3.driver` in the [registry](../scripts/harnesses.json), with `canRunCrossProviderChildTask` true. Use the [T3 Code route](#t3-code-route).
 3. herdr, tuios, tmux, or Rex. `HERDR_ENV`, `TUIOS_ENV`, `TMUX`, or `REX_SESSION` is set. Use the [pane route](#pane-route).
 4. Otherwise tell the user and ask for a native model. Never fall back to a hidden process.
@@ -110,6 +110,8 @@ The agent writes its report to `result.md` in its run directory and a blocking q
 | `timeout` | the wait ran out | Run `peek`. Extend with `wait --name NAME`, or close it. |
 | `error` | the pane or harness is gone, or the text could not be typed | Report it and relaunch if the work still matters. A `send --answer` that failed counts as undelivered, so the same command can be run again. |
 
+A verdict for a `write` agent also names its `worktree` and the `route` that made it, `workrex` or `git`.
+
 `send --text` types a reply. With `--answer QUESTION_ID` it types only while that question is pending. `send --keys "Down Enter"` presses keys, using names such as `Enter`, `Escape`, `Up`, `Down`, `Tab`, and single characters. `wait --name NAME` blocks again after a human answered the dialog in the pane. It also delivers the brief when the launch never sent it, as after a startup dialog or `launch --no-wait`. After `launch --no-wait`, call `wait` before the first turn can end. On tuios, and on tmux or Rex when `wait` starts within 90 seconds of the launch, a turn that ended unobserved reads as `stalled` after 90 seconds, so run `peek` and send the reminder yourself. `send` moves the previous `result.md` and `question.md` aside as `.prev` files before it delivers. `peek --name NAME` prints the recent screen.
 
 ### Questions in the parent pane
@@ -186,4 +188,4 @@ An agent's claim about its own model is not verification. The harness shows its 
 
 ## Add a harness
 
-`../scripts/harnesses.json` is the registry. An entry names the command, the herdr agent kind, the flags that select a model and an effort, the effort values it accepts, the flag that grants the run directory, and the launch flags for each access level. It also carries `t3`, the `driver` T3 Code names the harness by and the `options` that carry effort, with `{effort}` filled from the entry. An option that uses `{effort}` is left out when the entry has no effort. An optional `prompt` template sets how tuios receives the first prompt when a bare trailing argument is not enough. A harness with `effort` null takes no effort setting, so its effort belongs in the model id. A new harness needs an entry, a live launch check in each multiplexer, and one live `delegate_task` round, nothing else.
+`../scripts/harnesses.json` is the registry. An entry names the command, the herdr agent kind, the providers it serves, the flags that select a model and an effort, the effort values it accepts, the flag that grants the run directory, and the launch flags for each access level. `providers` maps each provider id in [providers.json](../scripts/providers.json) to the model id the harness takes, with `{model}` filled from the entry, such as `"openai": "openai-codex/{model}"`. It also carries `t3`, the `driver` T3 Code names the harness by and the `options` that carry effort, with `{effort}` filled from the entry. An option that uses `{effort}` is left out when the entry has no effort. An optional `prompt` template sets how tuios receives the first prompt when a bare trailing argument is not enough. A harness with `effort` null takes no effort setting, so its effort belongs in the model id. A new provider needs an entry in `providers.json` with its `harness`, `default` model, and a `match` pattern. Run [`/pstack-verify-agents`](../../pstack-verify-agents/SKILL.md) with the new entries to add the harness and check it end to end in Rex and Workrex.

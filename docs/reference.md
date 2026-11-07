@@ -36,7 +36,8 @@ Find each skill's instructions in the [skills tree](../plugins/pstack/skills/).
 | `/ketchup-video` | get the `/ketchup` catch-up as a short silent video of slides, with the calls waiting on you as text under it |
 | `/setup-pstack` | configure pstack per-role model choices |
 | `/pstack-preset` | save the current role mapping as a named project or user preset |
-| `/pstack-effort` | edit the role mapping as a page with a provider, model, and effort choice per slot, then apply it |
+| `/pstack-effort` | edit the role mapping as a page with a provider, model, harness, and effort choice per slot, then apply it |
+| `/pstack-verify-agents` | check that pstack runs the given agents end to end in Rex and Workrex, add a new harness, and fix what fails |
 | `/poteto-help` | answer a question about pstack with the prompt to send and the file the answer came from |
 | `/unslop` | clean up writing by removing AI tells |
 | `/no-comments` | strip comments before review, fix the accepted findings, encode claimed constraints |
@@ -171,7 +172,7 @@ Update an installed copy after a `git pull` with `muse plugins update pstack`, a
 
 Invoke [setup-pstack](../plugins/pstack/skills/setup-pstack/SKILL.md) to choose models for each role. It detects available models, confirms the choices, and writes an override sheet. Its [runtime table](../plugins/pstack/skills/setup-pstack/SKILL.md#other-runtimes) names the sheet path and loading mechanism for each runtime. Defaults live in [models.json](../plugins/pstack/models.json).
 
-A role entry may name another CLI harness, as in `codex:gpt-6.1-sol @xhigh`. That role runs on that harness, as a T3 Code subagent inside T3 Code and otherwise in the other CLI's own TUI, in a herdr tab, tuios window, tmux window, or Rex tab the user can watch. A write role gets its own git worktree, which Workrex creates inside Rex when it is installed. [Foreign-harness subagents](../plugins/pstack/skills/poteto-mode/references/foreign-harness.md) covers the routes, and [harnesses.json](../plugins/pstack/skills/poteto-mode/scripts/harnesses.json) lists the harnesses: `claude`, `codex`, `grok`, `agy`, and `muse`. setup-pstack can also keep a project sheet at `.pstack/models.md` and start from a preset saved with `pstack-preset`. `pstack-effort` edits the sheet on a page.
+A role entry is `model[->harness] [@effort]`. A model runs on its provider's harness, so `gpt-6.1-sol @xhigh` runs on Codex, and `->harness` picks another harness that serves the provider, as in `muse->pi @max`. A provider's harness name, such as `muse`, stands for its default model. A role on another harness runs as a T3 Code subagent inside T3 Code and otherwise in the other CLI's own TUI, in a herdr tab, tuios window, tmux window, or Rex tab the user can watch. A write role gets its own git worktree, which Workrex creates inside Rex when it is installed. [Foreign-harness subagents](../plugins/pstack/skills/poteto-mode/references/foreign-harness.md) covers the routes, and [harnesses.json](../plugins/pstack/skills/poteto-mode/scripts/harnesses.json) lists the harnesses and the providers each serves. [`/pstack-verify-agents`](../plugins/pstack/skills/pstack-verify-agents/SKILL.md) adds a harness and checks it end to end. setup-pstack can also keep a project sheet at `.pstack/models.md` and start from a preset saved with `pstack-preset`. `pstack-effort` edits the sheet on a page.
 
 For design comparisons and reviews, choose distinct models available to your runtime. The default panel uses different Claude models.
 

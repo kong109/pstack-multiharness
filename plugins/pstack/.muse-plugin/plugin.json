@@ -271,6 +271,11 @@
         "enabledDefault": true
       },
       {
+        "id": "pstack-verify-agents",
+        "path": "skills/pstack-verify-agents/SKILL.md",
+        "enabledDefault": true
+      },
+      {
         "id": "recall",
         "path": "skills/recall/SKILL.md",
         "enabledDefault": true

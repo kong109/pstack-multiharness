@@ -46,6 +46,7 @@ test("with no entries, each installed harness gets a seat, and a multi-provider 
 test("the brief names a task and the seats, not the skill or the scripts", () => {
   const text = brief([{ entry: "codex" }, { entry: "muse->pi @max" }]);
   expect(text).toContain("codex, muse->pi @max");
+  expect(text).toContain("runs the entry's model as written");
   expect(text).not.toMatch(/arena skill|pane-agent|workrex|\/pstack/i);
 });
 

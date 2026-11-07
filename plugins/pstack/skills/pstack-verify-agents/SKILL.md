@@ -54,10 +54,10 @@ Add a test case to `tests/resolve-models.test.mjs` for the new provider mapping.
 Launch a Claude Code coordinator in its own Workrex worktree and Rex session from the sandbox:
 
 ```sh
-cd <sandbox> && workrex add verify-<time> --session --background --local --agent "env PSTACK_PANES_DIR=<run>/panes claude" --prompt-file <run>/brief.md
+cd <sandbox> && workrex add verify-<time> --name verify-coordinator --session --background --local --agent "env PSTACK_PANES_DIR=<run>/panes claude" --prompt-file <run>/brief.md
 ```
 
-`--session` gives the coordinator a Rex session of its own, so a rename by its session hook leaves the user's session alone. `PSTACK_PANES_DIR` makes its pane agents write state where the recorder reads it. Then wait for it in the background with `cd <sandbox> && workrex wait verify-<time> --status done --timeout 3600`. `workrex wait` looks only in the repository of its working directory, so run it from the sandbox.
+`--name verify-coordinator` keeps the worktree at the same path on every run, so Claude Code asks whether to trust the folder only the first time. A new path per run brings the trust prompt back each time, and the coordinator waits on it with "No, exit" selected. `--session` gives the coordinator a Rex session of its own, so a rename by its session hook leaves the user's session alone. `PSTACK_PANES_DIR` makes its pane agents write state where the recorder reads it. Then wait for it in the background with `cd <sandbox> && workrex wait verify-coordinator --status done --timeout 3600`. `workrex wait` looks only in the repository of its working directory, so run it from the sandbox.
 
 While it runs, do not answer for it. Check in only when the recorder log shows a `waiting` status or a tab icon that stays on waiting for more than a minute. Then read that seat's screen with `PSTACK_PANES_DIR=<run>/panes node <poteto-mode>/scripts/pane-agent.mjs peek --name <seat>`. A dialog a pstack instruction should have handled is a finding. Answer it the way the instructions say, and record that you did.
 
@@ -89,7 +89,7 @@ Then check what the judge cannot:
 - The coordinator's report. Note every guess, retry, or workaround it describes, and every question it had to ask.
 - Leftovers. Run `workrex list` in the sandbox, `git -C <sandbox> worktree list`, and `rex window ls`. Compare them with what the coordinator says it kept.
 
-You can also ask the coordinator about its friction points with `SendMessage`. It shows in `ListAgents` as `verify-<time>`.
+You can also ask the coordinator about its friction points with `SendMessage`. It shows in `ListAgents` as `verify-coordinator`.
 
 ## 5. Fix and rerun
 

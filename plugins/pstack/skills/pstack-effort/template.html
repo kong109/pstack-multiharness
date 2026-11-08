@@ -206,11 +206,14 @@ function effortsOf(s) {
   if (!h.takesEffort) return [];
   return h.efforts || m.efforts;
 }
+function unlisted(s, effort) {
+  const h = HARNESSES[s.harness || (byId(s.provider) || {}).harness];
+  return Boolean(h && h.efforts && effort && effort !== "session" && !h.efforts.includes(effort));
+}
 function modelDefault(s) {
   const list = effortsOf(s);
   if (list && !list.length) return "";
-  const h = HARNESSES[s.harness || (byId(s.provider) || {}).harness];
-  return h && h.efforts && DATA.defaultEffort && DATA.defaultEffort !== "session" && !h.efforts.includes(DATA.defaultEffort) ? "" : DATA.defaultEffort;
+  return unlisted(s, DATA.defaultEffort) ? "" : DATA.defaultEffort;
 }
 function clearEffort(s) { s.effort = ""; }
 function unsupportedEffort(s) {
@@ -441,7 +444,7 @@ function presetLabel(p) { return p.scope + "/" + p.name; }
 function presetSlot(p, s) {
   const slot = { provider: s.provider, model: s.model, harness: s.harness, effort: s.effort };
   const list = effortsOf(slot);
-  if (!slot.effort && p.defaultEffort !== DATA.defaultEffort && !(list && !list.length) && !DATA.levelled.includes(slot.model)) slot.effort = p.defaultEffort;
+  if (!slot.effort && p.defaultEffort !== DATA.defaultEffort && !(list && !list.length) && !DATA.levelled.includes(slot.model) && !unlisted(slot, p.defaultEffort)) slot.effort = p.defaultEffort;
   return slot;
 }
 function loadPreset(p) {

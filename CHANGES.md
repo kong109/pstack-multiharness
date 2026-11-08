@@ -9,8 +9,8 @@ agy 1.5 takes `--effort low|medium|high` on a base model id, so `gemini-3.8-flas
 - The sheet's `default effort` line now reaches agy entries when agy lists that level. A level a harness does not list, such as `max` on agy or Grok, is left off, so the harness runs at its own default instead of failing the role.
 - An id that ends in its level, such as `gemini-3.8-flash-high`, still runs at that level and ignores the `default effort` line. An explicit effort on it is refused, because agy rejects the pair. `providers.json` marks Google with `levelledIds`, so only Gemini ids get this treatment.
 - `migrate-sheet.mjs` rewrites such an id as `gemini-3.8-flash @high`, and keeps the level when the entry says `@session`.
-- T3 Code's antigravity driver has no effort option, so `t3-task.mjs` appends the level to the model id, as in `gemini-3.8-flash-high`.
-- A preset's `default effort` is not added to a level-named id when it loads on the effort page.
+- T3 Code's antigravity driver has no effort option, so `t3-task.mjs` appends the level to the model id, as in `gemini-3.8-flash-high`, when agy lists that id, and refuses the effort otherwise.
+- When a preset loads on the effort page, its `default effort` is not added to a level-named id or to a slot whose harness does not list that level.
 
 ## 0.9.139 - Entries cut short by a shell redirect
 

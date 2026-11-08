@@ -576,7 +576,10 @@ test("a preset's default effort is not added to a level-named Antigravity id, wh
   const project = join(root, "project", ".pstack", "presets");
   mkdirSync(project, { recursive: true });
   writeFileSync(join(project, "levelled.md"), "feature: gemini-3.8-flash-high\ndefault effort: high\n");
+  writeFileSync(join(project, "most.md"), "feature: agy\ndefault effort: xhigh\n");
   const page = mount(sheet, new Map(), root);
+  page.choose("preset", "1");
+  expect(page.role("feature")).toBe("feature: agy");
   page.choose("preset", "0");
   expect(page.role("feature")).toBe("feature: gemini-3.8-flash-high");
   const pasted = parseMessage(page.message());

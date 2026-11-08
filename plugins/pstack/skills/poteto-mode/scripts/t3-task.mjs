@@ -6,7 +6,7 @@ import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 
 import { NAME, fill, checkForeignRequest, protocolPointer } from "./foreign-launch.mjs";
-import { harnesses } from "./resolve-models.mjs";
+import { harnesses, levelledIds } from "./resolve-models.mjs";
 
 const ROLES = { read: "review", write: "implementation" };
 
@@ -36,6 +36,9 @@ export function t3Task({ name, harness, model, effort = null, access = "read", b
   if (!brief?.trim()) throw new Error("--brief must name a file with the task in it");
   // T3 Code's antigravity driver has no effort option, so the effort goes into the model id, the way `agy models` lists it.
   const folded = effort !== null && !Object.values(t3.options ?? {}).some((template) => template.includes("{effort}"));
+  if (folded && !levelledIds().has(`${model}-${effort}`)) {
+    throw new Error(`T3 Code's ${t3.driver} driver takes no effort option, and ${model}-${effort} is not a model id it lists, so run ${model} without an effort`);
+  }
   const options = Object.fromEntries(
     Object.entries(t3.options ?? {})
       .filter(([, template]) => effort !== null || !template.includes("{effort}"))

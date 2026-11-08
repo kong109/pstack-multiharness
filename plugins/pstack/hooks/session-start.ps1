@@ -36,7 +36,7 @@ function MuseRoleLines([string[]] $lines) {
         $usable = $true
         foreach ($raw in $value[$role].Split(',')) {
             $entry = $raw.Trim([char[]]" `t")
-            if ($entry -cmatch '[ \t]+@([a-z]+)$' -and (HasOrdinal $efforts $Matches[1])) {
+            if ($entry -cmatch '@([a-z]+)$' -and (HasOrdinal $efforts $Matches[1])) {
                 $entry = $entry.Substring(0, $entry.Length - $Matches[0].Length)
             }
             $usable = $usable -and $entry -cmatch '^[a-z0-9][a-z0-9.-]*$'

@@ -11,7 +11,7 @@ import { checkForeignTarget } from "../../poteto-mode/scripts/foreign-launch.mjs
 const run = (command, args, opts = {}) => spawnSync(command, args, { encoding: "utf8", ...opts });
 const json = (r) => { try { return JSON.parse(r.stdout); } catch { return null; } };
 
-export const splitEntries = (args) => args.join(" ").split(/,|\s+(?=[^@\s])/).map((e) => e.trim()).filter(Boolean);
+export const splitEntries = (args) => args.join(" ").split(/,|\s+(?=[^@\s])/).map((e) => e.trim().replace(/\s+@/, "@")).filter(Boolean);
 
 export function planSeat(entry, { defaultEffort = "low", installed, registry } = {}) {
   const seat = { entry, problems: [] };

@@ -221,7 +221,7 @@ function unsupportedEffort(s) {
   return Boolean(list && s.effort && !list.includes(s.effort));
 }
 function entry(s) {
-  return s.model + (s.harness ? "->" + s.harness : "") + (s.effort ? " @" + s.effort : "");
+  return s.model + (s.harness ? "->" + s.harness : "") + (s.effort ? "@" + s.effort : "");
 }
 function line(r) { return r.role + ": " + r.slots.map(entry).join(", "); }
 

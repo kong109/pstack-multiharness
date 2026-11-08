@@ -17,7 +17,7 @@ const home = mkdtempSync(join(tmpdir(), "pstack-check-sheet-"));
 afterAll(() => rmSync(home, { recursive: true, force: true }));
 const sheetPath = join(home, "pstack-models.md");
 
-const PANEL = "claude-opus-5, gpt-5.5 @xhigh, gemini-3.8-flash";
+const PANEL = "claude-opus-5, gpt-5.5@xhigh, gemini-3.8-flash";
 const lines = (set = {}) =>
   models.roles.filter((r) => set[r.role] !== null).map(({ role, models: tier }) => `${role}: ${set[role] ?? (tier === "panel" ? PANEL : "claude-sonnet-5")}`);
 const sheet = (set, extra = []) => ["# pstack model overrides", "", ...lines(set), ...extra, "session hook: on", ""].join("\n");
@@ -45,7 +45,7 @@ describe("check-sheet.sh", () => {
   });
 
   test("passes a sheet with aliases, efforts, and a default effort", () => {
-    const set = { [roles[0]]: "inherit-parent", [roles[1]]: "auto", [roles[2]]: "claude-sonnet-5 @high" };
+    const set = { [roles[0]]: "inherit-parent", [roles[1]]: "auto", [roles[2]]: "claude-sonnet-5@high" };
     expect(check(sheet(set, ["default effort: session"]))).toEqual(ok);
     expect(check(sheet(set, ["default effort: xhigh"]))).toEqual(ok);
   });

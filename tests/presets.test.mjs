@@ -12,7 +12,7 @@ function fixture() {
   const root = mkdtempSync(join(tmpdir(), "pstack-presets-"));
   fixtures.push(root);
   const source = join(root, "source.md");
-  writeFileSync(source, "# local notes\n\nUnrelated instructions.\n\ndefault effort: medium\nsession hook: off\narena runners: a @high, b, a @low\n");
+  writeFileSync(source, "# local notes\n\nUnrelated instructions.\n\ndefault effort: medium\nsession hook: off\narena runners: a@high, b, a@low\n");
   return { root, source };
 }
 
@@ -37,7 +37,7 @@ test("same-name presets in both scopes remain independent", () => {
   const user = presetDirectory("user", root, root);
   const project = presetDirectory("project", root, root);
   savePreset(user, "daily", source);
-  writeFileSync(source, "bug-fix: auto @high\n");
+  writeFileSync(source, "bug-fix: auto@high\n");
   savePreset(project, "daily", source);
   expect(listPresets(user)).toEqual(["daily"]);
   expect(listPresets(project)).toEqual(["daily"]);
@@ -50,7 +50,7 @@ test("the CLI lists, shows, and applies an existing dotted version preset", () =
   const { root } = fixture();
   const directory = presetDirectory("project", root);
   mkdirSync(directory, { recursive: true });
-  const sheet = "# pstack model configuration\n\nbug-fix: gpt-6.1-sol @high\n";
+  const sheet = "# pstack model configuration\n\nbug-fix: gpt-6.1-sol@high\n";
   writeFileSync(join(directory, "openai-6.1.md"), sheet);
   const helper = join(import.meta.dir, "../plugins/pstack/skills/pstack-preset/scripts/presets.mjs");
   const run = (...args) => spawnSync("node", [helper, ...args], { cwd: root, encoding: "utf8" });
@@ -106,7 +106,7 @@ test("unsafe names, empty sheets, duplicate roles, and bad effort fail", () => {
     expect(() => savePreset(root, name, source)).toThrow();
     expect(() => applyPreset(root, name, source, true)).toThrow("portable lowercase");
   }
-  for (const sheet of ["# notes only", "role: a\nrole: b", "role: a@high", "role: a\neffort: a = high", "role: a\ndefault effort: a b"]) {
+  for (const sheet of ["# notes only", "role: a\nrole: b", "role: a @high", "role: a\neffort: a = high", "role: a\ndefault effort: a b"]) {
     expect(() => snapshot(sheet)).toThrow();
   }
   expect(() => presetDirectory("invalid", root, root)).toThrow();

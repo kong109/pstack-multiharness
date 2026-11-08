@@ -2,29 +2,28 @@
 import { copyFileSync, existsSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { harnesses, levelledIds, ownProvider, providers } from "./resolve-models.mjs";
+import { harnesses, levelledIds, ownProvider } from "./resolve-models.mjs";
 
 const ROLE = /^(\s*[a-z][a-z ,-]*[a-z]\s*:\s*)(\S.*)$/;
-const LEGACY = /^([a-z][a-z0-9-]*):(\S+)(\s+@\S+)?$/;
-const levels = new Set([...providers.flatMap((p) => p.efforts), ...Object.values(harnesses).flatMap((h) => h.efforts ?? [])]);
+const LEGACY = /^([a-z][a-z0-9-]*):([^\s@]+)(@\S+)?$/;
 const levelled = levelledIds();
 
 // A levelled model id becomes the model and an effort; an effort the entry already names wins, except `@session`.
 function splitLevel(entry) {
-  const model = /^(.+?)(?=->|@|\s|$)/.exec(entry)?.[1];
+  const model = /^(.+?)(?=->|@|$)/.exec(entry)?.[1];
   if (!levelled.has(model)) return entry;
   const [slug, effort] = levelled.get(model);
-  const rest = entry.slice(model.length).replace(/\s*@session$/, "");
-  return `${slug}${rest}${rest.includes("@") ? "" : ` @${effort}`}`;
+  const rest = entry.slice(model.length).replace(/@session$/, "");
+  return `${slug}${rest}${rest.includes("@") ? "" : `@${effort}`}`;
 }
 
-// An effort written without its space, which both grammars refuse, gets the space their error message asks for.
+// An effort written after a space, which the grammar refuses, moves up against the model.
 // The arrow is dropped only when the model's own provider runs on that harness, so the entry keeps its harness in every session.
 export function migrateEntry(entry) {
-  const joined = entry.includes("->") ? null : /^(\S+?)@([^@\s]+)$/.exec(entry);
-  const spaced = joined && levels.has(joined[2]) ? `${joined[1]} @${joined[2]}` : entry;
-  const match = LEGACY.exec(spaced);
-  if (!match || !Object.hasOwn(harnesses, match[1])) return splitLevel(spaced);
+  const spaced = /^(\S+)\s+(@\S+)$/.exec(entry);
+  const joined = spaced ? spaced[1] + spaced[2] : entry;
+  const match = LEGACY.exec(joined);
+  if (!match || !Object.hasOwn(harnesses, match[1])) return splitLevel(joined);
   const [, harness, model, effort = ""] = match;
   return splitLevel(`${model}${ownProvider(model)?.harness === harness ? "" : `->${harness}`}${effort}`);
 }
@@ -39,7 +38,7 @@ export function migrateText(text) {
   }).join("\n");
 }
 
-export function migrateFile(path, suffix = ".pre-arrow") {
+export function migrateFile(path, suffix = ".pre-nospace") {
   const text = readFileSync(path, "utf8");
   const next = migrateText(text);
   if (next === text) return { path, changed: false };

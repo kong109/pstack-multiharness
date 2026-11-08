@@ -20,27 +20,22 @@ const aliases = new Set(["auto", "inherit-parent"]);
 export function parseEntry(entry, list = harnesses) {
   const text = entry.trim();
   const invalid = (why) => new Error(`Invalid model entry: ${text}${why ? ` (${why})` : ""}`);
-  const [head, spaced, ...extra] = text.split(/\s+/);
-  if (extra.length || (spaced !== undefined && !/^@[^@]+$/.test(spaced))) throw invalid();
+  const spaced = /^(\S+)\s+(@\S+)$/.exec(text);
+  if (spaced) throw invalid(`write the effort right after the model, with no space, as in \`${spaced[1]}${spaced[2]}\``);
+  if (/\s/.test(text)) throw invalid();
+  const [head, explicitEffort, ...more] = text.split("@");
+  if (more.length || explicitEffort === "") throw invalid();
   const arrow = head.indexOf("->");
   const model = arrow < 0 ? head : head.slice(0, arrow);
   // An unquoted `muse->pi` in a shell redirects to a file named pi and leaves `muse-`; no model id ends in `-`.
   if (arrow < 0 && model.endsWith("-")) {
     throw invalid(`the shell read \`->\` as a redirect, so quote the entry, as in '${model}>harness', and delete the file it created, named after the harness`);
   }
-  let harness = null;
-  let explicitEffort = spaced?.slice(1);
-  if (arrow >= 0) {
-    const [name, joined, ...more] = head.slice(arrow + 2).split("@");
-    if (more.length || !harnessName.test(name) || (joined !== undefined && (!joined || explicitEffort !== undefined))) throw invalid();
-    harness = name;
-    explicitEffort ??= joined;
-  } else if (model.includes("@")) {
-    throw invalid(spaced ? "" : `write the effort after a space, as in \`${text.replace("@", " @")}\``);
-  }
+  const harness = arrow < 0 ? null : head.slice(arrow + 2);
+  if (harness !== null && !harnessName.test(harness)) throw invalid();
   const colon = model.indexOf(":");
   if (colon > 0 && Object.hasOwn(list, model.slice(0, colon))) {
-    throw invalid(`name the harness after the model, as in \`${model.slice(colon + 1)}->${harness ?? model.slice(0, colon)}${spaced ? ` ${spaced}` : ""}\``);
+    throw invalid(`name the harness after the model, as in \`${model.slice(colon + 1)}->${harness ?? model.slice(0, colon)}${explicitEffort ? `@${explicitEffort}` : ""}\``);
   }
   if (!model || !token.test(model) || (explicitEffort !== undefined && !token.test(explicitEffort))) throw invalid();
   if (harness && aliases.has(model)) throw invalid(`a ->${harness} entry names a model or a provider`);
@@ -87,7 +82,7 @@ export function resolveEntry({ model: written, harness: chosen, explicitEffort }
   // A levelled id keeps its level, since agy refuses a second effort on top. A default the harness does not list is left off.
   const levelled = levelledIds(catalog).get(model);
   if (levelled && explicitEffort !== undefined && explicitEffort !== "session") {
-    throw new Error(`${model} already names its effort, so write \`${levelled[0]} @${explicitEffort}\` instead of \`${model} @${explicitEffort}\``);
+    throw new Error(`${model} already names its effort, so write \`${levelled[0]}@${explicitEffort}\` instead of \`${model}@${explicitEffort}\``);
   }
   const listed = list[harness].efforts;
   const fallback = takesEffort(harness, list) && !levelled && (!listed || defaultEffort === "session" || listed.includes(defaultEffort));
@@ -106,7 +101,7 @@ export function resolveRole(text, role, defaults, options = {}) {
     const line = source.trim();
     if (!line || line.startsWith("#") || line.startsWith("```")) continue;
     if (/^effort:/.test(line)) {
-      throw new Error(`Unsupported line: ${line} (put the effort on each entry, as in \`model @high\`, or use a \`default effort:\` line)`);
+      throw new Error(`Unsupported line: ${line} (put the effort on each entry, as in \`model@high\`, or use a \`default effort:\` line)`);
     }
     const separator = line.indexOf(":");
     if (separator < 0) continue;

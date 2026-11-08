@@ -5,7 +5,7 @@
 
 Lauren Tan's [pstack](https://github.com/cursor/plugins/tree/main/pstack) is an opinionated Cursor skill stack that improves agent outcomes. This is a port for Claude Code, Codex, Pi, GitHub Copilot, Muse, and other agent harnesses. It tracks upstream and also carries named policy forks, each declared in [`tools/forks.json`](tools/forks.json).
 
-This repository, pstack-multiharness, is a fork of [michael-denyer/pstack-claude](https://github.com/michael-denyer/pstack-claude). It adds three things. A role can run on another CLI harness, such as `gpt-6.1-sol @xhigh` on Codex or `gpt-6.1-sol->pi @max`, in a pane you can watch. Role mappings can be saved and reused as presets. The `/pstack-effort` page edits the mapping. The install commands below install the fork.
+This repository, pstack-multiharness, is a fork of [michael-denyer/pstack-claude](https://github.com/michael-denyer/pstack-claude). It adds three things. A role can run on another CLI harness, such as `gpt-6.1-sol@xhigh` on Codex or `gpt-6.1-sol->pi@max`, in a pane you can watch. Role mappings can be saved and reused as presets. The `/pstack-effort` page edits the mapping. The install commands below install the fork.
 
 Tell `poteto-mode` your goal and it will invoke the correct workflow for the task. It keeps your code concise, simple and verified.
 
@@ -209,7 +209,7 @@ To update, run `git pull` in the clone, then run the `for` loop again to link sk
 
 pstack provides automatic routing on Claude Code, Codex, GitHub Copilot, Muse, MiniMax Code, Antigravity, Pi, Kimi Code CLI, OMP, and OpenCode 2. The runtimes deliver the instruction at different points: Kimi adds it while the plugin is enabled, OMP adds it before each main-agent turn, and OpenCode adds it at each model step in root sessions. Grok Build exposes a routing hint through a skill description; the model may not follow it. Codex requires hook trust through `/hooks`, and Muse requires `muse plugins approve pstack`. Other harnesses have no automatic routing.
 
-Run `setup-pstack` to turn automatic routing on or off, change model defaults, or set a reasoning effort per role (`arena runners: opus @xhigh, fable @max`). On OMP, the session hook setting applies globally across profiles; on Kimi, enable or disable the plugin to control routing. See the [routing reference](docs/reference.md#automatic-routing).
+Run `setup-pstack` to turn automatic routing on or off, change model defaults, or set a reasoning effort per role (`arena runners: opus@xhigh, fable@max`). On OMP, the session hook setting applies globally across profiles; on Kimi, enable or disable the plugin to control routing. See the [routing reference](docs/reference.md#automatic-routing).
 
 ## Getting started
 

@@ -17,15 +17,15 @@ const providersJson = JSON.parse(readFileSync(new URL("../plugins/pstack/skills/
 const sheet = `# pstack model configuration
 Roles below are edited by the page.
 
-feature: opus @high
-arena runners: opus @xhigh, gpt-6.1-sol @xhigh
+feature: opus@high
+arena runners: opus@xhigh, gpt-6.1-sol@xhigh
 swarm workers: inherit-parent
-why synthesizer: opus->claude @medium
+why synthesizer: opus->claude@medium
 default effort: max
 session hook: off
 `;
 
-const pageSheet = sheet.replace("default effort:", "reflect tooling: ollama:qwen3:8b @high\nhow explorer: muse @low, gpt-6.1-sol->codex@high\ndefault effort:");
+const pageSheet = sheet.replace("default effort:", "reflect tooling: ollama:qwen3:8b@high\nhow explorer: muse@low, gpt-6.1-sol->codex@high\ndefault effort:");
 
 const codexCache = {
   models: [
@@ -49,12 +49,12 @@ test("parses role lines with harness arrows and leaves everything else alone", (
   const { lines, roles } = parseSheet(pageSheet);
   expect(roles.map((r) => r.role)).toEqual(["feature", "arena runners", "swarm workers", "why synthesizer", "reflect tooling", "how explorer"]);
   expect(roles[1]).toEqual({
-    role: "arena runners", line: lines.indexOf("arena runners: opus @xhigh, gpt-6.1-sol @xhigh"),
+    role: "arena runners", line: lines.indexOf("arena runners: opus@xhigh, gpt-6.1-sol@xhigh"),
     slots: [{ harness: "", model: "opus", effort: "xhigh" }, { harness: "", model: "gpt-6.1-sol", effort: "xhigh" }],
   });
   expect(roles[3].slots[0]).toEqual({ harness: "claude", model: "opus", effort: "medium" });
   expect(roles[4].slots[0]).toEqual({ harness: "", model: "ollama:qwen3:8b", effort: "high" });
-  expect(roles[5].slots.map(slotText)).toEqual(["muse @low", "gpt-6.1-sol->codex @high"]);
+  expect(roles[5].slots.map(slotText)).toEqual(["muse@low", "gpt-6.1-sol->codex@high"]);
 });
 
 test("skips a line with an entry it cannot parse", () => {
@@ -105,7 +105,7 @@ test("renders the sheet into the page with escaped data and no placeholder left"
   expect(html).not.toContain("/*__PSTACK_DATA__*/");
   expect(html).not.toContain("__SCRIPT__");
   expect(html).not.toContain("</script><b>");
-  expect(html).toContain("gpt-6.1-sol @xhigh");
+  expect(html).toContain("gpt-6.1-sol@xhigh");
 });
 
 class Node {
@@ -165,14 +165,14 @@ test("switching a slot to another provider writes its model bare and keeps a sup
   const page = mount(pageSheet);
   const ri = page.roleIndex("feature");
   page.choose(`p-${ri}-0`, "openai");
-  expect(page.role("feature")).toBe("feature: gpt-6.1-sol @high");
+  expect(page.role("feature")).toBe("feature: gpt-6.1-sol@high");
   expect(resolveRole(page.next(), "feature")).toEqual([{ harness: "codex", model: "gpt-6.1-sol", effort: "high" }]);
   expect(page.efforts(ri, 0)).toEqual(["low", "high", "ultra"]);
   page.tick(`e-${ri}-0-ultra`);
-  expect(page.role("feature")).toBe("feature: gpt-6.1-sol @ultra");
+  expect(page.role("feature")).toBe("feature: gpt-6.1-sol@ultra");
   page.choose(`p-${ri}-0`, "anthropic");
   expect(page.role("feature")).toBe("feature: opus");
-  expect(page.message()).toContain("feature: opus @high -> opus");
+  expect(page.message()).toContain("feature: opus@high -> opus");
 });
 
 test("a valid effort survives a provider change", () => {
@@ -180,7 +180,7 @@ test("a valid effort survives a provider change", () => {
   const ri = page.roleIndex("arena runners");
   page.choose(`p-${ri}-0`, "openai");
   page.choose(`p-${ri}-1`, "anthropic");
-  expect(page.role("arena runners")).toBe("arena runners: gpt-6.1-sol, opus @xhigh");
+  expect(page.role("arena runners")).toBe("arena runners: gpt-6.1-sol, opus@xhigh");
 });
 
 test("each model offers only its own effort levels", () => {
@@ -189,16 +189,16 @@ test("each model offers only its own effort levels", () => {
   expect(page.efforts(ri, 0)).toEqual(["low", "medium", "high", "xhigh", "max"]);
   page.choose(`m-${ri}-1`, "gpt-6-astra");
   expect(page.efforts(ri, 1)).toEqual(["low", "medium"]);
-  expect(page.role("arena runners")).toBe("arena runners: opus @xhigh, gpt-6-astra");
+  expect(page.role("arena runners")).toBe("arena runners: opus@xhigh, gpt-6-astra");
 });
 
 test("aliases have no provider select and stay bare, and an unlisted model is preserved", () => {
   const page = mount(pageSheet);
   expect(page.has(`p-${page.roleIndex("swarm workers")}-0`)).toBe(false);
   expect(page.role("swarm workers")).toBe("swarm workers: inherit-parent");
-  expect(page.role("reflect tooling")).toBe("reflect tooling: ollama:qwen3:8b @high");
+  expect(page.role("reflect tooling")).toBe("reflect tooling: ollama:qwen3:8b@high");
   const ri = page.roleIndex("why synthesizer");
-  expect(page.role("why synthesizer")).toBe("why synthesizer: opus->claude @medium");
+  expect(page.role("why synthesizer")).toBe("why synthesizer: opus->claude@medium");
   page.tick(`e-${ri}-0-medium`);
   expect(page.role("why synthesizer")).toBe("why synthesizer: opus->claude");
 });
@@ -208,12 +208,12 @@ test("a harness choice is written as an arrow, and the provider's own harness wr
   const ri = page.roleIndex("feature");
   expect(page.options(`h-${ri}-0`)).toEqual(["claude (provider's own)", "->claude"]);
   page.choose(`h-${ri}-0`, "claude");
-  expect(page.role("feature")).toBe("feature: opus->claude @high");
+  expect(page.role("feature")).toBe("feature: opus->claude@high");
   page.choose(`h-${ri}-0`, "");
-  expect(page.role("feature")).toBe("feature: opus @high");
+  expect(page.role("feature")).toBe("feature: opus@high");
   const ai = page.roleIndex("arena runners");
   page.choose(`h-${ai}-1`, "codex");
-  expect(page.role("arena runners")).toBe("arena runners: opus @xhigh, gpt-6.1-sol->codex");
+  expect(page.role("arena runners")).toBe("arena runners: opus@xhigh, gpt-6.1-sol->codex");
   expect(resolveRole(page.next(), "arena runners")[1]).toEqual({ harness: "codex", model: "gpt-6.1-sol", effort: "max" });
 });
 
@@ -223,10 +223,10 @@ test("a provider alias stays the alias, and an arrow stays an arrow, through an 
   expect(page.selected(`m-${ri}-0`)).toBe("muse (default, muse-wonder-full-1.0)");
   expect(page.selected(`h-${ri}-1`)).toBe("->codex");
   page.tick(`e-${page.roleIndex("feature")}-0-high`);
-  expect(page.next()).toContain("how explorer: muse @low, gpt-6.1-sol->codex@high\n");
+  expect(page.next()).toContain("how explorer: muse@low, gpt-6.1-sol->codex@high\n");
   page.tick(`e-${ri}-0-high`);
   page.tick(`e-${ri}-1-low`);
-  expect(page.role("how explorer")).toBe("how explorer: muse @high, gpt-6.1-sol->codex @low");
+  expect(page.role("how explorer")).toBe("how explorer: muse@high, gpt-6.1-sol->codex@low");
   expect(resolveRole(page.next(), "how explorer")[0]).toEqual({ harness: "muse", model: "muse-wonder-full-1.0", effort: "high" });
 });
 
@@ -261,16 +261,16 @@ test("a harness other than the provider's own sets the effort list", () => {
   expect(page.efforts(ri, 1)).toEqual(["low", "high", "ultra"]);
   page.choose(`h-${ri}-1`, "pi");
   expect(page.efforts(ri, 1)).toEqual(["low", "medium"]);
-  expect(page.role("arena runners")).toBe("arena runners: opus @xhigh, gpt-6.1-sol->pi");
+  expect(page.role("arena runners")).toBe("arena runners: opus@xhigh, gpt-6.1-sol->pi");
   page.tick(`e-${ri}-1-medium`);
-  expect(page.role("arena runners")).toBe("arena runners: opus @xhigh, gpt-6.1-sol->pi @medium");
+  expect(page.role("arena runners")).toBe("arena runners: opus@xhigh, gpt-6.1-sol->pi@medium");
   page.choose(`h-${ri}-1`, "opencode");
   expect(page.efforts(ri, 1)).toEqual(["low", "high", "ultra"]);
-  expect(page.role("arena runners")).toBe("arena runners: opus @xhigh, gpt-6.1-sol->opencode");
+  expect(page.role("arena runners")).toBe("arena runners: opus@xhigh, gpt-6.1-sol->opencode");
   const hi = page.roleIndex("how explorer");
   page.choose(`h-${hi}-0`, "omp");
   expect(page.efforts(hi, 0)).toEqual([]);
-  expect(page.role("how explorer")).toBe("how explorer: muse->omp, gpt-6.1-sol->codex @high");
+  expect(page.role("how explorer")).toBe("how explorer: muse->omp, gpt-6.1-sol->codex@high");
   expect(page.rolesText()).toContain("this harness takes no effort setting");
 });
 
@@ -287,10 +287,10 @@ test("repeat and remove edit a panel's slots and reset restores the sheet", () =
   const page = mount(pageSheet);
   const ri = page.roleIndex("arena runners");
   page.press("Repeat", 0);
-  expect(page.role("arena runners")).toBe("arena runners: opus @xhigh, opus @xhigh, gpt-6.1-sol @xhigh");
+  expect(page.role("arena runners")).toBe("arena runners: opus@xhigh, opus@xhigh, gpt-6.1-sol@xhigh");
   page.press("Remove", 1);
   page.choose(`m-${ri}-0`, "sonnet");
-  expect(page.role("arena runners")).toBe("arena runners: sonnet @xhigh, gpt-6.1-sol @xhigh");
+  expect(page.role("arena runners")).toBe("arena runners: sonnet@xhigh, gpt-6.1-sol@xhigh");
   page.click("reset");
   expect(page.next()).toBe(pageSheet);
 });
@@ -301,18 +301,18 @@ test("refuses a sheet whose roles differ from the file's", () => {
 });
 
 test("refuses an entry a dispatch would reject", () => {
-  expect(() => planApply(sheet, sheet.replace("opus @high", "opus @turbo"), sheet)).toThrow("Unsupported claude effort for feature: turbo");
-  expect(() => planApply(sheet, sheet.replace("feature: opus @high", "feature: claude-opus-5-5 @high"), sheet)).toThrow("write the family name, such as opus");
-  expect(() => planApply(`${sheet}bug-fix: opus@high\n`, `${sheet}bug-fix: opus@high\n`, `${sheet}bug-fix: opus@high\n`)).toThrow("`opus @high`");
-  for (const line of ["  bug-fix: opus@high", "bug-fix : opus@high"]) {
-    expect(() => planApply(`${sheet}${line}\n`, `${sheet}${line}\n`, `${sheet}${line}\n`), line).toThrow("`opus @high`");
+  expect(() => planApply(sheet, sheet.replace("opus@high", "opus@turbo"), sheet)).toThrow("Unsupported claude effort for feature: turbo");
+  expect(() => planApply(sheet, sheet.replace("feature: opus@high", "feature: claude-opus-5-5@high"), sheet)).toThrow("write the family name, such as opus");
+  expect(() => planApply(`${sheet}bug-fix: opus @high\n`, `${sheet}bug-fix: opus @high\n`, `${sheet}bug-fix: opus @high\n`)).toThrow("`opus@high`");
+  for (const line of ["  bug-fix: opus @high", "bug-fix : opus @high"]) {
+    expect(() => planApply(`${sheet}${line}\n`, `${sheet}${line}\n`, `${sheet}${line}\n`), line).toThrow("`opus@high`");
   }
 });
 
 test("lists only the roles whose entries changed", () => {
-  const next = sheet.replace("feature: opus @high", "feature: gpt-6.1-sol->codex @xhigh");
+  const next = sheet.replace("feature: opus@high", "feature: gpt-6.1-sol->codex@xhigh");
   expect(planApply(sheet, next, sheet).changes).toEqual([
-    { role: "feature", from: "opus @high", to: "gpt-6.1-sol->codex @xhigh" },
+    { role: "feature", from: "opus@high", to: "gpt-6.1-sol->codex@xhigh" },
   ]);
   expect(planApply(sheet, sheet, sheet).changes).toEqual([]);
 });
@@ -326,20 +326,20 @@ function message(root, sheetPath, next, base = readFileSync(sheetPath, "utf8")) 
   return file;
 }
 
-const twoNative = "feature: opus @high\narena runners: opus @xhigh, gpt-6.1-sol @xhigh\n";
+const twoNative = "feature: opus@high\narena runners: opus@xhigh, gpt-6.1-sol@xhigh\n";
 
 test("apply backs up the sheet and writes the new one", () => {
   const root = scratch();
   const sheetPath = join(root, "pstack-models.md");
   writeFileSync(sheetPath, twoNative);
-  const next = twoNative.replace("opus @high", "opus @max");
+  const next = twoNative.replace("opus@high", "opus@max");
   const logs = [];
   const result = apply({ message: message(root, sheetPath, next), env: { TUIOS_ENV: "1" }, log: (line) => logs.push(line) });
   expect(readFileSync(sheetPath, "utf8")).toBe(next);
   expect(readFileSync(`${sheetPath}.bak`, "utf8")).toBe(twoNative);
   expect(result.backup).toBe(`${sheetPath}.bak`);
   expect(existsSync(join(root, ".claude"))).toBe(false);
-  expect(logs.join("\n")).toContain("feature: opus @high -> opus @max");
+  expect(logs.join("\n")).toContain("feature: opus@high -> opus@max");
   expect(logs.join("\n")).not.toContain("none of them");
 });
 
@@ -365,7 +365,7 @@ test("warns when the sheet routes to another harness and the shell has no multip
   apply({ message: message(root, sheetPath, twoNative.replace("@high", "@low")), env: { REX_SESSION: "session:x", REX_BLOCK: "block:y" }, log: (line) => logs.push(line) });
   expect(logs.join("\n")).toContain("wrote");
   expect(logs.join("\n")).not.toContain("run as T3 Code subagents");
-  const native = "feature: opus->claude @high\n";
+  const native = "feature: opus->claude@high\n";
   writeFileSync(sheetPath, native);
   logs.length = 0;
   apply({ message: message(root, sheetPath, native.replace("@high", "@low")), env: {}, log: (line) => logs.push(line) });
@@ -399,7 +399,7 @@ test("a slot on Antigravity offers agy's effort levels and writes an entry the r
   const page = mount(sheet);
   const ri = page.roleIndex("feature");
   page.choose(`p-${ri}-0`, "google");
-  expect(page.role("feature")).toBe("feature: gemini-3.8-flash @high");
+  expect(page.role("feature")).toBe("feature: gemini-3.8-flash@high");
   expect(page.efforts(ri, 0)).toEqual(["low", "medium", "high"]);
   page.tick(`e-${ri}-0-high`);
   expect(page.role("feature")).toBe("feature: gemini-3.8-flash");
@@ -407,7 +407,7 @@ test("a slot on Antigravity offers agy's effort levels and writes an entry the r
   expect(page.options(`m-${ri}-0`)).toEqual(["Gemini 3.8 Flash", "Gemini 4 Argon", "agy (default, gemini-3.8-flash)", "inherit-parent (parent session's model)", "auto (parent session's model)"]);
   page.choose(`m-${ri}-0`, "gemini-4-argon");
   page.tick(`e-${ri}-0-low`);
-  expect(page.role("feature")).toBe("feature: gemini-4-argon @low");
+  expect(page.role("feature")).toBe("feature: gemini-4-argon@low");
   const pasted = parseMessage(page.message());
   expect(resolveRole(pasted.next, "feature")).toEqual([{ harness: "agy", model: "gemini-4-argon", effort: "low" }]);
   expect(planApply(sheet, pasted.next, pasted.base).changes.map((c) => c.role)).toEqual(["feature"]);
@@ -417,13 +417,13 @@ test("apply writes an Antigravity slot that replaced an effort-bearing one", () 
   const root = scratch();
   const sheetPath = join(root, "pstack-models.md");
   writeFileSync(sheetPath, twoNative);
-  const next = twoNative.replace("gpt-6.1-sol @xhigh", "gemini-3.8-flash-high");
+  const next = twoNative.replace("gpt-6.1-sol@xhigh", "gemini-3.8-flash-high");
   apply({ message: message(root, sheetPath, next), env: { TUIOS_ENV: "1" }, log: () => {} });
   expect(resolveRole(readFileSync(sheetPath, "utf8"), "arena runners")).toEqual([
     { model: "opus", effort: "xhigh" },
     { harness: "agy", model: "gemini-3.8-flash-high", effort: null },
   ]);
-  const stuck = twoNative.replace("gpt-6.1-sol @xhigh", "gemini-3.8-flash-high @xhigh");
+  const stuck = twoNative.replace("gpt-6.1-sol@xhigh", "gemini-3.8-flash-high@xhigh");
   expect(() => apply({ message: message(root, sheetPath, stuck, next), env: {}, log: () => {} }))
     .toThrow("gemini-3.8-flash-high already names its effort");
   expect(readFileSync(sheetPath, "utf8")).toBe(next);
@@ -448,15 +448,15 @@ test("a cleared box inherits the sheet's default effort, and the page says which
 
 test("an effort the model does not list is kept and called out", () => {
   const page = mount(pageSheet);
-  expect(page.role("arena runners")).toContain("gpt-6.1-sol @xhigh");
+  expect(page.role("arena runners")).toContain("gpt-6.1-sol@xhigh");
   expect(page.rolesText()).toContain("keeps effort xhigh, which this model does not list");
 });
 
 test("lines of roles the user did not touch stay exactly as written", () => {
-  const spaced = pageSheet.replace("feature: opus @high", "feature:    opus @high");
+  const spaced = pageSheet.replace("feature: opus@high", "feature:    opus@high");
   const page = mount(spaced);
   page.tick(`e-${page.roleIndex("swarm workers") + 1}-0-medium`);
-  expect(page.next()).toContain("feature:    opus @high\n");
+  expect(page.next()).toContain("feature:    opus@high\n");
 });
 
 test("a saved draft is offered again only for the same sheet text, never against a sheet that gained lines", () => {
@@ -483,31 +483,31 @@ test("the message fence is longer than any backtick run inside the sheet", () =>
 test("apply changes only the role lines of the file on disk, so lines added after the page was rendered survive", () => {
   const root = scratch();
   const sheetPath = join(root, "pstack-models.md");
-  const rendered = "feature: opus @high\nbug-fix: opus @medium\n";
+  const rendered = "feature: opus@high\nbug-fix: opus@medium\n";
   const onDisk = `${rendered}\n# added after the page was rendered\ndefault effort: max\nsession hook: off\n`;
   writeFileSync(sheetPath, onDisk);
   apply({ message: message(root, sheetPath, rendered.replace("@high", "@low"), rendered), log: () => {} });
-  expect(readFileSync(sheetPath, "utf8")).toBe(onDisk.replace("feature: opus @high", "feature: opus @low"));
+  expect(readFileSync(sheetPath, "utf8")).toBe(onDisk.replace("feature: opus@high", "feature: opus@low"));
 });
 
 test("apply leaves a role edited on disk after the page was rendered when the page did not touch it", () => {
   const root = scratch();
   const sheetPath = join(root, "pstack-models.md");
-  const rendered = "feature: opus @high\nbug-fix: opus @medium\n";
-  const onDisk = "feature: opus @max\nbug-fix: opus @medium\n";
+  const rendered = "feature: opus@high\nbug-fix: opus@medium\n";
+  const onDisk = "feature: opus@max\nbug-fix: opus@medium\n";
   writeFileSync(sheetPath, onDisk);
-  const result = apply({ message: message(root, sheetPath, rendered.replace("bug-fix: opus @medium", "bug-fix: opus @low"), rendered), log: () => {} });
-  expect(readFileSync(sheetPath, "utf8")).toBe("feature: opus @max\nbug-fix: opus @low\n");
+  const result = apply({ message: message(root, sheetPath, rendered.replace("bug-fix: opus@medium", "bug-fix: opus@low"), rendered), log: () => {} });
+  expect(readFileSync(sheetPath, "utf8")).toBe("feature: opus@max\nbug-fix: opus@low\n");
   expect(result.changes.map((c) => c.role)).toEqual(["bug-fix"]);
 });
 
 test("apply refuses a role the page changed when the file's line moved on, and writes nothing", () => {
   const root = scratch();
   const sheetPath = join(root, "pstack-models.md");
-  const rendered = "feature: opus @high\nbug-fix: opus @medium\n";
-  const onDisk = "feature: opus @max\nbug-fix: opus @medium\n";
+  const rendered = "feature: opus@high\nbug-fix: opus@medium\n";
+  const onDisk = "feature: opus@max\nbug-fix: opus@medium\n";
   writeFileSync(sheetPath, onDisk);
-  const file = message(root, sheetPath, rendered.replace("feature: opus @high", "feature: opus @low"), rendered);
+  const file = message(root, sheetPath, rendered.replace("feature: opus@high", "feature: opus@low"), rendered);
   expect(() => apply({ message: file, log: () => {} })).toThrow(/refused: feature changed in the file after the page was rendered/);
   expect(readFileSync(sheetPath, "utf8")).toBe(onDisk);
   expect(existsSync(`${sheetPath}.bak`)).toBe(false);
@@ -517,16 +517,16 @@ test("the page's message carries the role lines as it read them, so apply can te
   const page = mount(pageSheet);
   page.tick(`e-${page.roleIndex("feature")}-0-high`);
   const { base } = parseMessage(page.message());
-  expect(base).toContain("feature: opus @high\n");
+  expect(base).toContain("feature: opus@high\n");
   expect(parseSheet(base).roles.map((r) => r.role)).toEqual(parseSheet(pageSheet).roles.map((r) => r.role));
 });
 
 test("apply keeps a sheet's code fence and CRLF endings intact", () => {
   const root = scratch();
   const sheetPath = join(root, "pstack-models.md");
-  const onDisk = "feature: opus @high\r\n```\r\nnot a role: x\r\n```\r\nbug-fix: opus @medium\r\n";
+  const onDisk = "feature: opus@high\r\n```\r\nnot a role: x\r\n```\r\nbug-fix: opus@medium\r\n";
   writeFileSync(sheetPath, onDisk);
-  const next = "feature: opus @low\n```\nnot a role: x\n```\nbug-fix: opus @medium\n";
+  const next = "feature: opus@low\n```\nnot a role: x\n```\nbug-fix: opus@medium\n";
   const file = join(root, "message.txt");
   const base = onDisk.replace(/\r\n/g, "\n").replace(/\n$/, "");
   writeFileSync(file, `/pstack-effort apply\nsheet: ${sheetPath}\nscope: user\n\n\`\`\`\`pstack-base\n${base}\n\`\`\`\`\n\`\`\`\`pstack-sheet\n${next.replace(/\n$/, "")}\n\`\`\`\`\n`);
@@ -538,8 +538,8 @@ const userPreset = `# pstack model configuration
 
 feature: opus
 arena runners: gpt-6-astra, sonnet
-swarm workers: sonnet @low
-bug-fix: opus @low
+swarm workers: sonnet@low
+bug-fix: opus@low
 default effort: medium
 `;
 
@@ -550,7 +550,7 @@ function presetTree(root = scratch()) {
   mkdirSync(project, { recursive: true });
   writeFileSync(join(user, "mid.md"), userPreset);
   writeFileSync(join(user, "empty.md"), "# nothing here\n");
-  writeFileSync(join(project, "solo.md"), "feature: gpt-6.1-sol @ultra\n");
+  writeFileSync(join(project, "solo.md"), "feature: gpt-6.1-sol@ultra\n");
   return root;
 }
 
@@ -589,17 +589,17 @@ test("a preset's default effort is not added to a level-named Antigravity id, wh
 test("loading a preset fills the roles it names and keeps the rest", () => {
   const page = mount(sheet, new Map(), presetTree());
   page.choose("preset", "0");
-  expect(page.role("feature")).toBe("feature: opus @medium");
-  expect(page.role("arena runners")).toBe("arena runners: gpt-6-astra @medium, sonnet @medium");
-  expect(page.role("swarm workers")).toBe("swarm workers: sonnet @low");
-  expect(page.role("why synthesizer")).toBe("why synthesizer: opus->claude @medium");
+  expect(page.role("feature")).toBe("feature: opus@medium");
+  expect(page.role("arena runners")).toBe("arena runners: gpt-6-astra@medium, sonnet@medium");
+  expect(page.role("swarm workers")).toBe("swarm workers: sonnet@low");
+  expect(page.role("why synthesizer")).toBe("why synthesizer: opus->claude@medium");
   expect(page.message()).toContain("changes: 3");
   expect(page.at("preset-note").textContent).toBe(
     "Loaded user/mid. Not in the preset, kept as is: why synthesizer. Not on this sheet, skipped: bug-fix.");
   const pasted = parseMessage(page.message());
   expect(planApply(sheet, pasted.next, pasted.base).changes.map((c) => c.role)).toEqual(["feature", "arena runners", "swarm workers"]);
   page.choose("preset", "1");
-  expect(page.role("feature")).toBe("feature: gpt-6.1-sol @ultra");
+  expect(page.role("feature")).toBe("feature: gpt-6.1-sol@ultra");
   page.click("reset");
   expect(page.next()).toBe(sheet);
   expect(page.at("preset-note").textContent).toBe("");

@@ -183,7 +183,7 @@ function context(out, starts) {
   return mandate;
 }
 
-const PANEL = "claude-opus-5, gpt-5.5 @xhigh, gemini-3.8-flash";
+const PANEL = "claude-opus-5, gpt-5.5@xhigh, gemini-3.8-flash";
 const sheetLines = (set = {}) =>
   models.roles.map(({ role, models: tier }) => `${role}: ${role in set ? set[role] : tier === "panel" ? PANEL : "claude-sonnet-5"}`);
 const validSheet = (extra = []) => ["# pstack model overrides", "", ...sheetLines(), ...extra, "session hook: on", ""].join("\n");

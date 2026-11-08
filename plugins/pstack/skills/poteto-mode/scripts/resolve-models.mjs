@@ -75,7 +75,8 @@ export function resolveEntry({ model: written, harness: chosen, explicitEffort }
     const template = list[harness].providers?.[provider.id];
     if (!template) {
       const serving = Object.keys(list).filter((h) => list[h].providers?.[provider.id]);
-      throw new Error(`${harness} runs no ${provider.label} models, so it cannot run ${model}${serving.length ? ` (use ${serving.map((h) => `${written}->${h}`).join(" or ")})` : ""}; with an API key, write the id ${harness} takes, as in \`provider/${model}->${harness}\``);
+      const keyed = catalog.some((p) => p.harness === harness) ? "" : `; with an API key, write the id ${harness} takes, as in \`provider/${model}->${harness}\``;
+      throw new Error(`${harness} runs no ${provider.label} models, so it cannot run ${model}${serving.length ? ` (use ${serving.map((h) => `${written}->${h}`).join(" or ")})` : ""}${keyed}`);
     }
     id = template.replaceAll("{model}", model);
   }

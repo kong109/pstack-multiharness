@@ -140,6 +140,7 @@ test("a provider/model id or an open-weight model runs on any harness, for an op
     { harness: "opencode", model: "kimi-k3", effort: null },
   ]);
   expect(() => resolveRole("role: muse->omp", "role")).toThrow("with an API key, write the id omp takes, as in `provider/muse-wonder-full-1.0->omp`");
+  expect(() => resolveRole("role: muse->agy", "role")).toThrow(/^agy runs no Meta \(Muse\) models, so it cannot run muse-wonder-full-1.0 \(use muse->muse\)$/);
 });
 
 test("pi, omp and opencode give each provider's model its own id prefix", () => {

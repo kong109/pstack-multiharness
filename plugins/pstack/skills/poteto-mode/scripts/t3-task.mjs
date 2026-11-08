@@ -32,18 +32,17 @@ export function t3Task({ name, harness, model, effort = null, access = "read", b
   checkForeignRequest("t3-task", { harness, model, effort });
   const { t3 } = harnesses[harness];
   if (!t3) throw new Error(`${harness} has no t3 block in harnesses.json, so T3 Code cannot run it`);
-  if (effort !== null && !Object.values(t3.options ?? {}).some((template) => template.includes("{effort}"))) {
-    throw new Error(`T3 Code's ${t3.driver} driver takes no effort option; name the effort in the model id (${model}-${effort})`);
-  }
   if (!Object.hasOwn(ROLES, access)) throw new Error("--access is read or write");
   if (!brief?.trim()) throw new Error("--brief must name a file with the task in it");
+  // T3 Code's antigravity driver has no effort option, so the effort goes into the model id, the way `agy models` lists it.
+  const folded = effort !== null && !Object.values(t3.options ?? {}).some((template) => template.includes("{effort}"));
   const options = Object.fromEntries(
     Object.entries(t3.options ?? {})
       .filter(([, template]) => effort !== null || !template.includes("{effort}"))
       .map(([id, template]) => [id, fill([template], { model, effort })[0]]),
   );
   const task = taskText(brief, access);
-  const target = { driverKind: t3.driver, model, ...(Object.keys(options).length > 0 && { options }) };
+  const target = { driverKind: t3.driver, model: folded ? `${model}-${effort}` : model, ...(Object.keys(options).length > 0 && { options }) };
   const digest = createHash("sha256").update(JSON.stringify([target, task])).digest("hex").slice(0, 12);
   return {
     title: name,

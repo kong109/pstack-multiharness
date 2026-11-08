@@ -401,6 +401,9 @@ test("a slot on Antigravity offers agy's effort levels and writes an entry the r
   page.choose(`p-${ri}-0`, "google");
   expect(page.role("feature")).toBe("feature: gemini-3.8-flash @high");
   expect(page.efforts(ri, 0)).toEqual(["low", "medium", "high"]);
+  page.tick(`e-${ri}-0-high`);
+  expect(page.role("feature")).toBe("feature: gemini-3.8-flash");
+  expect(page.rolesText()).toContain("this harness does not list the default effort max, so it runs at its own default");
   expect(page.options(`m-${ri}-0`)).toEqual(["Gemini 3.8 Flash", "Gemini 4 Argon", "agy (default, gemini-3.8-flash)", "inherit-parent (parent session's model)", "auto (parent session's model)"]);
   page.choose(`m-${ri}-0`, "gemini-4-argon");
   page.tick(`e-${ri}-0-low`);
@@ -566,6 +569,18 @@ test("the preset select lists both scopes, and a page with none disables it", ()
   const bare = mount(pageSheet);
   expect(bare.options("preset")).toEqual(["No presets saved"]);
   expect(bare.at("preset").attrs.disabled).toBe("");
+});
+
+test("a preset's default effort is not added to a level-named Antigravity id, which would refuse it", () => {
+  const root = scratch();
+  const project = join(root, "project", ".pstack", "presets");
+  mkdirSync(project, { recursive: true });
+  writeFileSync(join(project, "levelled.md"), "feature: gemini-3.8-flash-high\ndefault effort: high\n");
+  const page = mount(sheet, new Map(), root);
+  page.choose("preset", "0");
+  expect(page.role("feature")).toBe("feature: gemini-3.8-flash-high");
+  const pasted = parseMessage(page.message());
+  expect(resolveRole(pasted.next, "feature")).toEqual([{ harness: "agy", model: "gemini-3.8-flash-high", effort: null }]);
 });
 
 test("loading a preset fills the roles it names and keeps the rest", () => {

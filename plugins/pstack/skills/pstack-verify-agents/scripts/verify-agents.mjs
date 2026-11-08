@@ -84,7 +84,7 @@ export function sandbox({ env = process.env, now = Date.now() } = {}) {
 }
 
 export const brief = (seats, { task = DEFAULT_TASK } = {}) =>
-  `Set this project's arena runners to exactly these agents, one seat each, at low effort unless the entry names one: ${seats.map((s) => s.entry).join(", ")}. A harness that takes no effort setting runs the entry's model as written, not a lower-effort variant. Then throw this in the arena: ${task} Commit the final result on your branch. Don't push.\n`;
+  `Set this project's arena runners to exactly these agents, one seat each, at low effort unless the entry names one: ${seats.map((s) => s.entry).join(", ")}. An entry whose harness takes no effort setting, or whose model id already ends in a level, runs as written, not as a lower-effort variant. Then throw this in the arena: ${task} Commit the final result on your branch. Don't push.\n`;
 
 export const DEFAULT_TASK = "a dependency-free Node `wc` clone in `wc.mjs` that prints line, word, and byte counts for stdin, separated by spaces like `wc` with no flags, with a `node --test` file in `wc.test.mjs` that covers empty input.";
 

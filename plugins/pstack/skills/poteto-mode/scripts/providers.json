@@ -42,6 +42,7 @@
       "harness": "agy",
       "efforts": ["low", "medium", "high"],
       "default": "gemini-3.8-flash",
+      "levelledIds": true,
       "match": "^gemini-",
       "models": [
         { "slug": "gemini-3.8-flash", "label": "Gemini 3.8 Flash" },

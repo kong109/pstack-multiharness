@@ -2,19 +2,19 @@
 import { copyFileSync, existsSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { harnesses, ownProvider, providers } from "./resolve-models.mjs";
+import { harnesses, levelledIds, ownProvider, providers } from "./resolve-models.mjs";
 
 const ROLE = /^(\s*[a-z][a-z ,-]*[a-z]\s*:\s*)(\S.*)$/;
 const LEGACY = /^([a-z][a-z0-9-]*):(\S+)(\s+@\S+)?$/;
 const levels = new Set([...providers.flatMap((p) => p.efforts), ...Object.values(harnesses).flatMap((h) => h.efforts ?? [])]);
-const levelled = new Map(providers.flatMap((p) => p.models.flatMap((m) => p.efforts.map((e) => [`${m.slug}-${e}`, [m.slug, e]]))));
+const levelled = levelledIds();
 
-// A model id ending in its effort level becomes the model and an effort; an effort the entry already names wins.
+// A levelled model id becomes the model and an effort; an effort the entry already names wins, except `@session`.
 function splitLevel(entry) {
   const model = /^(.+?)(?=->|@|\s|$)/.exec(entry)?.[1];
   if (!levelled.has(model)) return entry;
   const [slug, effort] = levelled.get(model);
-  const rest = entry.slice(model.length);
+  const rest = entry.slice(model.length).replace(/\s*@session$/, "");
   return `${slug}${rest}${rest.includes("@") ? "" : ` @${effort}`}`;
 }
 

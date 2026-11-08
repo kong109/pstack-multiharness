@@ -208,7 +208,9 @@ function effortsOf(s) {
 }
 function modelDefault(s) {
   const list = effortsOf(s);
-  return list && !list.length ? "" : DATA.defaultEffort;
+  if (list && !list.length) return "";
+  const h = HARNESSES[s.harness || (byId(s.provider) || {}).harness];
+  return h && h.efforts && DATA.defaultEffort && DATA.defaultEffort !== "session" && !h.efforts.includes(DATA.defaultEffort) ? "" : DATA.defaultEffort;
 }
 function clearEffort(s) { s.effort = ""; }
 function unsupportedEffort(s) {
@@ -346,7 +348,8 @@ function effortNote(s) {
   if (s.effort) return "";
   if (!effortsOf(s).length) return "this harness takes no effort setting";
   const inherited = modelDefault(s);
-  return inherited ? `no box ticked: the sheet's default effort line sets ${inherited}` : "no box ticked: runs at the session's effort";
+  if (inherited) return `no box ticked: the sheet's default effort line sets ${inherited}`;
+  return DATA.defaultEffort && DATA.defaultEffort !== "session" ? `no box ticked: this harness does not list the default effort ${DATA.defaultEffort}, so it runs at its own default` : "no box ticked: runs at the session's effort";
 }
 
 function renderRoles() {
@@ -438,7 +441,7 @@ function presetLabel(p) { return p.scope + "/" + p.name; }
 function presetSlot(p, s) {
   const slot = { provider: s.provider, model: s.model, harness: s.harness, effort: s.effort };
   const list = effortsOf(slot);
-  if (!slot.effort && p.defaultEffort !== DATA.defaultEffort && !(list && !list.length)) slot.effort = p.defaultEffort;
+  if (!slot.effort && p.defaultEffort !== DATA.defaultEffort && !(list && !list.length) && !DATA.levelled.includes(slot.model)) slot.effort = p.defaultEffort;
   return slot;
 }
 function loadPreset(p) {

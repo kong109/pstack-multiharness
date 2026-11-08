@@ -206,9 +206,14 @@ function effortsOf(s) {
   if (!h.takesEffort) return [];
   return h.efforts || m.efforts;
 }
+function unlisted(s, effort) {
+  const h = HARNESSES[s.harness || (byId(s.provider) || {}).harness];
+  return Boolean(h && h.efforts && effort && effort !== "session" && !h.efforts.includes(effort));
+}
 function modelDefault(s) {
   const list = effortsOf(s);
-  return list && !list.length ? "" : DATA.defaultEffort;
+  if (list && !list.length) return "";
+  return unlisted(s, DATA.defaultEffort) ? "" : DATA.defaultEffort;
 }
 function clearEffort(s) { s.effort = ""; }
 function unsupportedEffort(s) {
@@ -344,9 +349,10 @@ function effortBoxes(r, s, si, ri) {
 function effortNote(s) {
   if (unsupportedEffort(s)) return `keeps effort ${s.effort}, which this ${ownHarness(s) ? "model" : "harness"} does not list`;
   if (s.effort) return "";
-  if (!effortsOf(s).length) return "this harness takes no effort setting; the effort is part of the model";
+  if (!effortsOf(s).length) return "this harness takes no effort setting";
   const inherited = modelDefault(s);
-  return inherited ? `no box ticked: the sheet's default effort line sets ${inherited}` : "no box ticked: runs at the session's effort";
+  if (inherited) return `no box ticked: the sheet's default effort line sets ${inherited}`;
+  return DATA.defaultEffort && DATA.defaultEffort !== "session" ? `no box ticked: this harness does not list the default effort ${DATA.defaultEffort}, so it runs at its own default` : "no box ticked: runs at the session's effort";
 }
 
 function renderRoles() {
@@ -438,7 +444,7 @@ function presetLabel(p) { return p.scope + "/" + p.name; }
 function presetSlot(p, s) {
   const slot = { provider: s.provider, model: s.model, harness: s.harness, effort: s.effort };
   const list = effortsOf(slot);
-  if (!slot.effort && p.defaultEffort !== DATA.defaultEffort && !(list && !list.length)) slot.effort = p.defaultEffort;
+  if (!slot.effort && p.defaultEffort !== DATA.defaultEffort && !(list && !list.length) && !DATA.levelled.includes(slot.model) && !unlisted(slot, p.defaultEffort)) slot.effort = p.defaultEffort;
   return slot;
 }
 function loadPreset(p) {

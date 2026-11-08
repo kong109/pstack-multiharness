@@ -4,7 +4,7 @@ import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
-import { ownProvider, harnesses as registry } from "../../poteto-mode/scripts/resolve-models.mjs";
+import { levelledIds, ownProvider, harnesses as registry } from "../../poteto-mode/scripts/resolve-models.mjs";
 import { allRoleLabels, parseSheet } from "./sheet.mjs";
 import { listPresets, presetDirectory } from "../../pstack-preset/scripts/presets.mjs";
 
@@ -69,6 +69,7 @@ export function pageData({ sheetPath, scope, native, generated, text, catalog, p
     presets: presets.map((p) => ({ ...p, roles: withProvider(p.roles) })),
     providers: buildProviders(catalog),
     harnesses: harnessChoices(harnesses),
+    levelled: [...levelledIds(catalog.providers).keys()],
   };
 }
 

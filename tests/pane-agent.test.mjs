@@ -406,7 +406,8 @@ test("launch refuses bad input before touching a multiplexer", () => {
   expect(() => launch(options({ name: "Arena A" }), { runner, env })).toThrow("--name must match");
   expect(() => launch(options({ harness: "nope" }), { runner, env })).toThrow("--harness must be one of");
   expect(() => launch(options({ effort: "turbo", harness: "claude", model: "m" }), { runner, env })).toThrow("Unsupported claude effort");
-  expect(() => launch(options({ effort: "high", harness: "agy", model: "gemini-3.8-flash" }), { runner, env })).toThrow("name the effort in the model id (gemini-3.8-flash-high)");
+  expect(() => launch(options({ effort: "high", harness: "opencode", model: "openai/gpt-6.1-sol" }), { runner, env })).toThrow("opencode takes no effort setting");
+  expect(() => launch(options({ effort: "xhigh", harness: "agy", model: "gemini-3.8-flash" }), { runner, env })).toThrow("Unsupported agy effort for launch: xhigh (use low, medium, high)");
   expect(() => launch(options({ brief: join(root, "missing.md") }), { runner, env })).toThrow("--brief must name an existing file");
   expect(() => launch(options({ access: "root" }), { runner, env })).toThrow("--access is read or write");
   expect(calls).toEqual([]);

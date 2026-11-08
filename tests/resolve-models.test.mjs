@@ -74,7 +74,7 @@ test("a provider's harness name stands for that provider's default model", () =>
     { harness: "codex", model: "gpt-6.1-sol", effort: null },
     { model: "opus", effort: "max" },
     { harness: "grok", model: "grok-4.7", effort: null },
-    { harness: "agy", model: "gemini-3.8-flash-high", effort: null },
+    { harness: "agy", model: "gemini-3.8-flash", effort: null },
   ]);
 });
 
@@ -113,9 +113,28 @@ test("the old harness: prefix fails with the arrow form in the message", () => {
 });
 
 test("the default effort reaches a harness entry unless that harness takes no effort", () => {
-  expect(resolveRole("default effort: high\nrole: gpt-6.1-sol, gemini-3.8-flash-low", "role")).toEqual([
+  expect(resolveRole("default effort: high\nrole: gpt-6.1-sol, gemini-3.8-flash, gpt-6.1-sol->opencode", "role")).toEqual([
     { harness: "codex", model: "gpt-6.1-sol", effort: "high" },
+    { harness: "agy", model: "gemini-3.8-flash", effort: "high" },
+    { harness: "opencode", model: "openai/gpt-6.1-sol", effort: null },
+  ]);
+});
+
+test("an id that names its effort keeps it, and a second effort on it is refused, since agy rejects the pair", () => {
+  expect(resolveRole("default effort: low\nrole: gemini-3.8-flash-high, gemini-3.8-flash-low @session", "role")).toEqual([
+    { harness: "agy", model: "gemini-3.8-flash-high", effort: null },
     { harness: "agy", model: "gemini-3.8-flash-low", effort: null },
+  ]);
+  expect(() => resolveRole("role: gemini-3.8-flash-high @low", "role")).toThrow("write `gemini-3.8-flash @low` instead of `gemini-3.8-flash-high @low`");
+  expect(resolveRole("role: gpt-6.1-sol-high @high", "role")).toEqual([{ harness: "codex", model: "gpt-6.1-sol-high", effort: "high" }]);
+});
+
+test("a default effort the harness does not list is left off, so that harness runs at its own default", () => {
+  expect(resolveRole("default effort: max\nrole: agy, grok, claude, gemini-3.8-flash @high", "role")).toEqual([
+    { harness: "agy", model: "gemini-3.8-flash", effort: null },
+    { harness: "grok", model: "grok-4.7", effort: null },
+    { model: "opus", effort: "max" },
+    { harness: "agy", model: "gemini-3.8-flash", effort: "high" },
   ]);
 });
 
@@ -159,10 +178,13 @@ test("the migration turns old harness prefixes into the arrow form and leaves ev
   const { migrateText } = await import("../plugins/pstack/skills/poteto-mode/scripts/migrate-sheet.mjs");
   const before = "# sheet\r\nfeature: codex:gpt-6.1-sol @xhigh, opus @high\r\narena runners: claude:opus, muse:muse-wonder-full-1.0 @low,agy:gemini-3.8-flash-low\r\nswarm workers: ollama:qwen3:8b\r\ndefault effort: high\r\n";
   const after = migrateText(before);
-  expect(after).toBe("# sheet\r\nfeature: gpt-6.1-sol @xhigh, opus @high\r\narena runners: opus, muse-wonder-full-1.0 @low,gemini-3.8-flash-low\r\nswarm workers: ollama:qwen3:8b\r\ndefault effort: high\r\n");
+  expect(after).toBe("# sheet\r\nfeature: gpt-6.1-sol @xhigh, opus @high\r\narena runners: opus, muse-wonder-full-1.0 @low,gemini-3.8-flash @low\r\nswarm workers: ollama:qwen3:8b\r\ndefault effort: high\r\n");
   expect(migrateText("role: codex:my-custom @low")).toBe("role: my-custom->codex @low");
   expect(migrateText("role: muse:muse-wonder-full-1.0@max, claude-opus-5-5@high, muse->omp@max")).toBe("role: muse-wonder-full-1.0 @max, claude-opus-5-5 @high, muse->omp@max");
   expect(migrateText("contact: me@example.com")).toBe("contact: me@example.com");
+  expect(migrateText("role: gemini-3.8-flash-high, gemini-4-argon-medium->agy, gemini-3.8-flash-high @low, gemini-3.8-flash-highest")).toBe("role: gemini-3.8-flash @high, gemini-4-argon->agy @medium, gemini-3.8-flash @low, gemini-3.8-flash-highest");
+  expect(migrateText("role: gemini-3.8-flash-low @session, gemini-3.8-flash-low->agy@session")).toBe("role: gemini-3.8-flash @low, gemini-3.8-flash->agy @low");
+  expect(migrateText("role: gpt-6.1-sol-high->opencode, opus-max")).toBe("role: gpt-6.1-sol-high->opencode, opus-max");
   for (const role of ["feature", "arena runners", "swarm workers"]) expect(() => resolveRole(after, role)).not.toThrow();
 });
 

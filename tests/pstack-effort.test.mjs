@@ -395,18 +395,21 @@ test("the registry and the provider catalog agree, so the page only offers what 
   }
 });
 
-test("a slot on Antigravity offers no effort levels and writes an entry the resolver and routing accept", () => {
+test("a slot on Antigravity offers agy's effort levels and writes an entry the resolver and routing accept", () => {
   const page = mount(sheet);
   const ri = page.roleIndex("feature");
   page.choose(`p-${ri}-0`, "google");
-  expect(page.role("feature")).toBe("feature: gemini-3.8-flash-high");
-  expect(page.efforts(ri, 0)).toEqual([]);
-  expect(page.options(`m-${ri}-0`)).toEqual(["Gemini 3.8 Flash (High)", "Gemini 3.8 Flash (Medium)", "Gemini 3.8 Flash (Low)", "agy (default, gemini-3.8-flash-high)", "inherit-parent (parent session's model)", "auto (parent session's model)"]);
-  expect(page.rolesText()).toContain("this harness takes no effort setting; the effort is part of the model");
-  page.choose(`m-${ri}-0`, "gemini-3.8-flash-low");
-  expect(page.role("feature")).toBe("feature: gemini-3.8-flash-low");
+  expect(page.role("feature")).toBe("feature: gemini-3.8-flash @high");
+  expect(page.efforts(ri, 0)).toEqual(["low", "medium", "high"]);
+  page.tick(`e-${ri}-0-high`);
+  expect(page.role("feature")).toBe("feature: gemini-3.8-flash");
+  expect(page.rolesText()).toContain("this harness does not list the default effort max, so it runs at its own default");
+  expect(page.options(`m-${ri}-0`)).toEqual(["Gemini 3.8 Flash", "Gemini 4 Argon", "agy (default, gemini-3.8-flash)", "inherit-parent (parent session's model)", "auto (parent session's model)"]);
+  page.choose(`m-${ri}-0`, "gemini-4-argon");
+  page.tick(`e-${ri}-0-low`);
+  expect(page.role("feature")).toBe("feature: gemini-4-argon @low");
   const pasted = parseMessage(page.message());
-  expect(resolveRole(pasted.next, "feature")).toEqual([{ harness: "agy", model: "gemini-3.8-flash-low", effort: null }]);
+  expect(resolveRole(pasted.next, "feature")).toEqual([{ harness: "agy", model: "gemini-4-argon", effort: "low" }]);
   expect(planApply(sheet, pasted.next, pasted.base).changes.map((c) => c.role)).toEqual(["feature"]);
 });
 
@@ -422,7 +425,7 @@ test("apply writes an Antigravity slot that replaced an effort-bearing one", () 
   ]);
   const stuck = twoNative.replace("gpt-6.1-sol @xhigh", "gemini-3.8-flash-high @xhigh");
   expect(() => apply({ message: message(root, sheetPath, stuck, next), env: {}, log: () => {} }))
-    .toThrow("agy takes no effort setting; name the effort in the model id");
+    .toThrow("gemini-3.8-flash-high already names its effort");
   expect(readFileSync(sheetPath, "utf8")).toBe(next);
 });
 
@@ -566,6 +569,21 @@ test("the preset select lists both scopes, and a page with none disables it", ()
   const bare = mount(pageSheet);
   expect(bare.options("preset")).toEqual(["No presets saved"]);
   expect(bare.at("preset").attrs.disabled).toBe("");
+});
+
+test("a preset's default effort is not added to a level-named Antigravity id, which would refuse it", () => {
+  const root = scratch();
+  const project = join(root, "project", ".pstack", "presets");
+  mkdirSync(project, { recursive: true });
+  writeFileSync(join(project, "levelled.md"), "feature: gemini-3.8-flash-high\ndefault effort: high\n");
+  writeFileSync(join(project, "most.md"), "feature: agy\ndefault effort: xhigh\n");
+  const page = mount(sheet, new Map(), root);
+  page.choose("preset", "1");
+  expect(page.role("feature")).toBe("feature: agy");
+  page.choose("preset", "0");
+  expect(page.role("feature")).toBe("feature: gemini-3.8-flash-high");
+  const pasted = parseMessage(page.message());
+  expect(resolveRole(pasted.next, "feature")).toEqual([{ harness: "agy", model: "gemini-3.8-flash-high", effort: null }]);
 });
 
 test("loading a preset fills the roles it names and keeps the rest", () => {

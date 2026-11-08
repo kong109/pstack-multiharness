@@ -2,6 +2,16 @@
 
 This file is the release changelog, with one `## <version> - <title>` entry per release, newest first. The Cursor-to-Claude rewrite rules live in [`tools/substitutions.json`](tools/substitutions.json), and the [sync boundary](CONTRIBUTING.md#the-sync-boundary) in `CONTRIBUTING.md` defines how a change to upstream's skill content is declared.
 
+## 0.9.140 - Antigravity takes an effort
+
+agy 1.5 takes `--effort low|medium|high` on a base model id, so `gemini-3.8-flash @low` now runs as `agy --model gemini-3.8-flash --effort low`. The Google provider lists `gemini-3.8-flash` and `gemini-4-argon` instead of one model per level, and `agy` stands for `gemini-3.8-flash`.
+
+- The sheet's `default effort` line now reaches agy entries when agy lists that level. A level a harness does not list, such as `max` on agy or Grok, is left off, so the harness runs at its own default instead of failing the role.
+- An id that ends in its level, such as `gemini-3.8-flash-high`, still runs at that level and ignores the `default effort` line. An explicit effort on it is refused, because agy rejects the pair. `providers.json` marks Google with `levelledIds`, so only Gemini ids get this treatment.
+- `migrate-sheet.mjs` rewrites such an id as `gemini-3.8-flash @high`, and keeps the level when the entry says `@session`.
+- T3 Code's antigravity driver has no effort option, so `t3-task.mjs` appends the level to the model id, as in `gemini-3.8-flash-high`, when agy lists that id, and refuses the effort otherwise.
+- When a preset loads on the effort page, its `default effort` is not added to a level-named id or to a slot whose harness does not list that level.
+
 ## 0.9.139 - Entries cut short by a shell redirect
 
 On a shell command line, an unquoted `codex->omp` is a redirect. The shell writes the command's output to a file named `omp` and passes `codex-` as the entry, so `verify-agents.mjs plan` verified a model named `codex-` and printed nothing. The resolver now refuses an entry ending in `-`, which no model id does, and says to quote it and delete the stray file. `verify-agents.mjs plan` and `brief` print their problems on stderr, so the message shows even when stdout went into that file, and `brief` refuses an entry that does not parse. The verify skill and the foreign-harness reference quote every `->` entry in their commands. The verify skill also says to run `workrex wait` from the sandbox, because it looks only in the repository of its working directory. Its brief tells the coordinator that a harness without an effort setting, such as agy, runs the entry's model as written. A run had given agy `gemini-3.8-flash-low` for low effort, so the judge counted it as an unplanned seat. It names the coordinator's worktree `verify-coordinator`, so its path stays the same between runs and Claude Code's folder trust prompt appears only on the first run. Before this release each run's new path stopped the coordinator at that prompt.

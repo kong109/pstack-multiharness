@@ -50,6 +50,10 @@ export function parseEntry(entry, list = harnesses) {
 export const providerOf = (model, catalog = providers) =>
   catalog.find((p) => p.models.some((m) => m.slug === model) || (p.match && new RegExp(p.match).test(model)));
 
+// A provider marked levelledIds also takes a model id ending in its effort level, the way `agy models` lists them.
+export const levelledIds = (catalog = providers) =>
+  new Map(catalog.filter((p) => p.levelledIds).flatMap((p) => p.models.flatMap((m) => p.efforts.map((e) => [`${m.slug}-${e}`, [m.slug, e]]))));
+
 export const ownProvider = (model, catalog = providers) =>
   catalog.find((p) => p.harness === model) ?? (model.includes("/") || aliases.has(model) ? undefined : providerOf(model, catalog));
 
@@ -80,7 +84,14 @@ export function resolveEntry({ model: written, harness: chosen, explicitEffort }
     }
     id = template.replaceAll("{model}", model);
   }
-  const effort = explicitEffort ?? (takesEffort(harness, list) ? defaultEffort : undefined);
+  // A levelled id keeps its level, since agy refuses a second effort on top. A default the harness does not list is left off.
+  const levelled = levelledIds(catalog).get(model);
+  if (levelled && explicitEffort !== undefined && explicitEffort !== "session") {
+    throw new Error(`${model} already names its effort, so write \`${levelled[0]} @${explicitEffort}\` instead of \`${model} @${explicitEffort}\``);
+  }
+  const listed = list[harness].efforts;
+  const fallback = takesEffort(harness, list) && !levelled && (!listed || defaultEffort === "session" || listed.includes(defaultEffort));
+  const effort = explicitEffort ?? (fallback ? defaultEffort : undefined);
   return {
     ...(harness !== session && { harness }),
     model: aliases.has(id) ? null : id,

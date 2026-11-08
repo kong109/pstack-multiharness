@@ -18,13 +18,13 @@ const scratch = () => {
 
 const all = () => true;
 
-test("entries split on commas and spaces but keep a spaced effort with its entry", () => {
-  expect(splitEntries(["claude", "muse->pi", "@max,", "gpt-6.1-sol->opencode@high,codex"])).toEqual(["claude", "muse->pi @max", "gpt-6.1-sol->opencode@high", "codex"]);
+test("entries split on commas and spaces, and an effort typed as its own word joins its entry", () => {
+  expect(splitEntries(["claude", "muse->pi", "@max,", "gpt-6.1-sol->opencode@high,codex"])).toEqual(["claude", "muse->pi@max", "gpt-6.1-sol->opencode@high", "codex"]);
 });
 
 test("a seat resolves at low effort unless the entry names one, and a harness without effort gets none", () => {
   expect(planSeat("muse", { installed: all })).toEqual({ entry: "muse", harness: "muse", model: "muse-wonder-full-1.0", effort: "low", problems: [] });
-  expect(planSeat("claude @max", { installed: all })).toMatchObject({ harness: "claude", model: "opus", effort: "max", problems: [] });
+  expect(planSeat("claude@max", { installed: all })).toMatchObject({ harness: "claude", model: "opus", effort: "max", problems: [] });
   expect(planSeat("agy", { installed: all })).toMatchObject({ harness: "agy", model: "gemini-3.8-flash", effort: "low", problems: [] });
   expect(planSeat("gpt-6.1-sol->opencode", { installed: all })).toMatchObject({ harness: "opencode", effort: null, problems: [] });
 });
@@ -35,7 +35,7 @@ test("each kind of problem is named, and an unregistered harness says whether it
   ]);
   expect(planSeat("muse->pi", { installed: all }).problems[0]).toMatchObject({ kind: "provider" });
   expect(planSeat("opus->codex", { installed: all }).problems[0].kind).toBe("provider");
-  expect(planSeat("grok @max", { installed: all }).problems[0].kind).toBe("effort");
+  expect(planSeat("grok@max", { installed: all }).problems[0].kind).toBe("effort");
   expect(planSeat("codex:gpt-6.1-sol", { installed: all }).problems[0]).toMatchObject({ kind: "grammar" });
   expect(planSeat("codex", { installed: () => false }).problems).toEqual([{ kind: "missing", detail: "codex is not on PATH" }]);
 });
@@ -46,8 +46,8 @@ test("with no entries, each installed harness gets a seat, and a multi-provider 
 });
 
 test("the brief names a task and the seats, not the skill or the scripts", () => {
-  const text = brief([{ entry: "codex" }, { entry: "muse->pi @max" }]);
-  expect(text).toContain("codex, muse->pi @max");
+  const text = brief([{ entry: "codex" }, { entry: "muse->pi@max" }]);
+  expect(text).toContain("codex, muse->pi@max");
   expect(text).toContain("runs as written, not as a lower-effort variant");
   expect(text).not.toMatch(/arena skill|pane-agent|workrex|\/pstack/i);
 });

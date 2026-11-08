@@ -106,7 +106,7 @@ function main(argv) {
   const shown = new Set(data.roles.map((r) => r.role));
   const skipped = allRoleLabels(text).filter((role) => !shown.has(role));
   if (skipped.length) {
-    console.log(`left off the page, because an entry does not parse: ${skipped.join("; ")}. If they use the old harness:model form, run node ${join(skillDir, "..", "poteto-mode", "scripts", "migrate-sheet.mjs")} ${sheetPath}`);
+    console.log(`left off the page, because an entry does not parse: ${skipped.join("; ")}. If they use the old harness:model form or a space before an effort, run node ${join(skillDir, "..", "poteto-mode", "scripts", "migrate-sheet.mjs")} ${sheetPath}`);
   }
 }
 

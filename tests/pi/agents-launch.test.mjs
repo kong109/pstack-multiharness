@@ -246,8 +246,8 @@ describe("model resolution", () => {
 
   test("an unknown alias is an error naming the valid values", async () => {
     const { w, pi, ctx } = setup();
-    const err = await pi.call("agent", { description: "m", prompt: "x", model: "opus @xhigh" }, ctx).catch((e) => e);
-    expect(err.message).toContain('Unknown model "opus @xhigh"');
+    const err = await pi.call("agent", { description: "m", prompt: "x", model: "opus@xhigh" }, ctx).catch((e) => e);
+    expect(err.message).toContain('Unknown model "opus@xhigh"');
     expect(err.message).toContain("opus, fable, sonnet, haiku, inherit-parent, auto");
     expect(w.invocations()).toEqual([]);
   });

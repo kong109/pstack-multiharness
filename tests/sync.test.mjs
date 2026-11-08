@@ -365,6 +365,11 @@ describe("unmatchedRules", () => {
 });
 
 describe("denylistHits", () => {
+  test("an effort written after a space fails the scan, and the port's form passes", () => {
+    expect(denylistHits("arena.md", "as in `opus @xhigh`", RULES.denylist)).toHaveLength(1);
+    expect(denylistHits("arena.md", "as in `gpt-6.1-sol->pi @max`", RULES.denylist)).toHaveLength(1);
+    expect(denylistHits("arena.md", "as in `opus@xhigh` or `gpt-6.1-sol->pi@max`", RULES.denylist)).toEqual([]);
+  });
   test("a Cursor model slug fails the scan", () => {
     expect(denylistHits("playbook.md", "default `grok-4.8-fast`", RULES.denylist)).toHaveLength(1);
     expect(denylistHits("playbook.md", "default `gpt-5.6-sol-max`", RULES.denylist)).toHaveLength(1);

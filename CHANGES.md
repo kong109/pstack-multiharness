@@ -2,6 +2,15 @@
 
 This file is the release changelog, with one `## <version> - <title>` entry per release, newest first. The Cursor-to-Claude rewrite rules live in [`tools/substitutions.json`](tools/substitutions.json), and the [sync boundary](CONTRIBUTING.md#the-sync-boundary) in `CONTRIBUTING.md` defines how a change to upstream's skill content is declared.
 
+## 0.9.141 - Efforts without a space, and Muse is Wonder Full only
+
+A role entry is now `model[->harness][@effort]`, with the effort right after the model, as in `opus@xhigh` or `gpt-6.1-sol->pi@max`. That is the form the fork used before 0.9.133. Upstream writes `opus @xhigh`, and the 0.9.133 re-port kept upstream's form. The resolver now refuses an entry with a space before `@` and gives the entry without the space.
+
+- [`migrate-sheet.mjs`](plugins/pstack/skills/poteto-mode/scripts/migrate-sheet.mjs) removes the space from every entry in a sheet or preset, and keeps a `.pre-nospace` copy of the old file. A level-named Gemini id now migrates to `gemini-3.8-flash@high`.
+- The `/pstack-effort` page and `setup-pstack` write slots without the space. The session hooks read an effort without the space on Muse and Copilot, so `muse-wonder-full-1.0@max` stays in the Muse session context.
+- The generated Models paragraph in each skill shows `opus@xhigh`. A sync denylist rule refuses a space before an effort level in port text, so an upstream sync cannot bring the spaced form back.
+- `muse-wonder-full-1.0` is now the example for every Muse tier, and the Muse panel example is that model on every seat at different efforts. `muse-spark-1.3` and `muse-wonder-1.0` are gone from `models.json` and the Muse mapping.
+
 ## 0.9.140 - Antigravity takes an effort
 
 agy 1.5 takes `--effort low|medium|high` on a base model id, so `gemini-3.8-flash @low` now runs as `agy --model gemini-3.8-flash --effort low`. The Google provider lists `gemini-3.8-flash` and `gemini-4-argon` instead of one model per level, and `agy` stands for `gemini-3.8-flash`.

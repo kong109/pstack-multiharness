@@ -331,8 +331,8 @@ export function museModelNamesSection(models) {
     block: models.muse,
     worker: "fast Muse model",
     panel: (list) =>
-      `is ${list}. Muse serves one model family, so vary reasoning effort across the panel ` +
-      "too and note in the verdict that diversity was reduced.",
+      `is ${list} on every seat, each at a different reasoning effort. Muse serves one model family, so ` +
+      "note in the verdict that diversity was reduced.",
     dispatch:
       "Pass a role's model where the dispatch takes one: a Workflow child's `model`, or the session model when " +
       "the dispatch has no model field. `subagent_spawn` takes an agent definition, not a model, so a role " +

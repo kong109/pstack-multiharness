@@ -553,6 +553,10 @@
       ]
     },
     {
+      "regex": "\\S @(?:minimal|low|medium|high|xhigh|max|ultra|session)\\b",
+      "hint": "upstream's spaced effort; the port writes the effort right after the model, as in `opus@xhigh`, so add a substitution rule for the phrase"
+    },
+    {
       "token": "pstack-models.mdc",
       "hint": "Cursor's rule file; the port's override sheet is pstack-models.md, at the path setup-pstack lists per runtime"
     },

@@ -193,9 +193,9 @@ describe("PreToolUse model check for pstack agents", () => {
   });
 
   test("a role value's effort suffix does not change the model it names", () => {
-    const text = sheet({ strong: "claude-opus-5.5 @xhigh", panel: "claude-sonnet-5 @high, gpt-5.5, gemini-3.8-flash" });
+    const text = sheet({ strong: "claude-opus-5.5@xhigh", panel: "claude-sonnet-5@high, gpt-5.5, gemini-3.8-flash" });
     for (const model of ["claude-opus-5.5", "claude-sonnet-5", "gpt-5.5"]) expect(runWith(text, agent(model))).toEqual(quiet);
-    const reason = deny(runWith(text, agent("claude-opus-5.5 @xhigh")).out);
+    const reason = deny(runWith(text, agent("claude-opus-5.5@xhigh")).out);
     expect(reason).toContain("one of `gpt-5.5`, `claude-opus-5.5`, `claude-sonnet-5`, `gemini-3.8-flash`.");
   });
 

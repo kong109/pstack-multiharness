@@ -32,6 +32,8 @@ test("provider IDs, OpenCode variants, and CRLF survive", () => {
 test("the old forms fail with the fix in the message", () => {
   expect(() => resolveRole("role: sonnet @xhigh", "role")).toThrow("`sonnet@xhigh`");
   expect(() => resolveRole("role: gpt-6.1-sol->pi @max", "role")).toThrow("`gpt-6.1-sol->pi@max`");
+  expect(() => resolveRole("role: codex:gpt-5 @high", "role")).toThrow("`gpt-5->codex@high`");
+  expect(() => resolveRole("role: opus @high@low", "role")).toThrow("Invalid model entry: opus@high@low");
   expect(() => resolveRole("role: sonnet\neffort: sonnet = high", "role")).toThrow("default effort");
 });
 
@@ -182,6 +184,8 @@ test("the migration turns old harness prefixes into the arrow form and leaves ev
   expect(after).toBe("# sheet\r\nfeature: gpt-6.1-sol@xhigh, opus@high\r\narena runners: opus, muse-wonder-full-1.0@low,gemini-3.8-flash@low\r\nswarm workers: ollama:qwen3:8b\r\ndefault effort: high\r\n");
   expect(migrateText("role: codex:my-custom@low")).toBe("role: my-custom->codex@low");
   expect(migrateText("role: muse:muse-wonder-full-1.0@max, claude-opus-5-5@high, muse->omp@max")).toBe("role: muse-wonder-full-1.0@max, claude-opus-5-5@high, muse->omp@max");
+  expect(migrateText("role: opus @xhigh, gpt-6.1-sol->pi\t@max, sonnet @minimal\ncontact: ping @kong109")).toBe("role: opus@xhigh, gpt-6.1-sol->pi@max, sonnet@minimal\ncontact: ping @kong109");
+  expect(migrateText(migrateText("role: opus @xhigh, gemini-3.8-flash-high"))).toBe("role: opus@xhigh, gemini-3.8-flash@high");
   expect(migrateText("contact: me@example.com")).toBe("contact: me@example.com");
   expect(migrateText("role: gemini-3.8-flash-high, gemini-4-argon-medium->agy, gemini-3.8-flash-high@low, gemini-3.8-flash-highest")).toBe("role: gemini-3.8-flash@high, gemini-4-argon->agy@medium, gemini-3.8-flash@low, gemini-3.8-flash-highest");
   expect(migrateText("role: gemini-3.8-flash-low@session, gemini-3.8-flash-low->agy@session")).toBe("role: gemini-3.8-flash@low, gemini-3.8-flash->agy@low");

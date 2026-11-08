@@ -21,7 +21,10 @@ export function parseEntry(entry, list = harnesses) {
   const text = entry.trim();
   const invalid = (why) => new Error(`Invalid model entry: ${text}${why ? ` (${why})` : ""}`);
   const spaced = /^(\S+)\s+(@\S+)$/.exec(text);
-  if (spaced) throw invalid(`write the effort right after the model, with no space, as in \`${spaced[1]}${spaced[2]}\``);
+  if (spaced) {
+    parseEntry(spaced[1] + spaced[2], list);
+    throw invalid(`write the effort right after the model, with no space, as in \`${spaced[1]}${spaced[2]}\``);
+  }
   if (/\s/.test(text)) throw invalid();
   const [head, explicitEffort, ...more] = text.split("@");
   if (more.length || explicitEffort === "") throw invalid();

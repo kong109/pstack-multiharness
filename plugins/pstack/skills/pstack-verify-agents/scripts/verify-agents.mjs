@@ -84,7 +84,7 @@ export function sandbox({ env = process.env, now = Date.now() } = {}) {
 }
 
 export const brief = (seats, { task = DEFAULT_TASK } = {}) =>
-  `Set this project's arena runners to exactly these agents, one seat each, at low effort unless the entry names one: ${seats.map((s) => s.entry).join(", ")}. Then throw this in the arena: ${task} Commit the final result on your branch. Don't push.\n`;
+  `Set this project's arena runners to exactly these agents, one seat each, at low effort unless the entry names one: ${seats.map((s) => s.entry).join(", ")}. A harness that takes no effort setting runs the entry's model as written, not a lower-effort variant. Then throw this in the arena: ${task} Commit the final result on your branch. Don't push.\n`;
 
 export const DEFAULT_TASK = "a dependency-free Node `wc` clone in `wc.mjs` that prints line, word, and byte counts for stdin, separated by spaces like `wc` with no flags, with a `node --test` file in `wc.test.mjs` that covers empty input.";
 
@@ -178,6 +178,13 @@ const usage = `usage: verify-agents.mjs plan <entry>...
        verify-agents.mjs watch --log <file> --stop <file> --panes <dir>
        verify-agents.mjs judge --log <file> --user-session <id> <entry>...`;
 
+// stderr, because a shell redirect that caused a problem also swallows stdout.
+const report = (planned, kind) => {
+  const found = planned.flatMap(({ entry, problems }) => problems.filter((p) => !kind || p.kind === kind).map((p) => `${entry}: ${p.kind}: ${p.detail}`));
+  for (const line of found) console.error(line);
+  return found.length;
+};
+
 export function main(argv) {
   const [command, ...rest] = argv;
   const { values, positionals } = parseArgs({ args: rest, allowPositionals: true, options: {
@@ -187,15 +194,22 @@ export function main(argv) {
   if (command === "plan") {
     const planned = seats();
     console.log(JSON.stringify(planned, null, 2));
+    report(planned);
     return planned.every((s) => !s.problems.length) ? 0 : 2;
   }
   if (command === "sandbox") return console.log(JSON.stringify(sandbox(), null, 2)), 0;
-  if (command === "brief") return process.stdout.write(brief(seats())), 0;
+  if (command === "brief") {
+    const planned = seats();
+    if (report(planned, "grammar")) return 2;
+    return process.stdout.write(brief(planned)), 0;
+  }
   if (command === "watch" && values.log && values.stop && values.panes) return watch(values), 0;
   if (command === "judge" && values.log) {
     const sandboxDir = sandboxPath();
     const worktrees = existsSync(join(sandboxDir, ".git")) ? git(sandboxDir, "worktree", "list", "--porcelain").split("\n").filter((l) => l.startsWith("worktree ")).map((l) => l.slice("worktree ".length)) : [];
-    const verdict = judge(readLog(values.log), seats(), { sandboxDir, userSession: values["user-session"], worktrees });
+    const planned = seats();
+    if (report(planned, "grammar")) return 2;
+    const verdict = judge(readLog(values.log), planned, { sandboxDir, userSession: values["user-session"], worktrees });
     console.log(JSON.stringify(verdict, null, 2));
     return verdict.ok ? 0 : 1;
   }

@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { brief, defaultEntries, judge, planSeat, sandbox, splitEntries } from "../plugins/pstack/skills/pstack-verify-agents/scripts/verify-agents.mjs";
 
 const directories = [];
@@ -46,6 +47,7 @@ test("with no entries, each installed harness gets a seat, and a multi-provider 
 test("the brief names a task and the seats, not the skill or the scripts", () => {
   const text = brief([{ entry: "codex" }, { entry: "muse->pi @max" }]);
   expect(text).toContain("codex, muse->pi @max");
+  expect(text).toContain("runs the entry's model as written");
   expect(text).not.toMatch(/arena skill|pane-agent|workrex|\/pstack/i);
 });
 
@@ -106,4 +108,21 @@ test("the sandbox is made once, refuses uncommitted changes, and drops only old 
   expect(sandbox({ env, now: Date.now() + 25 * 3600 * 1000 }).pruned.sort()).toEqual(["fresh", "old"]);
   writeFileSync(join(dir, "README.md"), "edited\n");
   expect(() => sandbox({ env })).toThrow("uncommitted changes");
+});
+
+test("a seat cut short by a shell redirect is a grammar problem that says to quote it", () => {
+  expect(planSeat("muse-", { installed: all }).problems[0]).toMatchObject({ kind: "grammar", detail: expect.stringContaining("quote the entry") });
+});
+
+test("brief and judge refuse an entry cut short by a redirect, on stderr, since the redirect took stdout", () => {
+  const dir = scratch();
+  const log = join(dir, "log.jsonl");
+  writeFileSync(log, "");
+  const cli = fileURLToPath(new URL("../plugins/pstack/skills/pstack-verify-agents/scripts/verify-agents.mjs", import.meta.url));
+  for (const args of [["brief", "claude", "codex-"], ["judge", "--log", log, "--user-session", "s", "claude", "codex-"]]) {
+    const run = spawnSync(process.execPath, [cli, ...args], { encoding: "utf8", env: { ...process.env, PSTACK_VERIFY_SANDBOX: join(dir, "none") } });
+    expect(run.status).toBe(2);
+    expect(run.stdout).toBe("");
+    expect(run.stderr).toContain("codex-: grammar:");
+  }
 });

@@ -95,7 +95,8 @@ test("a multi-provider harness gets the model id in its own provider namespace",
 });
 
 test("a harness that serves no model of that provider fails and names one that does", () => {
-  expect(() => resolveRole("role: opus->pi", "role", undefined, fixture)).toThrow("pi runs no Anthropic (Claude Code) models, so it cannot run opus (use opus->claude)");
+  expect(() => resolveRole("role: opus->pi", "role", undefined, fixture)).toThrow("pi runs no Anthropic (Claude Code) models, so it cannot run opus");
+  expect(() => resolveRole("role: opus->pi", "role", undefined, fixture)).toThrow("(use opus->claude)");
   expect(() => resolveRole("role: opus->codex", "role")).toThrow("use opus->claude");
   expect(() => resolveRole("role: muse->nope", "role")).toThrow("Unknown harness: nope");
 });
@@ -132,14 +133,26 @@ test("grok, agy and muse model ids keep their dots and dashes", () => {
   ]);
 });
 
+test("a provider/model id or an open-weight model runs on any harness, for an operator with an API key", () => {
+  expect(resolveRole("role: anthropic/claude-opus-5-5->opencode @high, muse-code/muse-wonder-full-1.0->omp, kimi-k3->opencode", "role")).toEqual([
+    { harness: "opencode", model: "anthropic/claude-opus-5-5", effort: "high" },
+    { harness: "omp", model: "muse-code/muse-wonder-full-1.0", effort: null },
+    { harness: "opencode", model: "kimi-k3", effort: null },
+  ]);
+  expect(() => resolveRole("role: muse->omp", "role")).toThrow("with an API key, write the id omp takes, as in `provider/muse-wonder-full-1.0->omp`");
+  expect(() => resolveRole("role: muse->agy", "role")).toThrow(/^agy runs no Meta \(Muse\) models, so it cannot run muse-wonder-full-1.0 \(use muse->muse\)$/);
+});
+
 test("pi, omp and opencode give each provider's model its own id prefix", () => {
-  expect(resolveRole("role: gpt-6.1-sol->pi @low, muse->omp@max, grok->omp, gpt-6.1-sol->opencode", "role")).toEqual([
+  expect(resolveRole("role: gpt-6.1-sol->pi @low, gpt-6.1-sol->omp@max, gpt-6.1-sol->opencode", "role")).toEqual([
     { harness: "pi", model: "openai-codex/gpt-6.1-sol", effort: "low" },
-    { harness: "omp", model: "muse-code/muse-wonder-full-1.0", effort: "max" },
-    { harness: "omp", model: "xai-oauth/grok-4.7", effort: null },
+    { harness: "omp", model: "openai-codex/gpt-6.1-sol", effort: "max" },
     { harness: "opencode", model: "openai/gpt-6.1-sol", effort: null },
   ]);
-  expect(() => resolveRole("role: muse->pi", "role")).toThrow("pi runs no Meta (Muse) models, so it cannot run muse-wonder-full-1.0 (use muse->muse or muse->omp)");
+  expect(() => resolveRole("role: muse->pi", "role")).toThrow("pi runs no Meta (Muse) models, so it cannot run muse-wonder-full-1.0 (use muse->muse)");
+  for (const [entry, own] of [["muse->omp", "muse"], ["opus->omp", "claude"], ["grok->omp", "grok"], ["gemini-3.8-flash-high->opencode", "agy"]]) {
+    expect(() => resolveRole(`role: ${entry}`, "role")).toThrow(`(use ${entry.split("->")[0]}->${own})`);
+  }
 });
 
 test("the migration turns old harness prefixes into the arrow form and leaves everything else as written", async () => {
@@ -177,4 +190,9 @@ test("the migration keeps an arrow whose harness no provider of that model owns,
     { harness: "claude", model: "local-thing", effort: null },
     { harness: "claude", model: "opus", effort: "high" },
   ]);
+});
+
+test("an entry cut short by an unquoted -> in a shell is refused with the reason", () => {
+  for (const cut of ["muse-", "gpt-6.1-sol- @high"]) expect(() => parseEntry(cut)).toThrow("the shell read `->` as a redirect, so quote the entry");
+  expect(parseEntry("muse->omp")).toMatchObject({ model: "muse", harness: "omp" });
 });

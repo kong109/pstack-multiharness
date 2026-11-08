@@ -32,6 +32,9 @@ export function t3Task({ name, harness, model, effort = null, access = "read", b
   checkForeignRequest("t3-task", { harness, model, effort });
   const { t3 } = harnesses[harness];
   if (!t3) throw new Error(`${harness} has no t3 block in harnesses.json, so T3 Code cannot run it`);
+  if (effort !== null && !Object.values(t3.options ?? {}).some((template) => template.includes("{effort}"))) {
+    throw new Error(`T3 Code's ${t3.driver} driver takes no effort option; name the effort in the model id (${model}-${effort})`);
+  }
   if (!Object.hasOwn(ROLES, access)) throw new Error("--access is read or write");
   if (!brief?.trim()) throw new Error("--brief must name a file with the task in it");
   const options = Object.fromEntries(

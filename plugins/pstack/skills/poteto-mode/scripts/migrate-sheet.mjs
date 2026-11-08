@@ -7,6 +7,16 @@ import { harnesses, ownProvider, providers } from "./resolve-models.mjs";
 const ROLE = /^(\s*[a-z][a-z ,-]*[a-z]\s*:\s*)(\S.*)$/;
 const LEGACY = /^([a-z][a-z0-9-]*):(\S+)(\s+@\S+)?$/;
 const levels = new Set([...providers.flatMap((p) => p.efforts), ...Object.values(harnesses).flatMap((h) => h.efforts ?? [])]);
+const levelled = new Map(providers.flatMap((p) => p.models.flatMap((m) => p.efforts.map((e) => [`${m.slug}-${e}`, [m.slug, e]]))));
+
+// A model id ending in its effort level becomes the model and an effort; an effort the entry already names wins.
+function splitLevel(entry) {
+  const model = /^(.+?)(?=->|@|\s|$)/.exec(entry)?.[1];
+  if (!levelled.has(model)) return entry;
+  const [slug, effort] = levelled.get(model);
+  const rest = entry.slice(model.length);
+  return `${slug}${rest}${rest.includes("@") ? "" : ` @${effort}`}`;
+}
 
 // An effort written without its space, which both grammars refuse, gets the space their error message asks for.
 // The arrow is dropped only when the model's own provider runs on that harness, so the entry keeps its harness in every session.
@@ -14,9 +24,9 @@ export function migrateEntry(entry) {
   const joined = entry.includes("->") ? null : /^(\S+?)@([^@\s]+)$/.exec(entry);
   const spaced = joined && levels.has(joined[2]) ? `${joined[1]} @${joined[2]}` : entry;
   const match = LEGACY.exec(spaced);
-  if (!match || !Object.hasOwn(harnesses, match[1])) return spaced;
+  if (!match || !Object.hasOwn(harnesses, match[1])) return splitLevel(spaced);
   const [, harness, model, effort = ""] = match;
-  return `${model}${ownProvider(model)?.harness === harness ? "" : `->${harness}`}${effort}`;
+  return splitLevel(`${model}${ownProvider(model)?.harness === harness ? "" : `->${harness}`}${effort}`);
 }
 
 export function migrateText(text) {

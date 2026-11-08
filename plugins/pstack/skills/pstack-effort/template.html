@@ -344,7 +344,7 @@ function effortBoxes(r, s, si, ri) {
 function effortNote(s) {
   if (unsupportedEffort(s)) return `keeps effort ${s.effort}, which this ${ownHarness(s) ? "model" : "harness"} does not list`;
   if (s.effort) return "";
-  if (!effortsOf(s).length) return "this harness takes no effort setting; the effort is part of the model";
+  if (!effortsOf(s).length) return "this harness takes no effort setting";
   const inherited = modelDefault(s);
   return inherited ? `no box ticked: the sheet's default effort line sets ${inherited}` : "no box ticked: runs at the session's effort";
 }

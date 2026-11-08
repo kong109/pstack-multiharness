@@ -79,8 +79,8 @@
     "promptFirst": false,
     "prompt": ["-i", "{prompt}"],
     "model": ["--model", "{model}"],
-    "effort": null,
-    "efforts": null,
+    "effort": ["--effort", "{effort}"],
+    "efforts": ["low", "medium", "high"],
     "runDir": ["--add-dir", "{run}"],
     "access": {
       "read": ["--dangerously-skip-permissions"],

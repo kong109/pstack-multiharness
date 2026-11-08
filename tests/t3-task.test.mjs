@@ -81,7 +81,7 @@ test("the request id is stable for a retry and changes with the brief or the tar
 
 test("an effort the harness cannot take is refused, and one it lists is accepted", () => {
   expect(() => t3Task(request({ harness: "agy", model: "gemini-3.8-flash", effort: "high" })))
-    .toThrow("agy takes no effort setting; name the effort in the model id (gemini-3.8-flash-high)");
+    .toThrow("T3 Code's antigravity driver takes no effort option; name the effort in the model id (gemini-3.8-flash-high)");
   expect(() => t3Task(request({ effort: "minimal" }))).toThrow("Unsupported grok effort");
   expect(() => t3Task(request({ harness: "muse", model: "m", effort: "minimal" }))).not.toThrow();
 });
@@ -116,7 +116,7 @@ test("the command prints the arguments as one JSON object and fails with a messa
   const bad = run("--name", "review-a", "--harness", "agy", "--model", "gemini-3.8-flash", "--effort", "high", "--brief", brief);
   expect(bad.status).toBe(1);
   expect(bad.stdout).toBe("");
-  expect(bad.stderr).toContain("agy takes no effort setting");
+  expect(bad.stderr).toContain("antigravity driver takes no effort option");
   expect(run("--name", "review-a", "--harness", "grok", "--model", "grok-4.7", "--brief", join(root, "missing.md")).stderr)
     .toContain("--brief must name an existing file");
 });

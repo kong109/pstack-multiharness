@@ -25,7 +25,8 @@ test("entries split on commas and spaces but keep a spaced effort with its entry
 test("a seat resolves at low effort unless the entry names one, and a harness without effort gets none", () => {
   expect(planSeat("muse", { installed: all })).toEqual({ entry: "muse", harness: "muse", model: "muse-wonder-full-1.0", effort: "low", problems: [] });
   expect(planSeat("claude @max", { installed: all })).toMatchObject({ harness: "claude", model: "opus", effort: "max", problems: [] });
-  expect(planSeat("agy", { installed: all })).toMatchObject({ harness: "agy", effort: null, problems: [] });
+  expect(planSeat("agy", { installed: all })).toMatchObject({ harness: "agy", model: "gemini-3.8-flash", effort: "low", problems: [] });
+  expect(planSeat("gpt-6.1-sol->opencode", { installed: all })).toMatchObject({ harness: "opencode", effort: null, problems: [] });
 });
 
 test("each kind of problem is named, and an unregistered harness says whether it is installed", () => {

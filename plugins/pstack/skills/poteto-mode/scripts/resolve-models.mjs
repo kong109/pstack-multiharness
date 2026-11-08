@@ -80,7 +80,12 @@ export function resolveEntry({ model: written, harness: chosen, explicitEffort }
     }
     id = template.replaceAll("{model}", model);
   }
-  const effort = explicitEffort ?? (takesEffort(harness, list) ? defaultEffort : undefined);
+  // An id ending in its effort level keeps that level, and agy refuses a second effort on top.
+  const levelled = provider?.models.flatMap((m) => provider.efforts.map((e) => [m.slug, e])).find(([slug, e]) => model === `${slug}-${e}`);
+  if (levelled && explicitEffort !== undefined) {
+    throw new Error(`${model} already names its effort, so write \`${levelled[0]} @${explicitEffort}\` instead of \`${model} @${explicitEffort}\``);
+  }
+  const effort = explicitEffort ?? (takesEffort(harness, list) && !levelled ? defaultEffort : undefined);
   return {
     ...(harness !== session && { harness }),
     model: aliases.has(id) ? null : id,

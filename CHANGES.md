@@ -2,6 +2,10 @@
 
 This file is the release changelog, with one `## <version> - <title>` entry per release, newest first. The Cursor-to-Claude rewrite rules live in [`tools/substitutions.json`](tools/substitutions.json), and the [sync boundary](CONTRIBUTING.md#the-sync-boundary) in `CONTRIBUTING.md` defines how a change to upstream's skill content is declared.
 
+## 0.9.142 - Pi runs Fable on Claude Fable 5.2
+
+Anthropic released Claude Fable 5.2 and moved Fable 5.1 to legacy. The Pi `anthropic` provider now maps `fable` to `anthropic/claude-fable-5-2`. On Claude Code, the `fable` alias already follows the CLI's current Fable, so nothing changes there.
+
 ## 0.9.141 - Efforts without a space, and Muse is Wonder Full only
 
 A role entry is now `model[->harness][@effort]`, with the effort right after the model, as in `opus@xhigh` or `gpt-6.1-sol->pi@max`. That is the form the fork used before 0.9.133. Upstream writes `opus @xhigh`, and the 0.9.133 re-port kept upstream's form. The resolver now refuses an entry with a space before `@` and gives the entry without the space.

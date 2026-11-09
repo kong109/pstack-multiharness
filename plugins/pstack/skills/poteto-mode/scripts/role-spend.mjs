@@ -42,7 +42,7 @@ export function spend(entries, claimed = new Set()) {
   for (const entry of entries) {
     const message = entry.type === "assistant" ? entry.message : null;
     if (!message?.usage || message.model === "<synthetic>") continue;
-    const id = message.id ?? `line-${byMessage.size}`;
+    const id = message.id ?? Symbol("no id");
     if (claimed.has(id)) continue;
     const seen = byMessage.get(id);
     if (!seen || (message.usage.output_tokens ?? 0) > (seen.usage.output_tokens ?? 0)) byMessage.set(id, message);

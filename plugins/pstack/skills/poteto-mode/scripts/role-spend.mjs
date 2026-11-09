@@ -35,34 +35,38 @@ function readJsonl(path) {
   });
 }
 
-// One API reply is written as several transcript lines that repeat its usage, so each message id counts once.
-export function spend(entries) {
+// One API reply is written as several transcript lines, some with partial or zeroed usage, so each message id counts once at its
+// largest output. A fork's transcript repeats its parent's replies, so an id already claimed in the session is skipped.
+export function spend(entries, claimed = new Set()) {
   const byMessage = new Map();
   for (const entry of entries) {
     const message = entry.type === "assistant" ? entry.message : null;
-    if (message?.usage && message.model !== "<synthetic>") byMessage.set(message.id ?? byMessage.size, message);
+    if (!message?.usage || message.model === "<synthetic>") continue;
+    const id = message.id ?? `line-${byMessage.size}`;
+    if (claimed.has(id)) continue;
+    const seen = byMessage.get(id);
+    if (!seen || (message.usage.output_tokens ?? 0) > (seen.usage.output_tokens ?? 0)) byMessage.set(id, message);
   }
   const usage = emptyUsage();
   const ran = new Set();
-  for (const { usage: u, model } of byMessage.values()) {
+  for (const [id, { usage: u, model }] of byMessage) {
+    claimed.add(id);
     usage.input += u.input_tokens ?? 0;
     usage.cacheWrite += u.cache_creation_input_tokens ?? 0;
     usage.cacheRead += u.cache_read_input_tokens ?? 0;
     usage.output += u.output_tokens ?? 0;
-    ran.add(model);
+    if (model) ran.add(model);
   }
   return { usage, ran: [...ran] };
 }
 
-function agentCalls(entries) {
-  const calls = new Map();
+function agentCalls(entries, calls) {
   for (const entry of entries) {
     if (entry.type !== "assistant") continue;
     for (const block of entry.message?.content ?? []) {
       if (block?.type === "tool_use" && (block.name === "Agent" || block.name === "Task")) calls.set(block.id, block.input ?? {});
     }
   }
-  return calls;
 }
 
 // Before 0.9.133 the routed agent's name carried its model and effort, as pstack-<model>-<effort>.
@@ -73,33 +77,50 @@ function requested(call, agentType) {
   return { model: null, effort: null, source: "inherited" };
 }
 
-function check(record, sheet, parentModel) {
-  if (!record.role) return "untagged";
+// An `auto` or `inherit-parent` entry accepts any model the spawning thread ran.
+function check(record, sheet, parentModels) {
+  if (!record.role) return { kind: "untagged" };
   const known = roleNames.get(record.role);
-  if (!known) return `unknown role ${record.role}`;
+  if (!known) return { kind: "unknown role", detail: record.role };
   let expected;
   try {
     expected = resolveRole(sheet, known[0], known[1]);
   } catch (error) {
-    return `sheet error: ${error.message}`;
+    return { kind: "sheet error", detail: error.message };
   }
   const native = expected.filter((e) => !e.harness);
-  if (!native.length) return `sheet runs this role on ${[...new Set(expected.map((e) => e.harness))].join(", ")}`;
-  const want = new Set(native.map((e) => familyOf(e.model ?? parentModel)));
+  if (!native.length) return { kind: "off sheet", detail: `sheet runs this role on ${[...new Set(expected.map((e) => e.harness))].join(", ")}` };
+  const want = new Set(native.flatMap((e) => (e.model ? [e.model] : parentModels).map(familyOf)));
   const got = record.ran.map(familyOf);
-  if (got.length && !got.some((f) => want.has(f))) return `ran ${got.join(", ")}, sheet says ${[...want].join(", ")}`;
+  if (want.size && got.length && !got.some((f) => want.has(f))) return { kind: "off sheet", detail: `ran ${got.join(", ")}, sheet says ${[...want].join(", ")}` };
   return null;
+}
+
+function readMeta(path) {
+  try {
+    return JSON.parse(readFileSync(path, "utf8"));
+  } catch {
+    return {};
+  }
 }
 
 export function sessionReport(file, sheet = "") {
   const entries = readJsonl(file);
-  const main = spend(entries);
-  const calls = agentCalls(entries);
+  const claimed = new Set();
+  const main = spend(entries, claimed);
+  const calls = new Map();
+  agentCalls(entries, calls);
   const dir = join(file.slice(0, -".jsonl".length), "subagents");
-  const metas = existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith(".meta.json")).sort() : [];
-  const spawns = metas.map((name) => {
-    const meta = JSON.parse(readFileSync(join(dir, name), "utf8"));
+  const agents = (existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith(".meta.json")).sort() : []).map((name) => {
     const transcript = join(dir, name.replace(/\.meta\.json$/, ".jsonl"));
+    const lines = existsSync(transcript) ? readJsonl(transcript) : [];
+    agentCalls(lines, calls);
+    return { id: name.replace(/^agent-|\.meta\.json$/g, ""), meta: readMeta(join(dir, name)), lines };
+  });
+  // Parents claim their replies before the forks that copy them.
+  const owners = [...agents].sort((a, b) => Number(!!a.meta.isFork) - Number(!!b.meta.isFork) || (a.meta.spawnDepth ?? 1) - (b.meta.spawnDepth ?? 1));
+  const used = new Map(owners.map((a) => [a.id, spend(a.lines, claimed)]));
+  const spawns = agents.map(({ id, meta }) => {
     const call = calls.get(meta.toolUseId) ?? {};
     const description = call.description ?? meta.description ?? "";
     const record = {
@@ -107,15 +128,17 @@ export function sessionReport(file, sheet = "") {
       role: description.match(tagRe)?.[1].trim() ?? null,
       agentType: meta.agentType ?? call.subagent_type ?? null,
       requested: requested(call, meta.agentType),
-      ...(existsSync(transcript) ? spend(readJsonl(transcript)) : { usage: emptyUsage(), ran: [] }),
+      ...used.get(id),
     };
-    return { ...record, issue: check(record, sheet, main.ran[0]) };
+    const parent = meta.parentAgentId ? used.get(meta.parentAgentId)?.ran ?? [] : main.ran;
+    return { ...record, issue: check(record, sheet, parent) };
   });
   return { session: basename(file, ".jsonl"), modified: statSync(file).mtime.toISOString(), main, spawns };
 }
 
-export const transcriptDir = (cwd, configDir = process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), ".claude")) =>
-  join(configDir, "projects", cwd.replace(/[^a-zA-Z0-9]/g, "-"));
+const configDir = () => process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), ".claude");
+
+export const transcriptDir = (cwd, config = configDir()) => join(config, "projects", cwd.replace(/[^a-zA-Z0-9]/g, "-"));
 
 const inputOf = (u) => u.input + u.cacheWrite + u.cacheRead;
 const millions = (n) => (n / 1e6).toFixed(1);
@@ -137,21 +160,23 @@ export function summarize(reports) {
   }).sort((a, b) => b.usage.output - a.usage.output);
 }
 
-function render(reports) {
+function render(reports, sheetPath) {
   const parent = emptyUsage();
   for (const r of reports) for (const k of Object.keys(parent)) parent[k] += r.main.usage[k];
   const [only] = reports;
   const scope = reports.length === 1 ? `session ${only.session} (${only.modified.slice(0, 10)})` : `${reports.length} sessions`;
-  const out = [`${scope}, main thread: input ${millions(inputOf(parent))}M, output ${thousands(parent.output)}k`];
-  out.push("", ["role", "ran", "effort", "spawns", "input (M)", "output (k)"].join("\t"));
+  const out = [
+    `${scope}, main thread: input+cache ${millions(inputOf(parent))}M, output ${thousands(parent.output)}k`,
+    `sheet: ${sheetPath ?? "none, so roles are checked against the pstack defaults"}`,
+  ];
+  out.push("", ["role", "ran", "effort", "spawns", "input+cache (M)", "output (k)"].join("\t"));
   for (const row of summarize(reports)) {
     out.push([row.role, row.ran, row.effort, row.n, millions(inputOf(row.usage)), thousands(row.usage.output)].join("\t"));
   }
   const spawns = reports.flatMap((r) => r.spawns);
-  const untagged = spawns.filter((s) => s.issue === "untagged").length;
-  const flagged = spawns.filter((s) => s.issue && s.issue !== "untagged");
-  out.push("", `routing: ${spawns.length} spawns, ${untagged} untagged, ${flagged.length} off the sheet`);
-  for (const s of flagged) out.push(`  ${s.description}: ${s.issue}`);
+  const count = (kind) => spawns.filter((s) => s.issue?.kind === kind).length;
+  out.push("", `routing: ${spawns.length} spawns, ${count("untagged")} untagged, ${count("unknown role")} with an unknown role, ${count("off sheet")} off the sheet, ${count("sheet error")} with a sheet error`);
+  for (const s of spawns.filter((s) => s.issue?.detail)) out.push(`  ${s.description}: ${s.issue.kind}: ${s.issue.detail}`);
   return out.join("\n");
 }
 
@@ -170,16 +195,21 @@ function main() {
   if (!existsSync(dir)) throw new Error(`No transcripts at ${dir}. Pass --dir with the folder that holds the session transcripts.`);
   const files = readdirSync(dir).filter((f) => f.endsWith(".jsonl")).map((f) => join(dir, f));
   const byAge = files.map((f) => [f, statSync(f).mtimeMs]).sort((a, b) => b[1] - a[1]);
+  const since = values.since === undefined ? undefined : Date.parse(values.since);
+  if (Number.isNaN(since)) throw new Error(`--since takes a date such as 2026-11-01, not ${values.since}`);
+  if (values.session !== undefined && (values.all || since !== undefined)) throw new Error("--session picks one session, so drop --all and --since");
   let chosen;
-  if (values.session) chosen = byAge.filter(([f]) => basename(f).startsWith(values.session));
-  else if (values.all || values.since) chosen = byAge.filter(([, t]) => !values.since || t >= Date.parse(values.since));
+  if (values.session !== undefined) {
+    chosen = byAge.filter(([f]) => values.session && basename(f).startsWith(values.session));
+    if (chosen.length > 1) throw new Error(`--session ${values.session} matches ${chosen.length} sessions; give more of the id`);
+  } else if (values.all || since !== undefined) chosen = byAge.filter(([, t]) => since === undefined || t >= since);
   else chosen = byAge.slice(0, 1);
   if (!chosen.length) throw new Error(`No session in ${dir} matches.`);
-  const projectSheet = join(process.cwd(), ".pstack", "models.md");
-  const sheetPath = values.sheet ?? [projectSheet, join(homedir(), ".claude", "pstack-models.md")].find(existsSync);
+  const sheets = [join(process.cwd(), ".pstack", "models.md"), join(configDir(), "pstack-models.md"), join(homedir(), ".claude", "pstack-models.md")];
+  const sheetPath = values.sheet ?? sheets.find(existsSync);
   const sheet = sheetPath ? readFileSync(sheetPath, "utf8") : "";
   const reports = chosen.map(([f]) => sessionReport(f, sheet));
-  console.log(values.json ? JSON.stringify({ sheet: sheetPath ?? null, reports, summary: summarize(reports) }, null, 2) : render(reports));
+  console.log(values.json ? JSON.stringify({ sheet: sheetPath ?? null, reports, summary: summarize(reports) }, null, 2) : render(reports, sheetPath));
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(resolve(process.argv[1]))).href) {

@@ -2,6 +2,15 @@
 
 This file is the release changelog, with one `## <version> - <title>` entry per release, newest first. The Cursor-to-Claude rewrite rules live in [`tools/substitutions.json`](tools/substitutions.json), and the [sync boundary](CONTRIBUTING.md#the-sync-boundary) in `CONTRIBUTING.md` defines how a change to upstream's skill content is declared.
 
+## 0.9.142 - Token spend per role
+
+pstack picks a model and effort for each role, but nothing showed which model a role actually ran on or what it cost. Every Claude Code subagent now starts its description with its role in brackets, as in `[strongest judgment] Review the parser`. The new [`role-spend.mjs`](plugins/pstack/skills/poteto-mode/scripts/role-spend.mjs) reads the session transcripts and reports tokens per role, model, and requested effort.
+
+- Each reply counts once by message id, since a transcript repeats a reply's usage on several lines. Synthetic replies are left out.
+- A tagged spawn is checked against the sheet, through `resolve-models.mjs`, and listed when it ran on a model family the sheet does not give its role, or when the sheet sends that role to another harness.
+- A routed agent from before 0.9.133, such as `pstack-claude-sonnet-5-5-high`, reports the model and effort in its name, so older sessions still show what each spawn asked for.
+- Before this release no spawn named its role, so older sessions group by agent type and skip the sheet check. Foreign-harness spend stays in each harness's logs for now.
+
 ## 0.9.141 - Efforts without a space, and Muse is Wonder Full only
 
 A role entry is now `model[->harness][@effort]`, with the effort right after the model, as in `opus@xhigh` or `gpt-6.1-sol->pi@max`. That is the form the fork used before 0.9.133. Upstream writes `opus @xhigh`, and the 0.9.133 re-port kept upstream's form. The resolver now refuses an entry with a space before `@` and gives the entry without the space.

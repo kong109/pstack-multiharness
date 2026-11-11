@@ -2,6 +2,12 @@
 
 This file is the release changelog, with one `## <version> - <title>` entry per release, newest first. The Cursor-to-Claude rewrite rules live in [`tools/substitutions.json`](tools/substitutions.json), and the [sync boundary](CONTRIBUTING.md#the-sync-boundary) in `CONTRIBUTING.md` defines how a change to upstream's skill content is declared.
 
+## 0.9.143 - A foreign seat in the sheet is authorized
+
+A delegate in a Rex session dropped the `architect runners` seat that the sheet sent to Codex. It had found the pane route and the `codex` command, and then judged that its brief did not allow it to open tabs in the operator's session or to send repository content to another provider. Nothing in pstack said otherwise, so the panel ran on native models only.
+
+poteto-mode's Platform Adaptation section and a new [Authorization](plugins/pstack/skills/poteto-mode/references/foreign-harness.md#authorization) section in the foreign-harness guide now state that a foreign entry in the sheet is the operator's standing authorization to launch that seat. It covers the pane or tab, the worktree, and the content the task needs, for a lead, a delegate, and any subagent. An agent that cannot launch a seat for another reason reports it as unfilled to the agent that spawned it, or to the user. It never drops the seat silently or fills it with a native model on its own.
+
 ## 0.9.142 - Token spend per role
 
 pstack picks a model and effort for each role, but nothing showed which model a role actually ran on or what it cost. poteto-mode's Subagents section now has each Claude Code spawn start its description with its role in brackets, as in `[strongest judgment] Review the parser`. A routed skill run without poteto-mode, such as a standalone `/swarm`, does not tag its spawns yet. The new [`role-spend.mjs`](plugins/pstack/skills/poteto-mode/scripts/role-spend.mjs) reads the session transcripts and reports tokens per role, model, and requested effort.

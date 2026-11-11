@@ -10,6 +10,15 @@ node /path/to/poteto-mode/scripts/resolve-models.mjs --session <this session's h
 
 Never run a foreign entry through a one-shot mode such as `codex exec` or `claude -p`, and never through the `Agent` tool.
 
+## Authorization
+
+The operator wrote or accepted the sheet, so a foreign entry in it is their standing authorization to run that seat. Do not ask for it again, and do not treat it as missing because your brief does not repeat it.
+
+- **What it covers.** Opening the seat's pane, tab, or window in the operator's multiplexer session. Creating the seat's worktree and branch. Sending the seat's provider the brief and the repository content the task needs.
+- **Who it covers.** Every agent that reads the sheet: a lead, a delegate, a subagent started through the `Agent` tool, and a pane agent with `write` access that launches its own.
+- **What it does not cover.** A model or harness the sheet does not name, and content the task does not need.
+- **A seat you cannot launch.** A missing command, a failed login, or no route below is a reason. Permission is not. Report the seat as unfilled, with the reason, to the agent that spawned you, or to the user when you are the lead. Never drop a seat silently, and never fill it with a native model on your own.
+
 ## Choose the route
 
 Take the first that applies.

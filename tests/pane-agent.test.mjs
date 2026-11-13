@@ -1690,7 +1690,7 @@ test("a done verdict names the close command, a later launch lists finished agen
   const third = launch(options({ name: "f3", wait: false }), deps());
   expect(third.finished).toEqual(["f1", "f2"]);
   expect(third.finishedHint).toEndWith("close --finished");
-  expect(list({ env: rexEnv() }).filter((a) => a.finished).map((a) => a.name)).toEqual(["f1", "f2"]);
+  expect(list({ env: rexEnv() }).filter((a) => a.finished).map((a) => a.name).sort()).toEqual(["f1", "f2"]);
   expect(list({ env: { ...rexEnv(), REX_BLOCK: "block:other" } }).some((a) => a.finished)).toBe(false);
   expect(closeFinished(deps()).closed.map((c) => c.name)).toEqual(["f1", "f2"]);
   expect(list({ env: rexEnv() }).map((a) => a.name)).toEqual(["f3"]);

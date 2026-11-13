@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
 import { isAbsolute, join } from "node:path";
 import {
-  askParent, briefText, close, detectMux, harnessArgs, launch, launchPrompt, list, main, nudgePrompt, panesRoot, peek, script, send, sh, waitFor,
+  askParent, briefText, close, closeFinished, detectMux, harnessArgs, launch, launchPrompt, list, main, nudgePrompt, panesRoot, peek, script, send, sh, waitFor,
 } from "../plugins/pstack/skills/poteto-mode/scripts/pane-agent.mjs";
 
 let root;
@@ -1665,4 +1665,35 @@ test("a workrex worktree_dir elsewhere moves the agent there, and close follows 
   expect(agents[0].pwd).toBe(join(tree, "pkg"));
   expect(close("arena-a", {}, { runner, env: rexEnv() }).worktree).toEqual({ path: tree, removed: true, branch: null });
   expect(existsSync(tree)).toBe(false);
+});
+
+test("a done verdict names the close command, a later launch lists finished agents, and close --finished closes only those", () => {
+  const blocks = ["block:f1", "block:f2", "block:f3"];
+  let opened = 0;
+  const results = new Set(["f1", "f2"]);
+  const { runner, calls } = scripted({
+    ...rexBase,
+    "rex split": () => json({ block_ids: [blocks[opened++]] }),
+    "rex block call": (args) => {
+      if (args.includes("process")) return json({ last_exit: null });
+      if (!args.includes("program_status")) return text(JSON.stringify({ content: "screen\n" }));
+      const name = `f${blocks.indexOf(args[args.indexOf("-b") + 1]) + 1}`;
+      if (results.has(name)) writeFileSync(join(root, "panes", name, "result.md"), "ok\n");
+      return json(rexRecord(results.has(name) ? "done" : "working", 1e9));
+    },
+  });
+  const deps = () => ({ runner, env: rexEnv(), clock: fakeClock() });
+  const first = launch(options({ name: "f1" }), deps());
+  expect(first.next).toEndWith("close --name f1");
+  expect(first.finished).toBeUndefined();
+  expect(launch(options({ name: "f2" }), deps()).finished).toEqual(["f1"]);
+  const third = launch(options({ name: "f3", wait: false }), deps());
+  expect(third.finished).toEqual(["f1", "f2"]);
+  expect(third.finishedHint).toEndWith("close --finished");
+  expect(list({ env: rexEnv() }).filter((a) => a.finished).map((a) => a.name)).toEqual(["f1", "f2"]);
+  expect(list({ env: { ...rexEnv(), REX_BLOCK: "block:other" } }).some((a) => a.finished)).toBe(false);
+  expect(closeFinished(deps()).closed.map((c) => c.name)).toEqual(["f1", "f2"]);
+  expect(list({ env: rexEnv() }).map((a) => a.name)).toEqual(["f3"]);
+  expect(calls.filter((c) => c[1] === "block" && c[2] === "close").map((c) => c.at(-1))).toEqual(["block:f1", "block:f2"]);
+  close("f3", {}, deps());
 });

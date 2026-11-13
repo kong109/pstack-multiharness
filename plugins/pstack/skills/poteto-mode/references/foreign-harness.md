@@ -193,6 +193,8 @@ node /path/to/poteto-mode/scripts/pane-agent.mjs close --name arena-a
 
 Close the whole panel when the panel is done, and close an agent you abandon. `close` removes the tab or window and the run directory, and `--keep` retains the directory. `--discard` also drops the worktree and branch of a `write` agent whose work you have taken or rejected. Before you end your turn, run `list` and close every agent you launched. Never close a tab or window you did not create.
 
+The helper keeps this rule in front of you. A `done` verdict carries the close command in `next`. Once you have read a `done` verdict the agent counts as finished, and every later `launch` names your finished agents that are still open in `finished`, as `list` does with `finished: true`. `close --finished` closes all of them in one call. It closes only agents launched from your pane whose `done` verdict you have read, and a `send` to an agent takes it off that list. It keeps a worktree with uncommitted changes and a branch with commits, as `close` does.
+
 ### Verify the routing
 
 An agent's claim about its own model is not verification. The harness shows its model and effort on screen, so read `peek` output for that line before you report that a panel ran on the assigned models. Distinguish the resolved configuration from the routing you observed.

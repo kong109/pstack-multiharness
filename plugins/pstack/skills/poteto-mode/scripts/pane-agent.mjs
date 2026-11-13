@@ -776,7 +776,10 @@ function conclude(state, mux, settled, { timeoutMs }) {
   }
   if (result !== null) {
     const big = result.length > RESULT_TEXT_LIMIT;
-    return { ...base, verdict: "done", resultFile, ...(big ? {} : { result }) };
+    // The lead forgets a rule it read turns ago, so the verdict carries the close command and the helper remembers the verdict was read.
+    state.delivered = new Date().toISOString();
+    saveState(state);
+    return { ...base, verdict: "done", resultFile, ...(big ? {} : { result }), next: `Close this agent once you need no follow-up from it: node ${script} close --name ${state.name}` };
   }
   if (settled.kind === "blocked") return { ...base, verdict: "blocked", screen: mux.peek(state) };
   if (settled.kind === "gone") return { ...base, verdict: "error", detail: "the pane or its agent is gone (the harness exited)" };
@@ -852,9 +855,9 @@ export function launch(options, deps) {
     const promptArgs = fill(spec.prompt ?? ["{prompt}"], { prompt: launchPrompt(run) });
     const args = harnessArgs(harness, { model, effort, access, run });
     const started = mux.launch(state, { command: spec.command, args, cwd: state.cwd, promptArgs, promptFirst: spec.promptFirst });
-    if (!wait) return { name, mux: muxId, run, launched: true, ...(worktree && { worktree: worktree.path }) };
+    if (!wait) return withFinished({ name, mux: muxId, run, launched: true, ...(worktree && { worktree: worktree.path }) }, env, name);
     const settled = started ?? (mux.initial ? mux.initial(state, timeoutMs) : { kind: "rest" });
-    return conclude(state, mux, withBrief(state, mux, settled, timeoutMs), { timeoutMs });
+    return withFinished(conclude(state, mux, withBrief(state, mux, settled, timeoutMs), { timeoutMs }), env, name);
   } catch (error) {
     try { if (state) mux.close?.(state); } finally {
       rmSync(run, { recursive: true, force: true });
@@ -878,6 +881,7 @@ export function send(name, { text, keys, answer, timeoutMs = DEFAULT_WAIT_MS }, 
   if (Boolean(text) === Boolean(keys)) throw new Error("send takes exactly one of --text or --keys");
   if (answer !== undefined && !text) throw new Error("--answer goes with --text");
   const state = loadState(name, deps.env);
+  delete state.delivered;
   const pending = pendingQuestion(state.run);
   if (answer !== undefined && pending !== answer) {
     const undelivered = pending === null && state.answered !== answer && String(stamp(join(state.run, "question.md.prev"))) === answer;
@@ -953,9 +957,27 @@ export function close(name, { keep = false, discard = false } = {}, deps) {
   return { name, mux: state.mux, closed, kept: closed ? (retain ? state.run : null) : state.run, ...(worktree && { worktree }) };
 }
 
+// The agents this pane launched whose done verdict it has already read and that are still open.
+function finishedOpen(env) {
+  return readStates(panesRoot(env)).filter((s) => s.delivered && !s.closed && s.parent && Object.hasOwn(muxes, s.mux) && env[muxes[s.mux].paneEnv] === s.parent.pane)
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function withFinished(out, env, except) {
+  const names = finishedOpen(env).map((s) => s.name).filter((n) => n !== except);
+  if (!names.length) return out;
+  return { ...out, finished: names, finishedHint: `These agents you launched are done and still open. Close each one you need no follow-up from, or all of them with: node ${script} close --finished` };
+}
+
+export function closeFinished(deps) {
+  deps = resolveDeps(deps);
+  return { closed: finishedOpen(deps.env).map((s) => close(s.name, {}, deps)) };
+}
+
 export function list({ env = process.env } = {}) {
+  const mine = new Set(finishedOpen(env).map((s) => s.name));
   return readStates(panesRoot(env)).map(({ name, mux, harness, model, effort, run, worktree, startedAt }) => ({
-    name, mux, harness, model, effort, run, ...(worktree && { worktree: worktree.path }), startedAt,
+    name, mux, harness, model, effort, run, ...(worktree && { worktree: worktree.path }), startedAt, ...(mine.has(name) && { finished: true }),
   }));
 }
 
@@ -969,7 +991,7 @@ export function main(argv, deps = {}) {
       name: { type: "string" }, harness: { type: "string" }, model: { type: "string" }, effort: { type: "string" },
       brief: { type: "string" }, cwd: { type: "string" }, access: { type: "string" }, mux: { type: "string" },
       "timeout-ms": { type: "string" }, "no-wait": { type: "boolean" }, text: { type: "string" },
-      keys: { type: "string" }, keep: { type: "boolean" }, discard: { type: "boolean" }, "in-place": { type: "boolean" }, answer: { type: "string" }, run: { type: "string" },
+      keys: { type: "string" }, keep: { type: "boolean" }, discard: { type: "boolean" }, finished: { type: "boolean" }, "in-place": { type: "boolean" }, answer: { type: "string" }, run: { type: "string" },
     },
   });
   const timeoutMs = values["timeout-ms"] === undefined ? undefined : Number(values["timeout-ms"]);
@@ -986,7 +1008,8 @@ export function main(argv, deps = {}) {
   } else if (command === "peek") {
     out = peek(values.name, deps);
   } else if (command === "close") {
-    out = close(values.name, { keep: values.keep, discard: values.discard }, deps);
+    if (values.finished && (values.name || values.keep || values.discard)) throw new Error("close --finished takes no other flag");
+    out = values.finished ? closeFinished(deps) : close(values.name, { keep: values.keep, discard: values.discard }, deps);
   } else if (command === "list") {
     out = list(deps);
   } else {

@@ -57,6 +57,10 @@ Skills name Claude defaults (a single-role default for code/prose/judgment, a wo
 
 `/setup-pstack` writes the configured model list. On Codex, set it to your Codex model slugs.
 
+## Model sheet
+
+Before any pstack role dispatch, find the sheet yourself. Run `node /path/to/poteto-mode/scripts/resolve-models.mjs --session codex --active "<role>" "<the skill's default models>"`. It reads the project's `.pstack/models.md` when present, then the main checkout's for a linked worktree, then `${CODEX_HOME:-~/.codex}/pstack-models.md`, and it names the sheet it used. This holds on every install, with or without the plugin hook and with or without a pstack block in `AGENTS.md`. Role rows pasted into `AGENTS.md` are a copy that can go stale, so the sheet wins when the two differ.
+
 ## Session routing hook
 
 The native pstack plugin bundles the same `SessionStart` routing instruction as the Claude Code plugin, through `session-start.sh` on macOS and Linux and `session-start.ps1` on Windows. Codex runs the hook on startup, resume, clear, and compact after the user trusts the hook through `/hooks`. The hook reads `session hook` from the Codex sheet, at the path in [setup-pstack's runtime table](../../setup-pstack/SKILL.md#other-runtimes); `session hook: off` disables injection.

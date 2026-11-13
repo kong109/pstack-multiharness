@@ -1,7 +1,10 @@
 import { expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseEntry, resolveRole } from "../plugins/pstack/skills/poteto-mode/scripts/resolve-models.mjs";
+import { findSheet, parseEntry, resolveRole, userSheet } from "../plugins/pstack/skills/poteto-mode/scripts/resolve-models.mjs";
 
 test("a panel keeps its order and duplicates, each entry with its own effort", () => {
   expect(resolveRole("arena runners: sonnet@high, opus, sonnet@low", "arena runners")).toEqual([
@@ -222,4 +225,51 @@ test("the migration keeps an arrow whose harness no provider of that model owns,
 test("an entry cut short by an unquoted -> in a shell is refused with the reason", () => {
   for (const cut of ["muse-", "gpt-6.1-sol-@high"]) expect(() => parseEntry(cut)).toThrow("the shell read `->` as a redirect, so quote the entry");
   expect(parseEntry("muse->omp")).toMatchObject({ model: "muse", harness: "omp" });
+});
+
+test("the active sheet is the project's, then the main checkout's for a linked worktree, then the runtime's user sheet", () => {
+  const base = realpathSync(mkdtempSync(join(tmpdir(), "find-sheet-")));
+  try {
+    const home = join(base, "home");
+    const repo = join(base, "repo");
+    const tree = join(base, "tree");
+    const git = (cwd, ...args) => spawnSync("git", ["-C", cwd, "-c", "user.name=t", "-c", "user.email=t@t", ...args], { encoding: "utf8" });
+    mkdirSync(join(home, ".codex"), { recursive: true });
+    mkdirSync(join(repo, "sub"), { recursive: true });
+    git(repo, "init", "-q");
+    git(repo, "commit", "-q", "--allow-empty", "-m", "init");
+    git(repo, "worktree", "add", "-q", tree);
+    const user = join(home, ".codex", "pstack-models.md");
+    const find = (cwd, session = "codex") => findSheet({ session, cwd, env: {}, home });
+    expect(find(repo)).toMatchObject({ path: null, scope: null });
+    writeFileSync(user, "bug-fix: gpt-6.1-sol\n");
+    expect(find(tree)).toMatchObject({ path: user, scope: "user" });
+    expect(find(tree).checked).toEqual([join(tree, ".pstack", "models.md"), join(repo, ".pstack", "models.md"), user]);
+    mkdirSync(join(repo, ".pstack"));
+    writeFileSync(join(repo, ".pstack", "models.md"), "bug-fix: opus@high\n");
+    expect(find(join(repo, "sub"))).toMatchObject({ path: join(repo, ".pstack", "models.md"), scope: "project" });
+    expect(find(tree)).toMatchObject({ path: join(repo, ".pstack", "models.md"), scope: "project" });
+    mkdirSync(join(tree, ".pstack"));
+    writeFileSync(join(tree, ".pstack", "models.md"), "bug-fix: fable\n");
+    expect(find(tree).path).toBe(join(tree, ".pstack", "models.md"));
+    expect(find(base, "claude")).toMatchObject({ path: null, checked: [join(base, ".pstack", "models.md"), join(home, ".claude", "pstack-models.md")] });
+
+    const script = fileURLToPath(new URL("../plugins/pstack/skills/poteto-mode/scripts/resolve-models.mjs", import.meta.url));
+    const run = (...args) => spawnSync("node", [script, ...args], { encoding: "utf8", env: { ...process.env, HOME: home, USERPROFILE: home, CODEX_HOME: "" } });
+    const resolved = run("--session", "codex", "--active", "--cwd", repo, "bug-fix", "gpt-6.1-sol");
+    expect(JSON.parse(resolved.stdout)).toEqual([{ harness: "claude", model: "opus", effort: "high" }]);
+    expect(resolved.stderr.trim()).toBe(`sheet: ${join(repo, ".pstack", "models.md")} (project)`);
+    expect(JSON.parse(run("--session", "codex", "--active", "--cwd", repo).stdout).scope).toBe("project");
+    expect(run("--cwd", repo, "sheet.md", "bug-fix").status).toBe(1);
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test("each runtime's user sheet follows the variable that moves its config folder", () => {
+  expect(userSheet("claude", { env: { CLAUDE_CONFIG_DIR: "/cfg" }, home: "/h" })).toBe(join("/cfg", "pstack-models.md"));
+  expect(userSheet("codex", { env: {}, home: "/h" })).toBe(join("/h", ".codex", "pstack-models.md"));
+  expect(userSheet("muse", { env: { XDG_CONFIG_HOME: "/x" }, home: "/h" })).toBe(join("/x", "muse", "pstack-models.md"));
+  expect(userSheet("agy", { env: {}, home: "/h" })).toBe(join("/h", ".gemini/config", "pstack-models.md"));
+  expect(() => userSheet("nope")).toThrow("No user sheet path is known for nope");
 });

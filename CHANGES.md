@@ -2,6 +2,15 @@
 
 This file is the release changelog, with one `## <version> - <title>` entry per release, newest first. The Cursor-to-Claude rewrite rules live in [`tools/substitutions.json`](tools/substitutions.json), and the [sync boundary](CONTRIBUTING.md#the-sync-boundary) in `CONTRIBUTING.md` defines how a change to upstream's skill content is declared.
 
+## 0.9.144 - The active sheet, review roles, and Rex panes
+
+A day of lanes in Rex showed four ways a spawn could miss the model sheet, and one layout problem.
+
+- **The sheet is found by pstack, not by a note.** A Codex install with a sheet but no pstack block in `AGENTS.md` had nothing telling it to read the sheet. An untracked project sheet also never reached the project's linked worktrees, so lanes there read the user sheet. `resolve-models.mjs --active` now finds the sheet itself: the project's `.pstack/models.md`, then the main checkout's for a linked worktree, then the runtime's user sheet. It names the sheet it used, and with no role it prints every path it checked. poteto-mode, the foreign-harness guide, the Codex mapping, and `setup-pstack` tell every session to read the sheet this way. `role-spend.mjs` finds its sheet the same way.
+- **A delegate and a reviewer always have a role.** Before 0.9.142, leads spawned `poteto-agent` delegates and thermo-nuclear reviewers with no role and passed `sonnet`, the stamped default for feature work, whatever the sheet said. Role tags ended that for delegates. poteto-mode now says that a `poteto-agent` is always tagged and takes its model from its role's line, and that a thermo-nuclear review subagent spawned outside a swarm is a `thermos reviewers` spawn.
+- **A panel role belongs to its panel.** One lead tagged 20 single reviewers `[interrogate reviewers]` and ran each on the first entry of that line, so the other five seats never ran. poteto-mode now forbids a panel role's tag on a spawn the panel's skill did not make. `role-spend.mjs` lists such a spawn as `panel without its skill` when the session never loaded `arena`, `architect`, or `interrogate`.
+- **In Rex a task's seats share its tab.** The pane helper opened a new tab for every agent, so a panel scattered across the tab bar. A seat that works in its launcher's directory now opens as a pane split from the launcher's pane. The first seat takes the right half, and each later one halves the largest live seat, down then right in turn. A `write` agent with a worktree of its own still gets a tab, from Workrex when it is installed. `PSTACK_REX_PLACEMENT=tab` restores a tab per seat.
+
 ## 0.9.143 - A foreign seat in the sheet is authorized
 
 A delegate in a Rex session dropped the `architect runners` seat that the sheet sent to Codex. It had found the pane route and the `codex` command, and then judged that its brief did not allow it to open tabs in the operator's session or to send repository content to another provider. Nothing in pstack said otherwise, so the panel ran on native models only.

@@ -519,6 +519,48 @@ export function rexMux({ runner, env, clock }) {
     if (r.status !== 0 || !opened?.block_ids?.[0]) throw new Error(`rex window new failed: ${failure(r)}`);
     return { session, window: opened.window_id, pane: opened.block_ids[0] };
   };
+  const live = (session, block) => rexBlock(runner, env, session, block, "process")?.last_exit === null;
+  // The layout file of a launcher's pane holds how many times each of its seats' panes was halved.
+  // Launches of one panel run at once, so a lock orders their reads and writes.
+  const withLayout = (launcher, change) => {
+    const layout = join(panesRoot(env), `rex-layout-${launcher.replace(/[^A-Za-z0-9-]/g, "_")}.json`);
+    const lock = `${layout}.lock`;
+    for (let i = 0; ; i++) {
+      try { mkdirSync(lock); break; } catch (error) {
+        if (error.code !== "EEXIST") throw error;
+        if (i >= 300 || Date.now() - statSync(lock, { throwIfNoEntry: false })?.mtimeMs > 60_000) rmSync(lock, { recursive: true, force: true });
+        else clock.sleep(100);
+      }
+    }
+    try {
+      let halved = {};
+      try { halved = JSON.parse(readFileSync(layout, "utf8")); } catch {}
+      const result = change(halved);
+      if (Object.keys(halved).length) writeFileSync(layout, JSON.stringify(halved));
+      else rmSync(layout, { force: true });
+      return result;
+    } finally {
+      rmSync(lock, { recursive: true, force: true });
+    }
+  };
+  // A seat that works in its launcher's directory opens as a pane in the launcher's tab, so one task's agents stay grouped.
+  // A worker with a worktree of its own is a task of its own and gets a tab. The first seat takes half of the launcher's pane. Each later one halves the largest live seat, down then right in turn, which tiles the seats as a grid.
+  const openPane = (state, cwd, argv) => {
+    const session = env.REX_SESSION;
+    return withLayout(env.REX_BLOCK, (halved) => {
+      for (const block of Object.keys(halved)) if (!live(session, block)) delete halved[block];
+      const [anchor, depth] = Object.entries(halved).sort((a, b) => a[1] - b[1])[0] ?? [env.REX_BLOCK, null];
+      const split = depth === null || depth % 2 ? "right" : "below";
+      const r = rex(["split", "-s", session, "-b", anchor, "--split", split, "--label", state.name, "-c", cwd, "--focus=false", "--json", "--", ...argv]);
+      let opened = null;
+      try { opened = JSON.parse(r.stdout); } catch {}
+      if (r.status !== 0 || !opened?.block_ids?.[0]) throw new Error(`rex split failed: ${failure(r)}`);
+      const pane = opened.block_ids[0];
+      if (depth !== null) halved[anchor] = depth + 1;
+      halved[pane] = depth === null ? 0 : depth + 1;
+      return { session, pane, split: true };
+    });
+  };
   const openWorkrex = (state, cwd, argv) => {
     const { repo, branch, base, workrex: handle } = state.worktree;
     const marker = join(state.run, "block");
@@ -545,7 +587,7 @@ export function rexMux({ runner, env, clock }) {
     id: "rex",
     launch(state, { cwd, ...launchArgs }) {
       const argv = harnessArgv(launchArgs);
-      state.ids = { ...state.ids, ...(state.worktree?.workrex ? openWorkrex(state, cwd, argv) : openTab(state, cwd, argv)) };
+      state.ids = { ...state.ids, ...(state.worktree?.workrex ? openWorkrex(state, cwd, argv) : state.worktree || env.PSTACK_REX_PLACEMENT === "tab" ? openTab(state, cwd, argv) : openPane(state, cwd, argv)) };
       state.prompted = true;
       state.awaitTurn = true;
       state.turnAt = clock.now();
@@ -578,6 +620,11 @@ export function rexMux({ runner, env, clock }) {
       return text === null ? "(unreadable: rex format failed)" : screenText(text);
     },
     close(state) {
+      if (state.ids?.split) {
+        const closed = rex(["block", "close", "-s", state.ids.session, state.ids.pane]).status === 0 || gone(state);
+        if (closed && state.parent?.pane) withLayout(state.parent.pane, (halved) => { delete halved[state.ids.pane]; });
+        return closed;
+      }
       if (!state.ids?.window) return true;
       return rex(["window", "close", "-s", state.ids.session, state.ids.window]).status === 0 || gone(state);
     },

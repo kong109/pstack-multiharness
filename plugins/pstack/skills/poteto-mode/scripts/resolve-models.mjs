@@ -1,6 +1,8 @@
 #!/usr/bin/env node
-import { readFileSync, realpathSync } from "node:fs";
-import { resolve } from "node:path";
+import { spawnSync } from "node:child_process";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { homedir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 
@@ -123,18 +125,63 @@ export function resolveRole(text, role, defaults, options = {}) {
   return value.split(",").map((entry) => resolveEntry(parseEntry(entry, options.harnesses), { ...options, defaultEffort }));
 }
 
+// Each runtime keeps its user sheet in its own config folder: [the variable that moves the folder, the folder under home, a subfolder].
+const sheetHomes = {
+  claude: ["CLAUDE_CONFIG_DIR", ".claude"],
+  codex: ["CODEX_HOME", ".codex"],
+  grok: ["GROK_HOME", ".grok"],
+  agy: [null, ".gemini/config"],
+  muse: ["XDG_CONFIG_HOME", ".config", "muse"],
+  pi: ["PI_CODING_AGENT_DIR", ".pi/agent"],
+  omp: [null, ".omp"],
+  opencode: ["XDG_CONFIG_HOME", ".config", "opencode"],
+  copilot: ["COPILOT_HOME", ".copilot"],
+  minimax: [null, ".minimax"],
+  kimi: ["KIMI_CODE_HOME", ".kimi-code"],
+};
+
+export function userSheet(session = "claude", { env = process.env, home = homedir() } = {}) {
+  const known = sheetHomes[session];
+  if (!known) throw new Error(`No user sheet path is known for ${session} (${Object.keys(sheetHomes).join(", ")}); pass the sheet's path`);
+  const [variable, folder, sub = ""] = known;
+  return join((variable && env[variable]) || join(home, folder), sub, "pstack-models.md");
+}
+
+const gitPath = (cwd, args) => {
+  const r = spawnSync("git", ["-C", cwd, "rev-parse", "--path-format=absolute", ...args], { encoding: "utf8" });
+  return r.status === 0 ? r.stdout.trim() : null;
+};
+
+// The project sheet replaces the user sheet as a whole. A project sheet is seldom tracked, so a linked worktree has no copy of it
+// and reads the one in the main checkout.
+export function findSheet({ session = "claude", cwd = process.cwd(), env = process.env, home = homedir() } = {}) {
+  const top = gitPath(cwd, ["--show-toplevel"]);
+  const common = top && gitPath(cwd, ["--git-common-dir"]);
+  const main = common && /[\\/]\.git$/.test(common) ? dirname(common) : null;
+  const roots = [...new Set([top ?? resolve(cwd), main].filter(Boolean))];
+  const checked = [...roots.map((root) => join(root, ".pstack", "models.md")), userSheet(session, { env, home })];
+  const path = checked.find((candidate) => existsSync(candidate)) ?? null;
+  return { path, scope: path === null ? null : path === checked.at(-1) ? "user" : "project", checked };
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(resolve(process.argv[1]))).href) {
   try {
-    const { values, positionals } = parseArgs({ allowPositionals: true, options: { session: { type: "string" } } });
-    const [file, role, defaults, ...extra] = positionals;
-    if (!file || !role || extra.length) {
-      throw new Error('Usage: resolve-models.mjs [--session <harness>] <sheet|-> "role" ["default-models"]');
+    const { values, positionals } = parseArgs({ allowPositionals: true, options: { session: { type: "string" }, active: { type: "boolean" }, cwd: { type: "string" } } });
+    const usage = 'Usage: resolve-models.mjs [--session <harness>] <sheet|-> "role" ["default-models"]\n       resolve-models.mjs [--session <harness>] --active [--cwd <dir>] ["role" ["default-models"]]';
+    if (values.cwd && !values.active) throw new Error(usage);
+    const found = values.active ? findSheet({ session: values.session, cwd: values.cwd }) : null;
+    const [file, role, defaults, ...extra] = found ? [found.path ?? "-", ...positionals] : positionals;
+    if (found && !role && !extra.length) {
+      console.log(JSON.stringify(found, null, 2));
+    } else {
+      if (!file || !role || extra.length) throw new Error(usage);
+      if (found) console.error(found.path ? `sheet: ${found.path} (${found.scope})` : "sheet: none found, so the role's defaults apply");
+      const text = file === "-" ? "" : readFileSync(file, "utf8");
+      if (values.session && !Object.hasOwn(harnesses, values.session)) {
+        console.error(`note: ${values.session} is not a registered harness (${Object.keys(harnesses).join(", ")}), so every entry without an arrow runs natively`);
+      }
+      console.log(JSON.stringify(resolveRole(text, role, defaults, { session: values.session }), null, 2));
     }
-    const text = file === "-" ? "" : readFileSync(file, "utf8");
-    if (values.session && !Object.hasOwn(harnesses, values.session)) {
-      console.error(`note: ${values.session} is not a registered harness (${Object.keys(harnesses).join(", ")}), so every entry without an arrow runs natively`);
-    }
-    console.log(JSON.stringify(resolveRole(text, role, defaults, { session: values.session }), null, 2));
   } catch (error) {
     console.error(error.message);
     process.exitCode = 1;

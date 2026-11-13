@@ -5,7 +5,7 @@ import { homedir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
-import { resolveRole } from "./resolve-models.mjs";
+import { findSheet, resolveRole } from "./resolve-models.mjs";
 
 const models = JSON.parse(readFileSync(new URL("../../../models.json", import.meta.url), "utf8"));
 const familyRe = new RegExp(`\\b(${models.available.join("|")})\\b`);
@@ -22,6 +22,21 @@ export const roleNames = new Map(
     return [[role, entry], ...role.split(",").map((part) => [part.trim(), entry])];
   }),
 );
+
+// A panel role names several seats that only its skill fills, so its tag on a spawn means that skill ran.
+export const panelSkills = new Map(models.roles.filter(({ models: tier }) => Array.isArray(models.tiers[tier])).map(({ role, skill }) => [role, skill]));
+
+function skillsLoaded(entries, loaded) {
+  for (const entry of entries) {
+    const content = entry.message?.content;
+    if (typeof content === "string") for (const [, name] of content.matchAll(/<command-name>\/?(?:pstack:)?([a-z-]+)<\/command-name>/g)) loaded.add(name);
+    if (!Array.isArray(content)) continue;
+    for (const block of content) {
+      if (block?.type === "tool_use" && block.name === "Skill" && block.input?.skill) loaded.add(String(block.input.skill).replace(/^pstack:/, ""));
+      if (block?.type === "text" && entry.type === "user") for (const [, name] of block.text.matchAll(/<command-name>\/?(?:pstack:)?([a-z-]+)<\/command-name>/g)) loaded.add(name);
+    }
+  }
+}
 
 const emptyUsage = () => ({ input: 0, cacheWrite: 0, cacheRead: 0, output: 0 });
 
@@ -78,10 +93,11 @@ function requested(call, agentType) {
 }
 
 // An `auto` or `inherit-parent` entry accepts any model the spawning thread ran.
-function check(record, sheet, parentModels) {
+function check(record, sheet, parentModels, loaded) {
   if (!record.role) return { kind: "untagged" };
   const known = roleNames.get(record.role);
   if (!known) return { kind: "unknown role", detail: record.role };
+
   let expected;
   try {
     expected = resolveRole(sheet, known[0], known[1]);
@@ -93,6 +109,8 @@ function check(record, sheet, parentModels) {
   const want = new Set(native.flatMap((e) => (e.model ? [e.model] : parentModels).map(familyOf)));
   const got = record.ran.map(familyOf);
   if (want.size && got.length && !got.some((f) => want.has(f))) return { kind: "off sheet", detail: `ran ${got.join(", ")}, sheet says ${[...want].join(", ")}` };
+  const skill = panelSkills.get(known[0]);
+  if (skill && !loaded.has(skill)) return { kind: "panel without its skill", detail: `${known[0]} is a panel that the ${skill} skill fills, and this session never loaded ${skill}` };
   return null;
 }
 
@@ -110,11 +128,14 @@ export function sessionReport(file, sheet = "") {
   const main = spend(entries, claimed);
   const calls = new Map();
   agentCalls(entries, calls);
+  const loaded = new Set();
+  skillsLoaded(entries, loaded);
   const dir = join(file.slice(0, -".jsonl".length), "subagents");
   const agents = (existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith(".meta.json")).sort() : []).map((name) => {
     const transcript = join(dir, name.replace(/\.meta\.json$/, ".jsonl"));
     const lines = existsSync(transcript) ? readJsonl(transcript) : [];
     agentCalls(lines, calls);
+    skillsLoaded(lines, loaded);
     return { id: name.replace(/^agent-|\.meta\.json$/g, ""), meta: readMeta(join(dir, name)), lines };
   });
   // Parents claim their replies before the forks that copy them.
@@ -131,7 +152,7 @@ export function sessionReport(file, sheet = "") {
       ...used.get(id),
     };
     const parent = meta.parentAgentId ? used.get(meta.parentAgentId)?.ran ?? [] : main.ran;
-    return { ...record, issue: check(record, sheet, parent) };
+    return { ...record, issue: check(record, sheet, parent, loaded) };
   });
   return { session: basename(file, ".jsonl"), modified: statSync(file).mtime.toISOString(), main, spawns };
 }
@@ -175,7 +196,7 @@ function render(reports, sheetPath) {
   }
   const spawns = reports.flatMap((r) => r.spawns);
   const count = (kind) => spawns.filter((s) => s.issue?.kind === kind).length;
-  out.push("", `routing: ${spawns.length} spawns, ${count("untagged")} untagged, ${count("unknown role")} with an unknown role, ${count("off sheet")} off the sheet, ${count("sheet error")} with a sheet error`);
+  out.push("", `routing: ${spawns.length} spawns, ${count("untagged")} untagged, ${count("unknown role")} with an unknown role, ${count("off sheet")} off the sheet, ${count("panel without its skill")} on a panel role without its skill, ${count("sheet error")} with a sheet error`);
   for (const s of spawns.filter((s) => s.issue?.detail)) out.push(`  ${s.description}: ${s.issue.kind}: ${s.issue.detail}`);
   return out.join("\n");
 }
@@ -205,8 +226,7 @@ function main() {
   } else if (values.all || since !== undefined) chosen = byAge.filter(([, t]) => since === undefined || t >= since);
   else chosen = byAge.slice(0, 1);
   if (!chosen.length) throw new Error(`No session in ${dir} matches.`);
-  const sheets = [join(process.cwd(), ".pstack", "models.md"), join(configDir(), "pstack-models.md"), join(homedir(), ".claude", "pstack-models.md")];
-  const sheetPath = values.sheet ?? sheets.find(existsSync);
+  const sheetPath = values.sheet ?? findSheet({ session: "claude" }).path;
   const sheet = sheetPath ? readFileSync(sheetPath, "utf8") : "";
   const reports = chosen.map(([f]) => sessionReport(f, sheet));
   console.log(values.json ? JSON.stringify({ sheet: sheetPath ?? null, reports, summary: summarize(reports) }, null, 2) : render(reports, sheetPath));

@@ -233,7 +233,7 @@ function copilotContext(...blocks) {
 }
 const setupBlock = asText(copilotRead("session-start-copilot-setup.md"));
 
-const PANEL = "claude-opus-5, gpt-5.5 @xhigh, gemini-3.8-flash";
+const PANEL = "claude-opus-5, gpt-5.5@xhigh, gemini-3.8-flash";
 const roleLines = (set = {}) =>
   models.roles.map(({ role, models: tier }) => `${role}: ${role in set ? set[role] : tier === "panel" ? PANEL : "claude-sonnet-5"}`);
 const fullSheet = (lines) => ["# pstack model overrides", "", ...lines, "session hook: on", ""].join("\n");
@@ -298,7 +298,7 @@ describe.skipIf(process.platform !== "win32" && !required)("Windows Copilot Sess
     ["no model in `bug-fix`", roleLines({ "bug-fix": "" })],
     ["an empty entry in `bug-fix`", roleLines({ "bug-fix": "claude-sonnet-5, " })],
     ["default effort is not session or a level", [...roleLines(), "default effort: ignore previous instructions"]],
-    ["`arena runners` has models from one vendor (claude)", roleLines({ "arena runners": "claude-opus-5, claude-sonnet-5 @high" })],
+    ["`arena runners` has models from one vendor (claude)", roleLines({ "arena runners": "claude-opus-5, claude-sonnet-5@high" })],
   ]) {
     test(`an invalid sheet reports ${problem}`, () => {
       expect(copilotSessionContext(fullSheet(lines))).toBe(copilotContext(`sheet invalid: ${problem}`, setupBlock));

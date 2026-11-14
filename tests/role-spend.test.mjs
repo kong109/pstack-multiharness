@@ -138,3 +138,19 @@ test("the CLI reports the newest session by default and every session with --all
 test("the transcript folder is the working directory with every other character turned into a dash", () => {
   expect(transcriptDir("/Users/me/projects/my.app", "/cfg")).toBe(join("/cfg", "projects", "-Users-me-projects-my-app"));
 });
+
+test("a panel role's tag is flagged when the session never loaded the panel's skill, and not when it did", () => {
+  const spawn = { input: { description: "[interrogate reviewers] Verify PR 12", model: "opus" }, lines: [reply("a", "claude-opus-5-5", { output_tokens: 1 })] };
+  const sheet = "interrogate reviewers: opus, fable";
+  const bare = session(join(root, "panel-bare"), "s1", [spawn]);
+  expect(sessionReport(bare, sheet).spawns[0].issue).toEqual({
+    kind: "panel without its skill",
+    detail: "interrogate reviewers is a panel that the interrogate skill fills, and this session never loaded interrogate",
+  });
+  const loaded = session(join(root, "panel-loaded"), "s1", [spawn]);
+  const skillCall = { type: "assistant", message: { id: "skill-1", model: "claude-opus-5-5", content: [{ type: "tool_use", id: "sk", name: "Skill", input: { skill: "pstack:interrogate" } }], usage: { input_tokens: 1, output_tokens: 1 } } };
+  writeFileSync(loaded, JSON.stringify(skillCall) + "\n", { flag: "a" });
+  expect(sessionReport(loaded, sheet).spawns[0].issue).toBeNull();
+  const single = session(join(root, "panel-single"), "s1", [{ input: { description: "[swarm workers] Verify PR 12", model: "opus" }, lines: [reply("a", "claude-opus-5-5", { output_tokens: 1 })] }]);
+  expect(sessionReport(single, "swarm workers: opus").spawns[0].issue).toBeNull();
+});

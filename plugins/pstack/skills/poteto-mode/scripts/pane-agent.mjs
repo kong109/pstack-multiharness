@@ -519,6 +519,48 @@ export function rexMux({ runner, env, clock }) {
     if (r.status !== 0 || !opened?.block_ids?.[0]) throw new Error(`rex window new failed: ${failure(r)}`);
     return { session, window: opened.window_id, pane: opened.block_ids[0] };
   };
+  const live = (session, block) => rexBlock(runner, env, session, block, "process")?.last_exit === null;
+  // The layout file of a launcher's pane holds how many times each of its seats' panes was halved.
+  // Launches of one panel run at once, so a lock orders their reads and writes.
+  const withLayout = (launcher, change) => {
+    const layout = join(panesRoot(env), `rex-layout-${launcher.replace(/[^A-Za-z0-9-]/g, "_")}.json`);
+    const lock = `${layout}.lock`;
+    for (let i = 0; ; i++) {
+      try { mkdirSync(lock); break; } catch (error) {
+        if (error.code !== "EEXIST") throw error;
+        if (i >= 300 || Date.now() - statSync(lock, { throwIfNoEntry: false })?.mtimeMs > 60_000) rmSync(lock, { recursive: true, force: true });
+        else clock.sleep(100);
+      }
+    }
+    try {
+      let halved = {};
+      try { halved = JSON.parse(readFileSync(layout, "utf8")); } catch {}
+      const result = change(halved);
+      if (Object.keys(halved).length) writeFileSync(layout, JSON.stringify(halved));
+      else rmSync(layout, { force: true });
+      return result;
+    } finally {
+      rmSync(lock, { recursive: true, force: true });
+    }
+  };
+  // A seat that works in its launcher's directory opens as a pane in the launcher's tab, so one task's agents stay grouped.
+  // A worker with a worktree of its own is a task of its own and gets a tab. The first seat takes half of the launcher's pane. Each later one halves the largest live seat, down then right in turn, which tiles the seats as a grid.
+  const openPane = (state, cwd, argv) => {
+    const session = env.REX_SESSION;
+    return withLayout(env.REX_BLOCK, (halved) => {
+      for (const block of Object.keys(halved)) if (!live(session, block)) delete halved[block];
+      const [anchor, depth] = Object.entries(halved).sort((a, b) => a[1] - b[1])[0] ?? [env.REX_BLOCK, null];
+      const split = depth === null || depth % 2 ? "right" : "below";
+      const r = rex(["split", "-s", session, "-b", anchor, "--split", split, "--label", state.name, "-c", cwd, "--focus=false", "--json", "--", ...argv]);
+      let opened = null;
+      try { opened = JSON.parse(r.stdout); } catch {}
+      if (r.status !== 0 || !opened?.block_ids?.[0]) throw new Error(`rex split failed: ${failure(r)}`);
+      const pane = opened.block_ids[0];
+      if (depth !== null) halved[anchor] = depth + 1;
+      halved[pane] = depth === null ? 0 : depth + 1;
+      return { session, pane, split: true };
+    });
+  };
   const openWorkrex = (state, cwd, argv) => {
     const { repo, branch, base, workrex: handle } = state.worktree;
     const marker = join(state.run, "block");
@@ -545,7 +587,7 @@ export function rexMux({ runner, env, clock }) {
     id: "rex",
     launch(state, { cwd, ...launchArgs }) {
       const argv = harnessArgv(launchArgs);
-      state.ids = { ...state.ids, ...(state.worktree?.workrex ? openWorkrex(state, cwd, argv) : openTab(state, cwd, argv)) };
+      state.ids = { ...state.ids, ...(state.worktree?.workrex ? openWorkrex(state, cwd, argv) : state.worktree || env.PSTACK_REX_PLACEMENT === "tab" ? openTab(state, cwd, argv) : openPane(state, cwd, argv)) };
       state.prompted = true;
       state.awaitTurn = true;
       state.turnAt = clock.now();
@@ -578,6 +620,11 @@ export function rexMux({ runner, env, clock }) {
       return text === null ? "(unreadable: rex format failed)" : screenText(text);
     },
     close(state) {
+      if (state.ids?.split) {
+        const closed = rex(["block", "close", "-s", state.ids.session, state.ids.pane]).status === 0 || gone(state);
+        if (closed && state.parent?.pane) withLayout(state.parent.pane, (halved) => { delete halved[state.ids.pane]; });
+        return closed;
+      }
       if (!state.ids?.window) return true;
       return rex(["window", "close", "-s", state.ids.session, state.ids.window]).status === 0 || gone(state);
     },
@@ -729,7 +776,10 @@ function conclude(state, mux, settled, { timeoutMs }) {
   }
   if (result !== null) {
     const big = result.length > RESULT_TEXT_LIMIT;
-    return { ...base, verdict: "done", resultFile, ...(big ? {} : { result }) };
+    // The lead forgets a rule it read turns ago, so the verdict carries the close command and the helper remembers the verdict was read.
+    state.delivered = new Date().toISOString();
+    saveState(state);
+    return { ...base, verdict: "done", resultFile, ...(big ? {} : { result }), next: `Close this agent once you need no follow-up from it: node ${script} close --name ${state.name}` };
   }
   if (settled.kind === "blocked") return { ...base, verdict: "blocked", screen: mux.peek(state) };
   if (settled.kind === "gone") return { ...base, verdict: "error", detail: "the pane or its agent is gone (the harness exited)" };
@@ -805,9 +855,9 @@ export function launch(options, deps) {
     const promptArgs = fill(spec.prompt ?? ["{prompt}"], { prompt: launchPrompt(run) });
     const args = harnessArgs(harness, { model, effort, access, run });
     const started = mux.launch(state, { command: spec.command, args, cwd: state.cwd, promptArgs, promptFirst: spec.promptFirst });
-    if (!wait) return { name, mux: muxId, run, launched: true, ...(worktree && { worktree: worktree.path }) };
+    if (!wait) return withFinished({ name, mux: muxId, run, launched: true, ...(worktree && { worktree: worktree.path }) }, env, name);
     const settled = started ?? (mux.initial ? mux.initial(state, timeoutMs) : { kind: "rest" });
-    return conclude(state, mux, withBrief(state, mux, settled, timeoutMs), { timeoutMs });
+    return withFinished(conclude(state, mux, withBrief(state, mux, settled, timeoutMs), { timeoutMs }), env, name);
   } catch (error) {
     try { if (state) mux.close?.(state); } finally {
       rmSync(run, { recursive: true, force: true });
@@ -831,6 +881,7 @@ export function send(name, { text, keys, answer, timeoutMs = DEFAULT_WAIT_MS }, 
   if (Boolean(text) === Boolean(keys)) throw new Error("send takes exactly one of --text or --keys");
   if (answer !== undefined && !text) throw new Error("--answer goes with --text");
   const state = loadState(name, deps.env);
+  delete state.delivered;
   const pending = pendingQuestion(state.run);
   if (answer !== undefined && pending !== answer) {
     const undelivered = pending === null && state.answered !== answer && String(stamp(join(state.run, "question.md.prev"))) === answer;
@@ -906,9 +957,27 @@ export function close(name, { keep = false, discard = false } = {}, deps) {
   return { name, mux: state.mux, closed, kept: closed ? (retain ? state.run : null) : state.run, ...(worktree && { worktree }) };
 }
 
+// The agents this pane launched whose done verdict it has already read and that are still open.
+function finishedOpen(env) {
+  return readStates(panesRoot(env)).filter((s) => s.delivered && !s.closed && s.parent && Object.hasOwn(muxes, s.mux) && env[muxes[s.mux].paneEnv] === s.parent.pane)
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function withFinished(out, env, except) {
+  const names = finishedOpen(env).map((s) => s.name).filter((n) => n !== except);
+  if (!names.length) return out;
+  return { ...out, finished: names, finishedHint: `These agents you launched are done and still open. Close each one you need no follow-up from, or all of them with: node ${script} close --finished` };
+}
+
+export function closeFinished(deps) {
+  deps = resolveDeps(deps);
+  return { closed: finishedOpen(deps.env).map((s) => close(s.name, {}, deps)) };
+}
+
 export function list({ env = process.env } = {}) {
+  const mine = new Set(finishedOpen(env).map((s) => s.name));
   return readStates(panesRoot(env)).map(({ name, mux, harness, model, effort, run, worktree, startedAt }) => ({
-    name, mux, harness, model, effort, run, ...(worktree && { worktree: worktree.path }), startedAt,
+    name, mux, harness, model, effort, run, ...(worktree && { worktree: worktree.path }), startedAt, ...(mine.has(name) && { finished: true }),
   }));
 }
 
@@ -922,7 +991,7 @@ export function main(argv, deps = {}) {
       name: { type: "string" }, harness: { type: "string" }, model: { type: "string" }, effort: { type: "string" },
       brief: { type: "string" }, cwd: { type: "string" }, access: { type: "string" }, mux: { type: "string" },
       "timeout-ms": { type: "string" }, "no-wait": { type: "boolean" }, text: { type: "string" },
-      keys: { type: "string" }, keep: { type: "boolean" }, discard: { type: "boolean" }, "in-place": { type: "boolean" }, answer: { type: "string" }, run: { type: "string" },
+      keys: { type: "string" }, keep: { type: "boolean" }, discard: { type: "boolean" }, finished: { type: "boolean" }, "in-place": { type: "boolean" }, answer: { type: "string" }, run: { type: "string" },
     },
   });
   const timeoutMs = values["timeout-ms"] === undefined ? undefined : Number(values["timeout-ms"]);
@@ -939,7 +1008,8 @@ export function main(argv, deps = {}) {
   } else if (command === "peek") {
     out = peek(values.name, deps);
   } else if (command === "close") {
-    out = close(values.name, { keep: values.keep, discard: values.discard }, deps);
+    if (values.finished && (values.name || values.keep || values.discard)) throw new Error("close --finished takes no other flag");
+    out = values.finished ? closeFinished(deps) : close(values.name, { keep: values.keep, discard: values.discard }, deps);
   } else if (command === "list") {
     out = list(deps);
   } else {

@@ -49,7 +49,7 @@ The default role-to-model mapping is the rule shape shown in the Write the overr
 
 #### Project scope
 
-A project may keep its own sheet at `<project-root>/.pstack/models.md`. An existing project sheet replaces the user sheet as a whole for that project, and missing roles take the skill defaults, never the user sheet's values. Configure the scope the user names. Otherwise keep the project scope when a project sheet exists, and ask which scope to configure when neither is established. The `session hook` line stays in the user sheet, since the hook reads only that one. For a project sheet, step 7 adds `@.pstack/models.md` to the project's `CLAUDE.md` on Claude Code, or a plain instruction naming the path to the project's `AGENTS.md` on other runtimes.
+A project may keep its own sheet at `<project-root>/.pstack/models.md`. An existing project sheet replaces the user sheet as a whole for that project, and missing roles take the skill defaults, never the user sheet's values. A project sheet is seldom tracked by git, so a linked worktree of the project has no copy. Such a worktree reads the main checkout's project sheet unless it has one of its own. `node /path/to/poteto-mode/scripts/resolve-models.mjs --session <harness> --active` prints the sheet in force and each path it checked. Configure the scope the user names. Otherwise keep the project scope when a project sheet exists, and ask which scope to configure when neither is established. The `session hook` line stays in the user sheet, since the hook reads only that one. For a project sheet, step 7 adds `@.pstack/models.md` to the project's `CLAUDE.md` on Claude Code, or a plain instruction naming the path to the project's `AGENTS.md` on other runtimes.
 
 #### Presets
 

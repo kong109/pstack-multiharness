@@ -17,21 +17,29 @@ case "$runtime" in
     ;;
   claude)
     sheet="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/pstack-models.md"
-    # A project's .pstack/models.md replaces the user's sheet in that project,
-    # in resolve-models.mjs's order. Claude Code may start in a subdirectory, and
-    # a linked worktree, which seldom has the untracked sheet, reads the main
-    # checkout's.
-    if [ -n "${CLAUDE_PROJECT_DIR:-}" ]; then
-      root=$(git -C "$CLAUDE_PROJECT_DIR" rev-parse --show-toplevel 2>/dev/null) || root=$CLAUDE_PROJECT_DIR
-      common=$(git -C "$root" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || common=
-      case "$common" in */.git) main=${common%/.git} ;; *) main=$root ;; esac
-      if [ -f "$root/.pstack/models.md" ]; then
-        sheet="$root/.pstack/models.md"
-      elif [ -f "$main/.pstack/models.md" ]; then
-        sheet="$main/.pstack/models.md"
-      fi
-    fi
     reader="${CLAUDE_PLUGIN_ROOT}/skills/setup-pstack/scripts/read-sheet.sh"
+    # A project's .pstack/models.md, found in resolve-models.mjs's order, sets
+    # the hook in that project when it has a session hook line; without one the
+    # user sheet's line holds, as before project sheets reached the hook. Claude
+    # Code may start in a subdirectory, and a linked worktree, which seldom has
+    # the untracked sheet, reads the main checkout's.
+    if [ -n "${CLAUDE_PROJECT_DIR:-}" ]; then
+      main=
+      if root=$(git -C "$CLAUDE_PROJECT_DIR" rev-parse --show-toplevel 2>/dev/null); then
+        common=$(git -C "$root" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || common=
+        case "$common" in */.git) main=${common%/.git} ;; esac
+      else
+        root=$CLAUDE_PROJECT_DIR
+      fi
+      for project in "$root/.pstack/models.md" ${main:+"$main/.pstack/models.md"}; do
+        if [ -f "$project" ]; then
+          if (sh "$reader" "$project" 2>/dev/null || true) | grep -q '^session hook:'; then
+            sheet=$project
+          fi
+          break
+        fi
+      done
+    fi
     ;;
   minimax)
     # MiniMax Code withholds MINIMAX_DATA_DIR from hooks and its bash tool.

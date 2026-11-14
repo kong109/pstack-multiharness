@@ -190,6 +190,29 @@ describe("SessionStart hook", () => {
     }
   });
 
+  // Project sheets written before the hook read them hold role lines only, so
+  // the user sheet's choice must survive them.
+  test("a Claude Code project sheet without a session hook line keeps the user's", () => {
+    const home = mkdtempSync(join(tmpdir(), "pstack-hook-"));
+    const project = join(home, "project");
+    const run = () =>
+      spawnSync("sh", ["-c", sessionStart.claude.hooks[0].command], {
+        env: { PATH: process.env.PATH, HOME: home, CLAUDE_PLUGIN_ROOT: pluginRoot, CLAUDE_PROJECT_DIR: project },
+        encoding: "utf8",
+      }).stdout;
+    try {
+      mkdirSync(join(home, ".claude"), { recursive: true });
+      mkdirSync(join(project, ".pstack"), { recursive: true });
+      writeFileSync(join(home, ".claude", "pstack-models.md"), "session hook: off\n");
+      writeFileSync(join(project, ".pstack", "models.md"), "bug-fix: opus\n");
+      expect(run()).toBe("");
+      writeFileSync(join(home, ".claude", "pstack-models.md"), "session hook: on\n");
+      expect(run()).toBe(mandate);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
   // Claude Code sets CLAUDE_PROJECT_DIR to the directory it starts in, which
   // can be below the repository root that holds the committed sheet.
   test("a Claude Code session started in a subdirectory reads the repository's sheet", () => {
@@ -231,6 +254,8 @@ describe("SessionStart hook", () => {
       mkdirSync(join(tree, ".pstack"));
       writeFileSync(join(tree, ".pstack", "models.md"), "session hook: on\n");
       expect(run(tree)).toBe(mandate);
+      mkdirSync(join(tree, "sub"));
+      expect(run(join(tree, "sub"))).toBe(mandate);
     } finally {
       rmSync(home, { recursive: true, force: true });
     }

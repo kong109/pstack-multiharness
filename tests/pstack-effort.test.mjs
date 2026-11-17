@@ -76,7 +76,7 @@ test("builds provider lists from the catalog, the available Claude models and th
   expect(anthropic.models.map((m) => m.slug)).toContain("extra");
   expect(anthropic.models.filter((m) => m.slug === "opus")).toHaveLength(1);
   expect(anthropic.models[0].efforts).toEqual(["low", "medium", "high", "xhigh", "max"]);
-  expect(openai.models.map((m) => m.slug)).toEqual(["gpt-6-astra", "gpt-6.1-sol"]);
+  expect(openai.models.map((m) => m.slug)).toEqual(["gpt-6-astra", "gpt-6.1-sol", "gpt-6.2-astra", "gpt-6.2-sol"]);
 
   const withCache = buildProviders({ providers: providersJson.providers, available: [], codex: codexModels(cacheHome()) });
   expect(withCache[1].models.find((m) => m.slug === "gpt-6.1-sol").efforts).toEqual(["low", "high", "ultra"]);

@@ -2,6 +2,10 @@
 
 This file is the release changelog, with one `## <version> - <title>` entry per release, newest first. The Cursor-to-Claude rewrite rules live in [`tools/substitutions.json`](tools/substitutions.json), and the [sync boundary](CONTRIBUTING.md#the-sync-boundary) in `CONTRIBUTING.md` defines how a change to upstream's skill content is declared.
 
+## 0.9.147 - GPT-6.2 Astra and GPT-6.2 Sol on the effort page
+
+OpenAI added `gpt-6.2-astra` and `gpt-6.2-sol` to Codex. The `/pstack-effort` page takes its OpenAI models from the Codex model cache when it exists, so a machine with a current cache already listed them. The page's fallback list, used when there is no cache, now offers both models after `gpt-6-astra` and `gpt-6.1-sol`. The OpenAI defaults do not change.
+
 ## 0.9.146 - One rule for when /deslop runs
 
 poteto-mode gave three rules for `/deslop`. The Non-negotiables and Opening a PR said to run it before commit, the multi-phase plan said before each commit, and Feature step 4 told the delegate to commit liberally before any `/deslop` pass. `/deslop` reads the branch's whole diff against its base, commits included, so it is built to run once over the finished branch. All three places, and the `/deslop` row in the [slash-command table](docs/reference.md#slash-commands), now say to run it over the branch diff before the rebase into final commits. Working commits before that rebase are allowed. A statechart of the poteto-mode flow showed the conflict: every path from the first delegate commit to Opening a PR broke the old rule.

@@ -24,7 +24,9 @@
       "match": "^gpt-",
       "models": [
         { "slug": "gpt-6-astra", "label": "GPT-6 Astra" },
-        { "slug": "gpt-6.1-sol", "label": "GPT-6.1 Sol" }
+        { "slug": "gpt-6.1-sol", "label": "GPT-6.1 Sol" },
+        { "slug": "gpt-6.2-astra", "label": "GPT-6.2 Astra" },
+        { "slug": "gpt-6.2-sol", "label": "GPT-6.2 Sol" }
       ]
     },
     {

@@ -46,7 +46,7 @@ Find each skill's instructions in the [skills tree](../plugins/pstack/skills/).
 | `/create-formal-verification-skill` | generate a project-local skill that formally verifies one high-risk property |
 | `/maintain-formal-verification-skill` | re-sync a formal verification after the code it covers changed |
 | `/statechart` | check a TLA+ model and draw it as a Mermaid statechart, with the shortest path to each state that breaks a rule |
-| `/deslop` | deslop a diff before commit |
+| `/deslop` | deslop a branch diff before its final commits |
 | `/babysit` | monitor an open PR, fix CI/comments, keep it merge-ready |
 | `/thermo-nuclear-review` | audit a branch's changes for bugs, breakage, security issues, devex regressions, and feature-gate leaks |
 | `/thermo-nuclear-code-quality-review` | extremely strict maintainability audit |

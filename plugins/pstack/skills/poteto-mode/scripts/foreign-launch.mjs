@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 
-import { harnesses, takesEffort } from "./resolve-models.mjs";
+import { effortsOn, harnesses, takesEffort } from "./resolve-models.mjs";
 
 export const skill = fileURLToPath(new URL("../SKILL.md", import.meta.url));
 
@@ -13,7 +13,7 @@ export const fill = (template, vars) =>
 export const protocolPointer = `Read the poteto-mode instructions at ${skill} before working. If the task supplies a specialist prompt or reference, read it and preserve that specialty. Report evidence and limitations accurately.`;
 
 export function checkForeignTarget(label, { harness, model, effort }) {
-  const { efforts } = harnesses[harness];
+  const efforts = effortsOn(harness, model);
   if (effort !== null && !takesEffort(harness)) {
     throw new Error(`${harness} takes no effort setting; name the effort in the model id (${model}-${effort}) for ${label}`);
   }

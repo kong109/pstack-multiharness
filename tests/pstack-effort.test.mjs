@@ -206,7 +206,7 @@ test("aliases have no provider select and stay bare, and an unlisted model is pr
 test("a harness choice is written as an arrow, and the provider's own harness writes none", () => {
   const page = mount(pageSheet);
   const ri = page.roleIndex("feature");
-  expect(page.options(`h-${ri}-0`)).toEqual(["claude (provider's own)", "->claude"]);
+  expect(page.options(`h-${ri}-0`)).toEqual(["claude (provider's own)", "->claude", "->agy"]);
   page.choose(`h-${ri}-0`, "claude");
   expect(page.role("feature")).toBe("feature: opus->claude@high");
   page.choose(`h-${ri}-0`, "");
@@ -247,7 +247,7 @@ function mountWith(list, text = pageSheet) {
 
 test("the harness list offers only the harnesses that serve the slot's provider", () => {
   const page = mountWith(multiHarness);
-  expect(page.options(`h-${page.roleIndex("feature")}-0`)).toEqual(["claude (provider's own)", "->claude"]);
+  expect(page.options(`h-${page.roleIndex("feature")}-0`)).toEqual(["claude (provider's own)", "->claude", "->agy"]);
   expect(page.options(`h-${page.roleIndex("arena runners")}-1`)).toEqual(["codex (provider's own)", "->codex", "->pi", "->opencode"]);
   expect(page.options(`h-${page.roleIndex("how explorer")}-0`)).toEqual(["muse (provider's own)", "->muse", "->pi", "->omp"]);
   expect(page.has(`h-${page.roleIndex("reflect tooling")}-0`)).toBe(false);
@@ -381,8 +381,10 @@ test("the registry and the provider catalog agree, so the page only offers what 
     if (spec.t3) expect(spec.t3.driver, id).toBeTruthy();
     for (const served of Object.keys(spec.providers)) expect(providersJson.providers.map((p) => p.id), id).toContain(served);
     // Only OpenAI's subscription runs outside its own CLI; an operator with an API key writes a provider/model id instead.
+    // A table of ids names models the harness serves from its own pool, as agy does for Opus 5.5.
     const own = providersJson.providers.filter((p) => p.harness === id).map((p) => p.id);
-    expect(Object.keys(spec.providers).filter((p) => !own.includes(p) && p !== "openai"), `${id} maps a subscription-bound provider`).toEqual([]);
+    const pooled = Object.keys(spec.providers).filter((p) => typeof spec.providers[p] !== "string");
+    expect(Object.keys(spec.providers).filter((p) => !own.includes(p) && !pooled.includes(p) && p !== "openai"), `${id} maps a subscription-bound provider`).toEqual([]);
   }
   for (const provider of providersJson.providers) {
     expect(Object.keys(harnesses), provider.id).toContain(provider.harness);
@@ -404,12 +406,16 @@ test("a slot on Antigravity offers agy's effort levels and writes an entry the r
   page.tick(`e-${ri}-0-high`);
   expect(page.role("feature")).toBe("feature: gemini-3.8-flash");
   expect(page.rolesText()).toContain("this harness does not list the default effort max, so it runs at its own default");
-  expect(page.options(`m-${ri}-0`)).toEqual(["Gemini 3.8 Flash", "Gemini 4 Argon", "agy (default, gemini-3.8-flash)", "inherit-parent (parent session's model)", "auto (parent session's model)"]);
+  expect(page.options(`m-${ri}-0`)).toEqual(["Gemini 3.8 Flash", "Gemini 4 Argon", "Gemini 4 Neon", "agy (default, gemini-3.8-flash)", "inherit-parent (parent session's model)", "auto (parent session's model)"]);
   page.choose(`m-${ri}-0`, "gemini-4-argon");
   page.tick(`e-${ri}-0-low`);
   expect(page.role("feature")).toBe("feature: gemini-4-argon@low");
   const pasted = parseMessage(page.message());
   expect(resolveRole(pasted.next, "feature")).toEqual([{ harness: "agy", model: "gemini-4-argon", effort: "low" }]);
+  page.choose(`m-${ri}-0`, "gemini-4-neon");
+  expect(page.efforts(ri, 0)).toEqual(["low", "medium", "high", "xhigh"]);
+  page.tick(`e-${ri}-0-xhigh`);
+  expect(page.role("feature")).toBe("feature: gemini-4-neon@xhigh");
   expect(planApply(sheet, pasted.next, pasted.base).changes.map((c) => c.role)).toEqual(["feature"]);
 });
 

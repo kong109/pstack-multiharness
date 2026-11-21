@@ -20,7 +20,7 @@
       "label": "OpenAI (Codex)",
       "harness": "codex",
       "efforts": ["low", "medium", "high", "xhigh", "max"],
-      "default": "gpt-6.1-sol",
+      "default": "gpt-6.2-sol",
       "match": "^gpt-",
       "models": [
         { "slug": "gpt-6-astra", "label": "GPT-6 Astra" },
@@ -48,7 +48,8 @@
       "match": "^gemini-",
       "models": [
         { "slug": "gemini-3.8-flash", "label": "Gemini 3.8 Flash" },
-        { "slug": "gemini-4-argon", "label": "Gemini 4 Argon" }
+        { "slug": "gemini-4-argon", "label": "Gemini 4 Argon" },
+        { "slug": "gemini-4-neon", "label": "Gemini 4 Neon", "efforts": ["low", "medium", "high", "xhigh"] }
       ]
     },
     {

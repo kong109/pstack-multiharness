@@ -208,7 +208,8 @@ function effortsOf(s) {
 }
 function unlisted(s, effort) {
   const h = HARNESSES[s.harness || (byId(s.provider) || {}).harness];
-  return Boolean(h && h.efforts && effort && effort !== "session" && !h.efforts.includes(effort));
+  const list = h && h.efforts && ownHarness(s) && modelOf(s) ? modelOf(s).efforts : h && h.efforts;
+  return Boolean(list && effort && effort !== "session" && !list.includes(effort));
 }
 function modelDefault(s) {
   const list = effortsOf(s);

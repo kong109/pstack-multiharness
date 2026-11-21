@@ -189,7 +189,8 @@ test("agy serves Opus 5.5 from its own pool under agy's id and effort levels, an
     { harness: "agy", model: "claude-opus-5-5", effort: "medium" },
   ]);
   expect(() => checkForeignTarget("role", { harness: "agy", model: "claude-opus-5-5", effort: "xhigh" })).toThrow("Unsupported agy effort for role: xhigh (use low, medium, high)");
-  expect(() => resolveRole("role: fable->agy", "role")).toThrow("agy runs only opus of the Anthropic (Claude Code) models, so it cannot run fable");
+  expect(() => resolveRole("role: fable->agy", "role")).toThrow("agy runs no Anthropic (Claude Code) models but opus, so it cannot run fable");
+  expect(() => resolveRole("role: fable->omp", "role")).toThrow("(use fable->claude)");
 });
 
 test("a model that lists its own efforts replaces its harness's list", () => {

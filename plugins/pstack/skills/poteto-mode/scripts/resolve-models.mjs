@@ -91,13 +91,13 @@ export function resolveEntry({ model: written, harness: chosen, explicitEffort }
   if (provider) {
     const template = list[harness].providers?.[provider.id];
     if (!template) {
-      const serving = Object.keys(list).filter((h) => list[h].providers?.[provider.id]);
+      const serving = Object.keys(list).filter((h) => list[h].providers?.[provider.id] && harnessId(list[h].providers[provider.id], model) !== undefined);
       const keyed = catalog.some((p) => p.harness === harness) ? "" : `; with an API key, write the id ${harness} takes, as in \`provider/${model}->${harness}\``;
       throw new Error(`${harness} runs no ${provider.label} models, so it cannot run ${model}${serving.length ? ` (use ${serving.map((h) => `${written}->${h}`).join(" or ")})` : ""}${keyed}`);
     }
     id = harnessId(template, model);
     if (id === undefined) {
-      throw new Error(`${harness} runs only ${Object.keys(template).join(", ")} of the ${provider.label} models, so it cannot run ${model}`);
+      throw new Error(`${harness} runs no ${provider.label} models but ${Object.keys(template).join(", ")}, so it cannot run ${model}`);
     }
   }
   // A levelled id keeps its level, since agy refuses a second effort on top. A default the harness does not list is left off.

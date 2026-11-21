@@ -217,6 +217,18 @@ test("a harness choice is written as an arrow, and the provider's own harness wr
   expect(resolveRole(page.next(), "arena runners")[1]).toEqual({ harness: "codex", model: "gpt-6.1-sol", effort: "max" });
 });
 
+test("a harness that serves a provider from its own pool is offered only for the pool's models", () => {
+  const page = mount(pageSheet);
+  const ri = page.roleIndex("feature");
+  page.choose(`h-${ri}-0`, "agy");
+  expect(page.role("feature")).toBe("feature: opus->agy@high");
+  expect(page.efforts(ri, 0)).toEqual(["low", "medium", "high"]);
+  expect(resolveRole(page.next(), "feature")).toEqual([{ harness: "agy", model: "claude-opus-5-5", effort: "high" }]);
+  page.choose(`m-${ri}-0`, "fable");
+  expect(page.role("feature")).toBe("feature: fable@high");
+  expect(page.options(`h-${ri}-0`)).toEqual(["claude (provider's own)", "->claude"]);
+});
+
 test("a provider alias stays the alias, and an arrow stays an arrow, through an effort change", () => {
   const page = mount(pageSheet);
   const ri = page.roleIndex("how explorer");

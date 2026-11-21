@@ -57,6 +57,7 @@ export function providerFor(model, providers, native) {
 
 export const harnessChoices = (list) => Object.fromEntries(Object.entries(list).map(([name, spec]) => [name, {
   providers: Object.keys(spec.providers ?? {}), takesEffort: spec.effort !== null, efforts: spec.efforts ?? null,
+  pooled: Object.fromEntries(Object.entries(spec.providers ?? {}).filter(([, ids]) => typeof ids !== "string").map(([id, ids]) => [id, [...Object.keys(ids), ...Object.values(ids)]])),
 }]));
 
 export function pageData({ sheetPath, scope, native, generated, text, catalog, presets = [], harnesses = registry }) {

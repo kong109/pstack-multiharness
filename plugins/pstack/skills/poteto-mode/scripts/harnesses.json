@@ -74,7 +74,10 @@
   },
   "agy": {
     "command": "agy",
-    "providers": { "google": "{model}" },
+    "providers": {
+      "google": "{model}",
+      "anthropic": { "opus": "claude-opus-5-5" }
+    },
     "kind": "agy",
     "promptFirst": false,
     "prompt": ["-i", "{prompt}"],

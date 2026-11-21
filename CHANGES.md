@@ -2,6 +2,14 @@
 
 This file is the release changelog, with one `## <version> - <title>` entry per release, newest first. The Cursor-to-Claude rewrite rules live in [`tools/substitutions.json`](tools/substitutions.json), and the [sync boundary](CONTRIBUTING.md#the-sync-boundary) in `CONTRIBUTING.md` defines how a change to upstream's skill content is declared.
 
+## 0.9.148 - Gemini 4 Neon, Antigravity's Opus 5.5, and GPT-6.2 Sol as the OpenAI default
+
+Antigravity added Gemini 4 Neon, which takes `xhigh` where its other models stop at `high`. A model in [`providers.json`](plugins/pstack/skills/poteto-mode/scripts/providers.json) can now list its own effort levels, and they replace its harness's list in the resolver, the launch check, and the `/pstack-effort` page. `gemini-4-neon` is the first, so `gemini-4-neon@xhigh` and the id `gemini-4-neon-xhigh` resolve, and `gemini-4-argon@xhigh` is still refused.
+
+Antigravity also serves Opus 5.5 from its own pool, separate from a Claude subscription. A harness in [`harnesses.json`](plugins/pstack/skills/poteto-mode/scripts/harnesses.json) can now give a provider a table of the models it serves in place of one id template. agy's table maps `opus` to `claude-opus-5-5`, so `opus->agy@high` runs there at `low`, `medium`, or `high`, which are the levels agy accepts for it. Any other Claude model on agy is refused, and the page offers `agy` in an Anthropic slot's harness list. Inside T3 Code the level is folded into the id, as `claude-opus-5-5-high`.
+
+The OpenAI default is now `gpt-6.2-sol`, so a `codex` entry runs that model.
+
 ## 0.9.147 - GPT-6.2 Astra and GPT-6.2 Sol on the effort page
 
 OpenAI added `gpt-6.2-astra` and `gpt-6.2-sol` to Codex. The `/pstack-effort` page takes its OpenAI models from the Codex model cache when it exists, so a machine with a current cache already listed them. The page's fallback list, used when there is no cache, now offers both models after `gpt-6-astra` and `gpt-6.1-sol`. The OpenAI defaults do not change.

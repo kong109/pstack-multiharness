@@ -52,7 +52,20 @@ export const providerOf = (model, catalog = providers) =>
 
 // A provider marked levelledIds also takes a model id ending in its effort level, the way `agy models` lists them.
 export const levelledIds = (catalog = providers) =>
-  new Map(catalog.filter((p) => p.levelledIds).flatMap((p) => p.models.flatMap((m) => p.efforts.map((e) => [`${m.slug}-${e}`, [m.slug, e]]))));
+  new Map(catalog.filter((p) => p.levelledIds).flatMap((p) => p.models.flatMap((m) => (m.efforts ?? p.efforts).map((e) => [`${m.slug}-${e}`, [m.slug, e]]))));
+
+// A model that lists its own efforts replaces its harness's list, as Gemini 4 Neon adds xhigh on agy.
+export function effortsOn(harness, model, { harnesses: list = harnesses, providers: catalog = providers } = {}) {
+  const listed = list[harness].efforts;
+  const own = catalog.find((p) => p.harness === harness)?.models.find((m) => m.slug === model)?.efforts;
+  return listed && own ? own : listed;
+}
+
+// A harness gives a provider one id template for every model, or a table of the models it serves from its own pool.
+function harnessId(template, model) {
+  if (typeof template === "string") return template.replaceAll("{model}", model);
+  return template[model] ?? (Object.values(template).includes(model) ? model : undefined);
+}
 
 export const ownProvider = (model, catalog = providers) =>
   catalog.find((p) => p.harness === model) ?? (model.includes("/") || aliases.has(model) ? undefined : providerOf(model, catalog));
@@ -78,18 +91,21 @@ export function resolveEntry({ model: written, harness: chosen, explicitEffort }
   if (provider) {
     const template = list[harness].providers?.[provider.id];
     if (!template) {
-      const serving = Object.keys(list).filter((h) => list[h].providers?.[provider.id]);
+      const serving = Object.keys(list).filter((h) => list[h].providers?.[provider.id] && harnessId(list[h].providers[provider.id], model) !== undefined);
       const keyed = catalog.some((p) => p.harness === harness) ? "" : `; with an API key, write the id ${harness} takes, as in \`provider/${model}->${harness}\``;
       throw new Error(`${harness} runs no ${provider.label} models, so it cannot run ${model}${serving.length ? ` (use ${serving.map((h) => `${written}->${h}`).join(" or ")})` : ""}${keyed}`);
     }
-    id = template.replaceAll("{model}", model);
+    id = harnessId(template, model);
+    if (id === undefined) {
+      throw new Error(`${harness} runs no ${provider.label} models but ${Object.keys(template).join(", ")}, so it cannot run ${model}`);
+    }
   }
   // A levelled id keeps its level, since agy refuses a second effort on top. A default the harness does not list is left off.
   const levelled = levelledIds(catalog).get(model);
   if (levelled && explicitEffort !== undefined && explicitEffort !== "session") {
     throw new Error(`${model} already names its effort, so write \`${levelled[0]}@${explicitEffort}\` instead of \`${model}@${explicitEffort}\``);
   }
-  const listed = list[harness].efforts;
+  const listed = effortsOn(harness, id, { harnesses: list, providers: catalog });
   const fallback = takesEffort(harness, list) && !levelled && (!listed || defaultEffort === "session" || listed.includes(defaultEffort));
   const effort = explicitEffort ?? (fallback ? defaultEffort : undefined);
   return {

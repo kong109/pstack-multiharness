@@ -197,7 +197,12 @@ function modelOf(s) {
   return p && p.models.find(m => m.slug === slug);
 }
 function ownHarness(s) { const p = byId(s.provider); return !s.harness || Boolean(p && s.harness === p.harness); }
-function servingHarnesses(id) { return Object.keys(HARNESSES).filter(h => HARNESSES[h].providers.includes(id)); }
+// A harness that serves a provider from its own pool is offered only for the models in that pool.
+function servingHarnesses(id, s) {
+  const p = byId(id);
+  const slug = p && s.model === p.harness ? p.default : s.model;
+  return Object.keys(HARNESSES).filter(h => HARNESSES[h].providers.includes(id) && (!HARNESSES[h].pooled[id] || HARNESSES[h].pooled[id].includes(slug)));
+}
 function effortsOf(s) {
   const m = modelOf(s);
   if (!m) return null;
@@ -208,7 +213,8 @@ function effortsOf(s) {
 }
 function unlisted(s, effort) {
   const h = HARNESSES[s.harness || (byId(s.provider) || {}).harness];
-  return Boolean(h && h.efforts && effort && effort !== "session" && !h.efforts.includes(effort));
+  const list = h && h.efforts && ownHarness(s) && modelOf(s) ? modelOf(s).efforts : h && h.efforts;
+  return Boolean(list && effort && effort !== "session" && !list.includes(effort));
 }
 function modelDefault(s) {
   const list = effortsOf(s);
@@ -262,8 +268,8 @@ function renderMeta() {
 function changeProvider(s, id) {
   const next = byId(id);
   s.provider = id;
-  if (s.harness && !servingHarnesses(id).includes(s.harness)) s.harness = "";
   if (!next.models.some(m => m.slug === s.model)) s.model = next.models[0].slug;
+  if (s.harness && !servingHarnesses(id, s).includes(s.harness)) s.harness = "";
   if (unsupportedEffort(s)) clearEffort(s);
 }
 
@@ -303,7 +309,7 @@ function modelSelect(r, s, si, ri) {
   ALIASES.forEach(a => { const o = el("option", { value: a, text: a + " (parent session's model)" }); if (a === s.model) o.selected = true; sel.append(o); });
   sel.addEventListener("change", () => {
     s.model = sel.value;
-    if (isAlias(s)) s.harness = "";
+    if (isAlias(s) || (s.harness && !servingHarnesses(s.provider, s).includes(s.harness))) s.harness = "";
     if (s.effort && (!modelOf(s) || unsupportedEffort(s))) clearEffort(s);
     commit();
   });
@@ -316,7 +322,7 @@ function harnessSelect(r, s, si, ri) {
   const own = el("option", { value: "", text: provider.harness + " (provider's own)" });
   if (!s.harness) own.selected = true;
   sel.append(own);
-  const offered = servingHarnesses(provider.id);
+  const offered = servingHarnesses(provider.id, s);
   offered.forEach(h => {
     const o = el("option", { value: h, text: "->" + h });
     if (h === s.harness) o.selected = true;

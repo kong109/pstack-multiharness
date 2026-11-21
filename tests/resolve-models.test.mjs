@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { findSheet, parseEntry, resolveRole, userSheet } from "../plugins/pstack/skills/poteto-mode/scripts/resolve-models.mjs";
+import { checkForeignTarget } from "../plugins/pstack/skills/poteto-mode/scripts/foreign-launch.mjs";
 
 test("a panel keeps its order and duplicates, each entry with its own effort", () => {
   expect(resolveRole("arena runners: sonnet@high, opus, sonnet@low", "arena runners")).toEqual([
@@ -77,7 +78,7 @@ test("->harness names the harness, with the effort after a space or straight aft
 test("a provider's harness name stands for that provider's default model", () => {
   expect(resolveRole("role: muse@low, codex, claude@max, grok, agy", "role")).toEqual([
     { harness: "muse", model: "muse-wonder-full-1.0", effort: "low" },
-    { harness: "codex", model: "gpt-6.1-sol", effort: null },
+    { harness: "codex", model: "gpt-6.2-sol", effort: null },
     { model: "opus", effort: "max" },
     { harness: "grok", model: "grok-4.7", effort: null },
     { harness: "agy", model: "gemini-3.8-flash", effort: null },
@@ -175,9 +176,32 @@ test("pi, omp and opencode give each provider's model its own id prefix", () => 
     { harness: "opencode", model: "openai/gpt-6.1-sol", effort: null },
   ]);
   expect(() => resolveRole("role: muse->pi", "role")).toThrow("pi runs no Meta (Muse) models, so it cannot run muse-wonder-full-1.0 (use muse->muse)");
-  for (const [entry, own] of [["muse->omp", "muse"], ["opus->omp", "claude"], ["grok->omp", "grok"], ["gemini-3.8-flash-high->opencode", "agy"]]) {
+  for (const [entry, own] of [["muse->omp", "muse"], ["grok->omp", "grok"], ["gemini-3.8-flash-high->opencode", "agy"]]) {
     expect(() => resolveRole(`role: ${entry}`, "role")).toThrow(`(use ${entry.split("->")[0]}->${own})`);
   }
+  expect(() => resolveRole("role: opus->omp", "role")).toThrow("(use opus->claude or opus->agy)");
+});
+
+test("agy serves Opus 5.5 from its own pool under agy's id and effort levels, and no other Claude model", () => {
+  expect(resolveRole("default effort: max\nrole: opus->agy@high, opus->agy, claude-opus-5-5->agy@medium", "role")).toEqual([
+    { harness: "agy", model: "claude-opus-5-5", effort: "high" },
+    { harness: "agy", model: "claude-opus-5-5", effort: null },
+    { harness: "agy", model: "claude-opus-5-5", effort: "medium" },
+  ]);
+  expect(() => checkForeignTarget("role", { harness: "agy", model: "claude-opus-5-5", effort: "xhigh" })).toThrow("Unsupported agy effort for role: xhigh (use low, medium, high)");
+  expect(() => resolveRole("role: fable->agy", "role")).toThrow("agy runs no Anthropic (Claude Code) models but opus, so it cannot run fable");
+  expect(() => resolveRole("role: fable->omp", "role")).toThrow("(use fable->claude)");
+});
+
+test("a model that lists its own efforts replaces its harness's list", () => {
+  expect(resolveRole("default effort: xhigh\nrole: gemini-4-neon, gemini-4-argon, gemini-4-neon-xhigh", "role")).toEqual([
+    { harness: "agy", model: "gemini-4-neon", effort: "xhigh" },
+    { harness: "agy", model: "gemini-4-argon", effort: null },
+    { harness: "agy", model: "gemini-4-neon-xhigh", effort: null },
+  ]);
+  checkForeignTarget("role", { harness: "agy", model: "gemini-4-neon", effort: "xhigh" });
+  expect(() => checkForeignTarget("role", { harness: "agy", model: "gemini-4-argon", effort: "xhigh" })).toThrow("Unsupported agy effort");
+  expect(() => checkForeignTarget("role", { harness: "agy", model: "gemini-4-neon", effort: "max" })).toThrow("(use low, medium, high, xhigh)");
 });
 
 test("the migration turns old harness prefixes into the arrow form and leaves everything else as written", async () => {

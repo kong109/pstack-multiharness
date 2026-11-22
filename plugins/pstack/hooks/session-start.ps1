@@ -147,7 +147,7 @@ if (Test-Path -LiteralPath $sheet -PathType Leaf) {
         $sheetLines = ($encoding.GetString($bytes) -replace '^\uFEFF', '') -split "`n" | ForEach-Object { $_ -replace "`r$", '' }
     } catch { }
 }
-if (HasOrdinal $sheetLines 'session hook: off') {
+if ('off'.Equals($env:PSTACK_SESSION_HOOK, [System.StringComparison]::Ordinal) -or (HasOrdinal $sheetLines 'session hook: off')) {
     # Antigravity parses stdout as JSON, so an off hook prints an empty object.
     if ($Runtime -ceq 'agy') { [Console]::Write("{}`n") }
     exit 0

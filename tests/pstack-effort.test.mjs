@@ -20,12 +20,12 @@ Roles below are edited by the page.
 feature: opus@high
 arena runners: opus@xhigh, gpt-6.1-sol@xhigh
 swarm workers: inherit-parent
-why synthesizer: opus->claude@medium
+perf-issue: opus->claude@medium
 default effort: max
 session hook: off
 `;
 
-const pageSheet = sheet.replace("default effort:", "reflect tooling: ollama:qwen3:8b@high\nhow explorer: muse@low, gpt-6.1-sol->codex@high\ndefault effort:");
+const pageSheet = sheet.replace("default effort:", "hillclimb: ollama:qwen3:8b@high\njudgment and prose: muse@low, gpt-6.1-sol->codex@high\ndefault effort:");
 
 const codexCache = {
   models: [
@@ -47,7 +47,7 @@ const scratch = () => {
 
 test("parses role lines with harness arrows and leaves everything else alone", () => {
   const { lines, roles } = parseSheet(pageSheet);
-  expect(roles.map((r) => r.role)).toEqual(["feature", "arena runners", "swarm workers", "why synthesizer", "reflect tooling", "how explorer"]);
+  expect(roles.map((r) => r.role)).toEqual(["feature", "arena runners", "swarm workers", "perf-issue", "hillclimb", "judgment and prose"]);
   expect(roles[1]).toEqual({
     role: "arena runners", line: lines.indexOf("arena runners: opus@xhigh, gpt-6.1-sol@xhigh"),
     slots: [{ harness: "", model: "opus", effort: "xhigh" }, { harness: "", model: "gpt-6.1-sol", effort: "xhigh" }],
@@ -196,11 +196,11 @@ test("aliases have no provider select and stay bare, and an unlisted model is pr
   const page = mount(pageSheet);
   expect(page.has(`p-${page.roleIndex("swarm workers")}-0`)).toBe(false);
   expect(page.role("swarm workers")).toBe("swarm workers: inherit-parent");
-  expect(page.role("reflect tooling")).toBe("reflect tooling: ollama:qwen3:8b@high");
-  const ri = page.roleIndex("why synthesizer");
-  expect(page.role("why synthesizer")).toBe("why synthesizer: opus->claude@medium");
+  expect(page.role("hillclimb")).toBe("hillclimb: ollama:qwen3:8b@high");
+  const ri = page.roleIndex("perf-issue");
+  expect(page.role("perf-issue")).toBe("perf-issue: opus->claude@medium");
   page.tick(`e-${ri}-0-medium`);
-  expect(page.role("why synthesizer")).toBe("why synthesizer: opus->claude");
+  expect(page.role("perf-issue")).toBe("perf-issue: opus->claude");
 });
 
 test("a harness choice is written as an arrow, and the provider's own harness writes none", () => {
@@ -231,15 +231,15 @@ test("a harness that serves a provider from its own pool is offered only for the
 
 test("a provider alias stays the alias, and an arrow stays an arrow, through an effort change", () => {
   const page = mount(pageSheet);
-  const ri = page.roleIndex("how explorer");
+  const ri = page.roleIndex("judgment and prose");
   expect(page.selected(`m-${ri}-0`)).toBe("muse (default, muse-wonder-full-1.0)");
   expect(page.selected(`h-${ri}-1`)).toBe("->codex");
   page.tick(`e-${page.roleIndex("feature")}-0-high`);
-  expect(page.next()).toContain("how explorer: muse@low, gpt-6.1-sol->codex@high\n");
+  expect(page.next()).toContain("judgment and prose: muse@low, gpt-6.1-sol->codex@high\n");
   page.tick(`e-${ri}-0-high`);
   page.tick(`e-${ri}-1-low`);
-  expect(page.role("how explorer")).toBe("how explorer: muse@high, gpt-6.1-sol->codex@low");
-  expect(resolveRole(page.next(), "how explorer")[0]).toEqual({ harness: "muse", model: "muse-wonder-full-1.0", effort: "high" });
+  expect(page.role("judgment and prose")).toBe("judgment and prose: muse@high, gpt-6.1-sol->codex@low");
+  expect(resolveRole(page.next(), "judgment and prose")[0]).toEqual({ harness: "muse", model: "muse-wonder-full-1.0", effort: "high" });
 });
 
 const multiHarness = {
@@ -261,8 +261,8 @@ test("the harness list offers only the harnesses that serve the slot's provider"
   const page = mountWith(multiHarness);
   expect(page.options(`h-${page.roleIndex("feature")}-0`)).toEqual(["claude (provider's own)", "->claude", "->agy"]);
   expect(page.options(`h-${page.roleIndex("arena runners")}-1`)).toEqual(["codex (provider's own)", "->codex", "->pi", "->opencode"]);
-  expect(page.options(`h-${page.roleIndex("how explorer")}-0`)).toEqual(["muse (provider's own)", "->muse", "->pi", "->omp"]);
-  expect(page.has(`h-${page.roleIndex("reflect tooling")}-0`)).toBe(false);
+  expect(page.options(`h-${page.roleIndex("judgment and prose")}-0`)).toEqual(["muse (provider's own)", "->muse", "->pi", "->omp"]);
+  expect(page.has(`h-${page.roleIndex("hillclimb")}-0`)).toBe(false);
   const real = mount(pageSheet);
   expect(real.options(`h-${real.roleIndex("arena runners")}-1`)).toEqual(["codex (provider's own)", "->codex", "->pi", "->omp", "->opencode"]);
 });
@@ -279,10 +279,10 @@ test("a harness other than the provider's own sets the effort list", () => {
   page.choose(`h-${ri}-1`, "opencode");
   expect(page.efforts(ri, 1)).toEqual(["low", "high", "ultra"]);
   expect(page.role("arena runners")).toBe("arena runners: opus@xhigh, gpt-6.1-sol->opencode");
-  const hi = page.roleIndex("how explorer");
+  const hi = page.roleIndex("judgment and prose");
   page.choose(`h-${hi}-0`, "omp");
   expect(page.efforts(hi, 0)).toEqual([]);
-  expect(page.role("how explorer")).toBe("how explorer: muse->omp, gpt-6.1-sol->codex@high");
+  expect(page.role("judgment and prose")).toBe("judgment and prose: muse->omp, gpt-6.1-sol->codex@high");
   expect(page.rolesText()).toContain("this harness takes no effort setting");
 });
 
@@ -610,10 +610,10 @@ test("loading a preset fills the roles it names and keeps the rest", () => {
   expect(page.role("feature")).toBe("feature: opus@medium");
   expect(page.role("arena runners")).toBe("arena runners: gpt-6-astra@medium, sonnet@medium");
   expect(page.role("swarm workers")).toBe("swarm workers: sonnet@low");
-  expect(page.role("why synthesizer")).toBe("why synthesizer: opus->claude@medium");
+  expect(page.role("perf-issue")).toBe("perf-issue: opus->claude@medium");
   expect(page.message()).toContain("changes: 3");
   expect(page.at("preset-note").textContent).toBe(
-    "Loaded user/mid. Not in the preset, kept as is: why synthesizer. Not on this sheet, skipped: bug-fix.");
+    "Loaded user/mid. Not in the preset, kept as is: perf-issue. Not on this sheet, skipped: bug-fix.");
   const pasted = parseMessage(page.message());
   expect(planApply(sheet, pasted.next, pasted.base).changes.map((c) => c.role)).toEqual(["feature", "arena runners", "swarm workers"]);
   page.choose("preset", "1");
@@ -621,4 +621,17 @@ test("loading a preset fills the roles it names and keeps the rest", () => {
   page.click("reset");
   expect(page.next()).toBe(sheet);
   expect(page.at("preset-note").textContent).toBe("");
+});
+
+test("retired role lines from an older sheet round-trip cleanly without breaking edits", () => {
+  const legacy = `${sheet.replace("default effort:", "how explorer: opus@high\ndefault effort:")}`;
+  const page = mount(legacy);
+  expect(page.role("how explorer")).toBe("how explorer: opus@high");
+  expect(page.next()).toBe(legacy);
+  page.tick(`e-${page.roleIndex("feature")}-0-high`);
+  const pasted = parseMessage(page.message());
+  expect(planApply(legacy, pasted.next, pasted.base).changes).toEqual([
+    { role: "feature", from: "opus@high", to: "opus" },
+  ]);
+  expect(pasted.next).toContain("how explorer: opus@high\n");
 });

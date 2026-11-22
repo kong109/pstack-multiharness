@@ -173,16 +173,9 @@ const NOTES = {
   "hillclimb": "Hillclimb loop workers.",
   "judgment and prose": "Default for judgment calls, reviews and writing.",
   "strongest judgment": "Hardest changes: cross-cutting design, concurrency, subtle algorithms.",
-  "how explorer": "how skill: explores the code.",
-  "how explainer": "how skill: writes the explanation.",
-  "why investigators": "why skill: parallel investigators.",
-  "why synthesizer": "why skill: merges the investigations.",
-  "reflect tooling": "reflect skill: tooling checks.",
-  "reflect judgment, divergent, synthesizer": "reflect skill: judgment passes.",
   "swarm workers": "swarm skill fan-out workers and verifiers.",
   "arena runners": "arena: one competing build per slot.",
   "arena cross-judge pool": "arena: judges drawn from this pool.",
-  "architect runners": "architect: one design per slot.",
   "interrogate reviewers": "interrogate: one adversarial reviewer per slot."
 };
 function digest(text) { let h = 5381; for (let i = 0; i < text.length; i++) h = ((h * 33) ^ text.charCodeAt(i)) >>> 0; return h.toString(36); }

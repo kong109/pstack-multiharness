@@ -2,6 +2,123 @@
 
 This file is the release changelog, with one `## <version> - <title>` entry per release, newest first. The Cursor-to-Claude rewrite rules live in [`tools/substitutions.json`](tools/substitutions.json), and the [sync boundary](CONTRIBUTING.md#the-sync-boundary) in `CONTRIBUTING.md` defines how a change to upstream's skill content is declared.
 
+## 0.9.150 - Upstream 0.9.139 to 0.9.147, shorter skills, worker.md, and PSTACK_SESSION_HOOK
+
+This release merges upstream's 26 commits from 0.9.139 to 0.9.147 into the fork. Upstream's own notes follow below. The fork keeps its version numbers, so upstream's 0.9.139 to 0.9.147 are not the fork's releases of those numbers.
+
+- **Retired roles removed from `pstack-effort`.** Upstream 0.9.140 collapsed `how`, `why`, `reflect`, and `architect` and dropped their 7 roles from `models.json`. The `/pstack-effort` template and tests drop those retired role descriptions while keeping a round-trip test for older sheets.
+- **Unspaced `@effort` preserved.** Fork parsers and the sync denylist keep `opus@xhigh` without a space before `@` across `setup-pstack`, `sheet.awk`, `session-start.ps1`, and hook fixtures.
+- **`PSTACK_SESSION_HOOK=off` with Antigravity and `.pstack/models.md`.** `session-start.ps1` prints `{}` for `agy` when disabled through either `PSTACK_SESSION_HOOK=off` or the sheet, and `session-start.sh` checks `PSTACK_SESSION_HOOK=off` ahead of both the project and user sheets.
+- **Fork identity and features preserved.** Foreign-harness dispatch, `.pstack/models.md`, presets, `role-spend.mjs` (without retired `architect runners`), `/deslop` before rebase into final commits, Muse `muse-wonder-full-1.0` defaults, and Windows Antigravity hooks stay in place. DeepSeek Harness lands as skills-only (`dsh-tools.md`) and Pi's `pi agent host: hc` lands in the Pi extension without changing `harnesses.json` or `pstack-effort`.
+
+### Upstream 0.9.147: Pi agents in herdr-core terminals, reflect on Pi, Codex and OpenCode, REST reads in cloud sessions
+
+With a `pi agent host: hc` line in the sheet, and a Pi session running inside [herdr-core](https://github.com/herdrdev/herdr-core), the Pi `agent` tool runs each child as an interactive `pi` in its own `hc` terminal instead of a hidden `pi --mode rpc` process. The user can watch a running agent and type into it. The child gets the parent's environment through a 0600 file instead of argv. `stop_agent` sends SIGTERM to the terminal's process group, then SIGKILL after `killGraceMs`. A restored session finds the terminal by its recorded pid. Without the line, or outside herdr-core, the RPC path is unchanged. On Linux, a prompt over 128 KiB fails, because `hc send` takes the text as an argument. From @xinlihhh ([#447](https://github.com/michael-denyer/pstack-claude/pull/447)).
+
+On Pi and Codex, `reflect` copied an edited pstack skill to `.claude/skills/` or Claude Code's personal skills folder, which neither runtime loads. On Pi, the copy now goes to `.pi/skills/<skill>/` or the Pi agent directory's `skills/` folder, where it replaces the package's copy. On Codex, it goes to the repository's `.agents/skills/<skill>/` or `${CODEX_HOME:-~/.codex}/skills/<skill>/`, beside the plugin's `pstack:<skill>`. From @seonwooj0810 ([#498](https://github.com/michael-denyer/pstack-claude/pull/498), for [#496](https://github.com/michael-denyer/pstack-claude/issues/496)).
+
+On OpenCode, `reflect` reads the whole session, compacted turns included, through `opencode session list --format json` and `opencode session export`. Before, its transcript finder read only Claude Code's folder and found nothing. Reported by @xianshang33 in [#500](https://github.com/michael-denyer/pstack-claude/issues/500), with the fix from @xianshang33 ([#501](https://github.com/michael-denyer/pstack-claude/pull/501)).
+
+When `watch-pr` exits 7 with `graphql-refused` in a Claude Code cloud session, the babysit playbook points the agent at [`cloud-session-pr-reads.md`](plugins/pstack/skills/poteto-mode/references/cloud-session-pr-reads.md), which lists the REST reads that work there and their limits. `watch-pr` and `ship-pr` still need GraphQL, and the shipping and fix-ci playbooks still run `gh pr` commands that the proxy refuses. From @abc123931 ([#497](https://github.com/michael-denyer/pstack-claude/pull/497), part of [#494](https://github.com/michael-denyer/pstack-claude/issues/494)).
+
+The live Pi panel test expects each agent on the model that the extension's `resolveModel` picks. On `openai` that can be the `models.json` codex tier model, so the test failed on `main` ([#504](https://github.com/michael-denyer/pstack-claude/pull/504), for [#503](https://github.com/michael-denyer/pstack-claude/issues/503)).
+
+### Upstream 0.9.146: watch-pr --expect-app and cloud-session fixes, PSTACK_SESSION_HOOK, reflect on OMP
+
+`watch-pr --expect-app <slug>` names a GitHub App that runs the repository's CI. The watcher used to skip any check suite that an app other than Actions had queued with no runs, because apps such as Claude queue one on every push and never run it. A CI app that starts late left the same shape: on `microsoft/react-native-windows`, Azure Pipelines kept its suite queued with no runs for 13 minutes to 4.2 hours while a CLA check passed, and the watcher read that as clean CI. A named app's queued suite with no runs now counts as a pending check, beside reported checks and on a head with none. The flag waits only on a suite the app has already created, and an app that never runs waits until `--timeout`. The ready proof and status rows list each suite the watcher did not count as `queuedWithoutRuns`, and when that list is not empty the pretty READY verdict names the flag ([#492](https://github.com/michael-denyer/pstack-claude/pull/492), for [#472](https://github.com/michael-denyer/pstack-claude/issues/472)).
+
+In a Claude Code cloud session, the GitHub proxy refuses GraphQL, and `watch-pr` retried that refusal for minutes. It now stops with exit 7 on the first read and reports a `graphql-refused` failure. The failure keeps `gh`'s own line, which tells an agent to read the PR over the REST API. A GraphQL 403 that can clear, such as a secondary rate limit, still retries. `docs/reference.md` says that `watch-pr` and `ship-pr` need GraphQL. Reported by @abc123931 in [#481](https://github.com/michael-denyer/pstack-claude/issues/481), with the fix from @abc123931 ([#488](https://github.com/michael-denyer/pstack-claude/pull/488)).
+
+`PSTACK_SESSION_HOOK=off` turns routing off where no user sheet survives between sessions. A Claude Code cloud session starts with an empty home, so `session hook: off` in the user sheet never reached the next session. The shared session hook checks the variable before the sheet, in `session-start.sh` and `session-start.ps1`. That covers Claude Code, and Codex, GitHub Copilot, Muse, and Antigravity when the runtime passes the variable to its hooks. MiniMax Code passes its hooks a fixed set of variables, so the sheet stays the way to turn routing off there. The OMP, OpenCode, and Pi plugins still read only their sheet. Reported by @abc123931 in [#479](https://github.com/michael-denyer/pstack-claude/issues/479) ([#491](https://github.com/michael-denyer/pstack-claude/pull/491)).
+
+On OMP, `reflect` writes an edited pstack skill to `.omp/skills/<skill>/` for a project copy, or to the active profile's agent skills folder for a personal one. It used Claude Code's folders before, and OMP skips Claude Code's personal skills folder by default ([#489](https://github.com/michael-denyer/pstack-claude/pull/489), for [#477](https://github.com/michael-denyer/pstack-claude/issues/477)). `reflect` now says before approval that the edited copy of a pstack skill is a separate skill beside the plugin's own copy, `pstack:<skill>` on Claude Code, which pstack's routing can keep invoking instead ([#490](https://github.com/michael-denyer/pstack-claude/issues/490)).
+
+### Upstream 0.9.145: sync to upstream 0b46ec3 (v0.15.46): statechart on Windows reads TLC's line ends, skills-only DeepSeek Harness support
+
+The upstream pin moves from `2f87c85` to `0b46ec3`, upstream v0.15.46, 3 pstack commits (cursor/plugins#1283, #1284 and #1292). `cursor-team-kit` and `thermos` did not change upstream, so their pins stay. The sync is from @CuriousDev21 ([#480](https://github.com/michael-denyer/pstack-claude/pull/480)).
+
+What changes for users:
+
+- `/statechart` reads TLC's output with `\r\n` line ends as it reads `\n` output, in the run and DOT readers as well as the message reader the port already fixed in 0.9.116 (cursor/plugins#1292).
+- The janitor that kills the worker and removes its folders is now `janitor.ts` on every platform, with the group kill in the new `kill.ts`. The `/bin/sh` janitor is gone. On Windows the janitor no longer kills a process tree once the worker has exited, so a reused pid is spared.
+- On native Windows, `statechart/SKILL.md` gives the `node` command that runs `statechart.ts`, `java` and `mise` start without a console window, and TLC writes its output as UTF-8 (cursor/plugins#1292).
+
+What stays different:
+
+- #1283 and #1284 move upstream's Gemini panel seat to `gemini-4-neon-high`, then `gemini-4-neon-xhigh`. The port's panels come from `models.json` and hold no Gemini seat, so `arena`, `poteto-mode` and `setup-pstack` keep the port's text. The substitution rule that removes the Gemini seat sentence from `poteto-mode` now matches upstream's new wording.
+
+Fork changes: `test/messages.test.ts` now matches upstream and is no longer a fork, and the port-only `janitor.ts` is now upstream's file. The port's own Windows line-end test gives way to upstream's test of the same case. Upstream now carries the Windows kill and the worker's `TEMP` and `TMP`, so `run.ts` keeps only `childEnv` and `statechart.ts` keeps only the hidden worker and janitor windows. `kill.ts` is a new fork. Its `taskkill` starts with `windowsHide`, as the port's kill did before, because the detached janitor that calls it on Windows has no console of its own.
+
+DeepSeek Harness (DSH) can run pstack as a skills-only install. The shared `~/.agents/skills/` install now covers DSH, and the generator writes [`dsh-tools.md`](plugins/pstack/skills/poteto-mode/references/dsh-tools.md), which maps Claude Code tool names, subagent policy and model roles to DSH. DSH gets no native bundle, SessionStart hook or role sheet, so `setup-pstack` uses its native delegation defaults. The bug report form lists DeepSeek Harness. From @kyn0v ([#429](https://github.com/michael-denyer/pstack-claude/pull/429)).
+
+### Upstream 0.9.144: watch-pr suite evidence, Codex hook without CLAUDE_PLUGIN_ROOT, setext playbook headings
+
+When a PR already has reported checks, `watch-pr` verifies the head and run count before deciding that a suite is covered. An invalid count now produces a query error. A suite with a positive count can be skipped even when GitHub returns a null status. The watcher reads suites as soon as the reported checks finish, alongside any outstanding review-thread pages ([#486](https://github.com/michael-denyer/pstack-claude/pull/486)).
+
+Each failed or pending row supplied by the check-suites API now carries `source: "check-suites"` in the verdict JSON. The top-level CI source still names the primary read. A zero-run GitHub Actions suite waiting for approval tells the reader to approve its workflows. Other providers requiring action point the reader to their check details.
+
+The suite lookup requires GitHub CLI 2.48 or later. A CLI that rejects `--slurp` now produces an immediate exit 7 with an upgrade instruction, saving 12 minutes of retries at the default settings.
+
+On Codex, the SessionStart hook finds the plugin from its own path when `CLAUDE_PLUGIN_ROOT` is not in its environment, as `session-start.ps1` already does on Windows. @thomas92tw reported in [#483](https://github.com/michael-denyer/pstack-claude/issues/483) that every Codex 0.170.0 session printed `SessionStart Failed`: Codex put the plugin path into the hook's command but left the variable unset, so `session-start.sh` stopped on it. The fix is from @flipcyde101 ([#485](https://github.com/michael-denyer/pstack-claude/pull/485)).
+
+`check-playbooks.mjs` reads a setext heading (text over a `---` or `===` line) and an ATX heading with a tab after its `#` run as headings, on the numbered-step path and on the paragraph path that 0.9.142 added. It read both as text before, so a change anchored on such a heading passed. A line of dashes under a list item still leaves the item an anchor, as CommonMark reads it. No bundled playbook has either heading form, so no project playbook passed wrongly. From @seonwooj0810 ([#478](https://github.com/michael-denyer/pstack-claude/pull/478)), for [#476](https://github.com/michael-denyer/pstack-claude/issues/476).
+
+The bug report form lists every supported runtime, and `tests/issue-template.test.mjs` fails when a `RUNTIMES` row is missing from it. From @abc123931 ([#482](https://github.com/michael-denyer/pstack-claude/pull/482)).
+
+### Upstream 0.9.143: watch-pr blocks on approval-gated Actions beside other checks
+
+`watch-pr` no longer calls a fork PR ready while its Actions workflows wait for maintainer approval and another app, such as a CLA bot, has reported a passing check ([#470](https://github.com/michael-denyer/pstack-claude/issues/470)). GitHub gives a gated workflow a check suite with no runs, so no check read shows it, and the watcher read the other app's check alone as clean CI. On 2026-11-19, 28 of 110 open PR heads in nine large repositories whose reported checks had all passed had this shape.
+
+Before the watcher counts a head's CI as clean or absent, it now reads the head's check suites. Beside reported checks, a suite counts only when it has no runs and waits for approval, or is an Actions suite that has not started its runs. The check read already shows every other suite's runs, and it hides a run that a later run of the same workflow replaced, so a cancelled run that a later run replaced does not block. On a head with no reported checks, every suite that has not finished cleanly counts, as in 0.9.141. Another app's queued suite with no runs, such as the one the Claude GitHub app adds to every push, never counts. The read is one paginated REST call for each PR on each poll, made only when no reported check has failed or is pending.
+
+A counted suite becomes a check named for its app. A suite waiting for approval is a failed check with state `ACTION_REQUIRED` that says to approve the workflows, so the watcher stops with exit 4, as it does for an `ACTION_REQUIRED` check run, and `--status-only` shows the row as `ci-failing`. A suite still running is a pending check, and the watcher waits on it.
+
+On a head with no reported checks, 0.9.141 reported a gated suite as a retried query failure, which ended in exit 7 after about 12 minutes of backoff and pointed at GitHub authentication. Such a head now shows the same failed check on the first read.
+
+### Upstream 0.9.142: playbook checks on bases without numbered steps, and OMP skill folders
+
+Since 0.9.139, `check-playbooks.mjs` matches each quoted anchor against one numbered step of the base playbook. `opening-a-pr.md` has no numbered steps, and since 0.9.140 neither has `babysit.md`, so the checker rejected every change anchored on them, even on text that matched word for word, and a repository that runs it before each push was blocked. When a base has no numbered steps, each paragraph and each list item now counts as a step. Headings, fenced code, and a quote that spans two blocks still fail, and a base with numbered steps is checked as before. poteto-mode's Project playbooks section now says what a step is in such a base. @apenab reported this in [#466](https://github.com/michael-denyer/pstack-claude/issues/466), and [#468](https://github.com/michael-denyer/pstack-claude/pull/468) fixes it.
+
+On OMP, `create-verification-skill` wrote the generated `verify` skill to `.claude/skills/verify/`, which OMP loads only while its `enableClaudeProject` setting is on. `omp-tools.md` now has rows for five skills that write or look for project skills. `create-verification-skill` writes to `.omp/skills/verify/`, OMP's native project skill folder. `create-formal-verification-skill` writes to `.omp/skills/<area>/` and gives the skill a `description`, because OMP skips a native skill without one. `automate-me` writes a project mode skill to `.omp/skills/<handle>-mode/` and a personal one to the active profile's skills folder, `~/.omp/agent/skills/` by default, directly under the folder, since OMP does not scan nested folders. It looks for mode skills in those folders and `.agents/skills/` as well as the Claude Code paths. The maintain skills and poteto-mode's `verify` lookup check `.omp/skills/` first, then `.claude/skills/` and `.agents/skills/`, so they still find skills generated before this release. `reflect` is not covered yet and still copies a skill into `.claude/skills/<skill>/` on OMP. @younes-io reported this in [#463](https://github.com/michael-denyer/pstack-claude/issues/463), and [#469](https://github.com/michael-denyer/pstack-claude/pull/469) fixes it.
+
+### Upstream 0.9.141: watch-pr no longer reads approval-gated fork CI as no CI
+
+`watch-pr` no longer reads a fork PR whose workflows wait for maintainer approval as a repository with no checks. GitHub shows no check runs and no rollup for such a head, so the watcher could wait out its 60 seconds and call the PR ready with CI never run. When the head has no rollup, the watcher now reads its check suites. A suite that has not finished cleanly is reported as a `checks-unavailable` query failure, and one waiting for approval says so. Another app's queued suite with no runs, such as the one the Claude GitHub app adds to every push, still counts as no CI. The check covers a head with no reported checks only. When another app has reported a check, the watcher still reads that check alone and does not see Actions waiting beside it. @EthanYoQ found and fixed this in [#460](https://github.com/michael-denyer/pstack-claude/pull/460).
+
+### Upstream 0.9.140: sync to upstream 2f87c85 (v0.15.43): shorter skills, worker.md, one-file how, why, and reflect
+
+The upstream pin moves from `c742dd6` to `2f87c85`, upstream v0.15.43, 2 pstack commits (cursor/plugins#1236 and #1249). `cursor-team-kit` and `thermos` did not change upstream, so their pins stay. @bramvera ran this sync in [#467](https://github.com/michael-denyer/pstack-claude/pull/467).
+
+What changes for users:
+
+- `how`, `why`, and `reflect` are each one short file. `how` starts one read-only subagent and presents its answer. `why` answers from the commits and PR discussions behind the code. `reflect` reads the transcript itself, with no reviewer or synthesizer subagents, and still waits for approval before it edits a skill. Their reference prompts and per-source playbooks are gone.
+- `architect` is a short brief: trace every system the change touches, sketch two shapes, pick the one with one owner per piece of state, and run `arena` for a large or contested design. The five phases, runner prompt, red-flag list, and rationale template are gone.
+- poteto-mode no longer routes to `how`. Its trigger list is 13 short lines, its playbook list is names only, and the Comments section is gone (`no-comments` still runs before review).
+- A new `poteto-mode/worker.md` carries the operator's rules to every started agent. The first line of each kickoff points at it by absolute path.
+- The Orchestrate playbook is deleted. Program-scale work routes to `figure-it-out`.
+- The Babysit, Opening a PR, and Multi-phase plan playbooks are cut to a few rules each. Multi-phase plan no longer runs `check-plan.mjs`, so the script, its tests, and its hook contract are deleted.
+- No role runs above xhigh unless the model sheet sets a higher level on the role's line or the `default effort` line. The `strongest judgment` model runs outside a panel only when the user names it for the task or two xhigh runs of the same brief on the task's own role model failed their check.
+- A second opinion, and the show-me-your-work reviewer, run on a model from another family.
+- Fourteen principle leaves, `unslop`, and `technical-writing` have shorter bodies with the same rules.
+- `statechart` reports a spec's SANY line and column on a parse error and draws arrows into a parent state through its border.
+
+Retired roles. `models.json` drops `how explorer`, `how explainer`, `why investigators`, `why synthesizer`, `reflect tooling`, `reflect judgment, divergent, synthesizer`, and `architect runners`, because their skills no longer spawn those subagents. `setup-pstack` drops such lines from an existing sheet on its next run. The port keeps `strongest judgment`, `thermos reviewers`, and `no-comments reviewer`, and keeps its own role tiers in `models.json` rather than upstream's Opus-first slugs.
+
+Forks. Every fork in `tools/forks.json` survives, merged onto upstream's new text, except seven files upstream deleted that the port had edited: `architect/references/rationale-template.md`, `how/references/explainer-prompt.md`, `why/references/epistemics.md`, `why/references/investigator-prompt.md`, `why/references/synthesizer-prompt.md`, `poteto-mode/scripts/check-plan.mjs`, and `poteto-mode/scripts/check-plan.test.ts`. The port follows upstream and deletes them. The human-rulings rule that `epistemics.md` held now sits inline in `recall` and the Session pickup playbook. The architect deviation rule from `rationale-template.md` now sits in `architect/SKILL.md`. The two #231 reflect pins in `tests/skill-rules.test.mjs` are removed with the reviewer prompts they guarded. The #72 rule that keeps a skipped step as a `skip: <reason>` line stays, though upstream dropped it.
+
+`agents/poteto-agent.md` drops upstream's new `model:` pin, because the port passes model and effort on each `Agent` call from the role sheet. An `inherit-parent` role keeps the `pstack:poteto-agent` type and runs on the parent model.
+
+New substitution rules rewrite upstream's new Cursor slugs in poteto-mode, arena, and the eval playbook to point at the Models sections, rewrite arena's vendor rule and family prefixes to the port's family rule, rewrite the control-ui driver line and the cursor-team-kit `/deslop` line, and map Project workers and readonly agent mode to background workers and full tool access. 34 rules whose upstream text is gone were removed. The generator no longer stamps a driver line into the deleted Orchestrate playbook.
+
+### Upstream 0.9.139: safer worktree cleanup and resume, playbook checks, and GPT-6.2 defaults
+
+The worktree audit checks ignored files in initialized submodules and compares local branches with the tips advertised by origin. @EthanYoQ found the submodule case and proposed a fix in [#459](https://github.com/michael-denyer/pstack-claude/pull/459). Pi records ownership in each new agent worktree's private Git directory so reusing its path cannot redirect a resumed agent or its cleanup.
+
+The project playbook checker accepts YAML comments and block lists of base names. It skips fenced examples and checks each quoted anchor against an individual bundled step.
+
+Codex defaults to GPT-6.2 Sol for general and worker roles and GPT-6.2 Astra for strongest judgment. Pi uses these defaults on its OpenAI providers when its model registry lists them. Older catalogs keep their supported model IDs, and a user's model sheet still takes precedence.
+
+
 ## 0.9.149 - Antigravity routing on Windows, and sheet models an Antigravity session cannot pick
 
 Antigravity runs a plugin hook through `cmd.exe` on Windows, which cannot start `./hooks/session-start.sh`, so a Windows agy session never got the routing mandate. The hook command in [`hooks.json`](plugins/pstack/hooks.json) now runs `hooks/session-start.ps1 agy` when the sh script cannot start, and that script has an `agy` branch that prints the same `injectSteps` JSON, or `{}` when the sheet says `session hook: off`. Nothing changes where `sh` runs the hook.

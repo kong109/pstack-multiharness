@@ -181,7 +181,7 @@ cd pstack-multiharness
 agy plugin install ./plugins/pstack
 ```
 
-This installs the native Antigravity plugin bundle (`skills`, `agents`, and `SessionStart` routing hook) into `~/.gemini/config/plugins/pstack`.
+This copies the native Antigravity plugin bundle (`skills`, `agents`, and `SessionStart` routing hook) into `~/.gemini/config/plugins/pstack`. The copy does not follow the clone, so run `agy plugin install ./plugins/pstack` again after each `git pull`. On Windows the hook runs through PowerShell and needs no `sh`.
 
 </details>
 

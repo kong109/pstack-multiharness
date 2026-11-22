@@ -237,6 +237,23 @@ test("the session's own harness is the one left out, and a session outside the r
   expect(() => resolveRole("r: codex:gpt-5->pi", "r")).toThrow("name the harness after the model, as in `gpt-5->pi`");
 });
 
+test("an Antigravity session keeps its own harness on a model its subagent tool cannot select, so that entry opens a pane", () => {
+  const sheet = "r: flash, pro@high, auto, gemini-4-neon@high, opus->agy@high, agy, opus@high";
+  expect(resolveRole(sheet, "r", undefined, { session: "agy" })).toEqual([
+    { model: "flash", effort: null },
+    { model: "pro", effort: "high" },
+    { model: null, effort: null },
+    { harness: "agy", model: "gemini-4-neon", effort: "high" },
+    { harness: "agy", model: "claude-opus-5-5", effort: "high" },
+    { harness: "agy", model: "gemini-3.8-flash", effort: null },
+    { harness: "claude", model: "opus", effort: "high" },
+  ]);
+  expect(resolveRole("r: gemini-4-neon@high, opus", "r", undefined, { session: "claude" })).toEqual([
+    { harness: "agy", model: "gemini-4-neon", effort: "high" },
+    { model: "opus", effort: null },
+  ]);
+});
+
 test("the migration keeps an arrow whose harness no provider of that model owns, so the entry runs where it did in any session", async () => {
   const { migrateText } = await import("../plugins/pstack/skills/poteto-mode/scripts/migrate-sheet.mjs");
   expect(migrateText("role: claude:local-thing, claude:opus@high")).toBe("role: local-thing->claude, opus@high");

@@ -78,6 +78,7 @@
       "google": "{model}",
       "anthropic": { "opus": "claude-opus-5-5" }
     },
+    "subagentModels": ["flash_lite", "flash", "pro"],
     "kind": "agy",
     "promptFirst": false,
     "prompt": ["-i", "{prompt}"],

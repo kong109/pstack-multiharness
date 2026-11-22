@@ -3,7 +3,7 @@
     "SessionStart": [
       {
         "type": "command",
-        "command": "./hooks/session-start.sh agy"
+        "command": "./hooks/session-start.sh agy || powershell.exe -NoProfile -ExecutionPolicy Bypass -File hooks/session-start.ps1 agy"
       }
     ]
   }

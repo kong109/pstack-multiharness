@@ -17,13 +17,14 @@ OpenCode 2 loads the native pstack plugin, which registers each skill as `pstack
 | --- | --- |
 | `setup-pstack` | Use the configured models listed by OpenCode and the model names guidance below. |
 | `why` | Use connected sources where available and report missing evidence instead of assuming it. |
+| `reflect` | The transcript finder reads Claude Code's folder, so it finds nothing here. From the session's directory, run `opencode session list --format json`, which lists that project's sessions newest first, and pick this conversation by its `title`; another open session can be newer. Run `opencode session export <id> > <file>` and read the file. The export holds every message, compacted turns included. Redirect it to a file, because a pipe can cut it short. Add `--sanitize` to redact sensitive transcript and file data. If the export fails, work from the conversation in your context and say the transcript was not found. |
 
 ## Model names
 
 Claude Code model aliases are not OpenCode model IDs. Select a configured chat model only when the user explicitly asks for a model or variant; otherwise let the subagent inherit its model. OpenCode accepts `providerID/modelID` or `providerID/modelID#variant` in the `subagent` tool's `model` field. Look up the ID and variant with the `models` tool; do not guess.
 
 - The model sheet is `${XDG_CONFIG_HOME:-~/.config}/opencode/pstack-models.md`. Add that path to the OpenCode configuration's `instructions` array to load role choices; the plugin reads the `session hook` setting directly.
-- For role-model skills (`architect`, `arena`, `how`, `interrogate`, `no-comments`, `poteto-mode`, `reflect`, `swarm`, `thermos`, `why`), treat a saved user choice as an explicit instruction only when it identifies a configured model. The `subagent` input has no separate effort field; use a listed `#variant` when requested. Omit `model` for `inherit-parent` or `auto`.
+- For role-model skills (`arena`, `interrogate`, `no-comments`, `poteto-mode`, `swarm`, `thermos`), treat a saved user choice as an explicit instruction only when it identifies a configured model. The `subagent` input has no separate effort field; use a listed `#variant` when requested. Omit `model` for `inherit-parent` or `auto`.
 - For diverse-model panels, use different available providers only when the user requests those models. Otherwise inherit and state that model diversity was not established.
 
 Use the `models` command to inspect configured models before writing the sheet.

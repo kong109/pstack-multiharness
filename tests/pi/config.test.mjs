@@ -5,7 +5,7 @@ import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { loadAgentTypes } from "../../plugins/pstack/pi/agent-files.ts";
-import { checkEffort, defaultSettings, parseSheet, readSheet } from "../../plugins/pstack/pi/config.ts";
+import { checkEffort, defaultSettings, parseSheet, readSheet, resolveModel } from "../../plugins/pstack/pi/config.ts";
 import { chmodDeniesReads } from "../session-hook-sheets.mjs";
 
 test("depth comes from the reader on each use and PI_CODING_AGENT_DIR moves the sheet", () => {
@@ -16,6 +16,19 @@ test("depth comes from the reader on each use and PI_CODING_AGENT_DIR moves the 
   expect(settings.depth).toBe(2);
   expect(settings.agentDir).toBe("/tmp/pi-agent-x");
   expect(defaultSettings(() => 0, "").agentDir).toBe(join(homedir(), ".pi", "agent"));
+});
+
+test.each(["openai", "openai-codex"])("OpenAI aliases prefer the 6.2 model in %s when its catalog lists it", (provider) => {
+  const settings = defaultSettings(() => 0);
+  const parent = `${provider}/parent`;
+  for (const [alias, preferred, fallback] of [
+    ["opus", "gpt-6.2-sol", "gpt-6.1-sol"], ["sonnet", "gpt-6.2-sol", "gpt-6.1-sol"], ["fable", "gpt-6.2-astra", "gpt-6-astra"],
+  ]) {
+    const catalog = { find: (p, id) => p === provider && id === preferred ? { id } : undefined };
+    expect(resolveModel(alias, settings, undefined, parent, catalog)).toBe(`${provider}/${preferred}`);
+    expect(resolveModel(alias, settings, undefined, parent, { find: () => undefined })).toBe(`${provider}/${fallback}`);
+    expect(resolveModel(alias, settings, parseSheet(`pi models: ${alias}=custom/model`), parent, catalog)).toBe("custom/model");
+  }
 });
 
 test("only an exact pi ask tool: off line turns the ask tool off", () => {
@@ -29,6 +42,13 @@ test("only an exact pi agent tools: off line turns the agent tools off", () => {
   expect(parseSheet("bug-fix: opus\r\npi agent tools: off\r\n").agentToolsOff).toBe(true);
   for (const sheet of ["bug-fix: opus\n", "pi agent tools: on\n", "pi agent tools: off \n", "agent tools: off\n", "pi ask tool: off\n"]) {
     expect({ sheet, off: parseSheet(sheet).agentToolsOff }).toEqual({ sheet, off: false });
+  }
+});
+
+test("only an exact pi agent host: hc line moves agents into hc terminals", () => {
+  expect(parseSheet("bug-fix: opus\r\npi agent host: hc\r\n").hcHost).toBe(true);
+  for (const sheet of ["bug-fix: opus\n", "pi agent host: rpc\n", "pi agent host: hc \n", "agent host: hc\n", "pi agent tools: off\n"]) {
+    expect({ sheet, hc: parseSheet(sheet).hcHost }).toEqual({ sheet, hc: false });
   }
 });
 

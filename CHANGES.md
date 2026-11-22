@@ -2,6 +2,14 @@
 
 This file is the release changelog, with one `## <version> - <title>` entry per release, newest first. The Cursor-to-Claude rewrite rules live in [`tools/substitutions.json`](tools/substitutions.json), and the [sync boundary](CONTRIBUTING.md#the-sync-boundary) in `CONTRIBUTING.md` defines how a change to upstream's skill content is declared.
 
+## 0.9.151 - Prepend worker.md kickoff line in foreign-harness launches
+
+Foreign-harness launches now put `Read <path>/worker.md before anything else.` on line 1 of every worker brief across T3 Code, herdr, tuios, tmux, and Rex.
+
+- **Single kickoff helper in `foreign-launch.mjs`.** `foreign-launch.mjs` exports `worker`, `workerKickoff`, and `withWorkerKickoff`. `pane-agent.mjs` and `t3-task.mjs` pass the user brief through `withWorkerKickoff` before appending the protocol section and the `poteto-mode` pointer.
+- **Idempotent deduplication.** When the first non-blank line already matches a `worker.md` kickoff line with `/` or `\` separators, an optional trailing period, or different letter case, `withWorkerKickoff` returns the brief unchanged. Callers that already followed `poteto-mode/SKILL.md` never emit a duplicate first line, and briefs that mention `worker.md` only later in the body still receive the kickoff line on line 1.
+- **Documentation and tests.** `foreign-harness.md` documents the prepended kickoff line for the T3 Code and pane routes. `tests/pane-agent.test.mjs` and `tests/t3-task.test.mjs` cover default prepending, deduplication, and mentions of `worker.md` in the body.
+
 ## 0.9.150 - Upstream 0.9.139 to 0.9.147, shorter skills, worker.md, and PSTACK_SESSION_HOOK
 
 This release merges upstream's 26 commits from 0.9.139 to 0.9.147 into the fork. Upstream's own notes follow below. The fork keeps its version numbers, so upstream's 0.9.139 to 0.9.147 are not the fork's releases of those numbers.

@@ -5,14 +5,14 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 
-import { NAME, fill, checkForeignRequest, protocolPointer } from "./foreign-launch.mjs";
+import { NAME, fill, checkForeignRequest, protocolPointer, withWorkerKickoff } from "./foreign-launch.mjs";
 import { harnesses, levelledIds } from "./resolve-models.mjs";
 
 const ROLES = { read: "review", write: "implementation" };
 
 export function taskText(brief, access) {
   const scope = access === "read" ? "Do not modify any file." : "Change only what the task assigns.";
-  return `${brief.trimEnd()}
+  return `${withWorkerKickoff(brief)}
 
 ## Subagent protocol
 

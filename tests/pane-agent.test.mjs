@@ -5,6 +5,7 @@ import {
 import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
 import { isAbsolute, join } from "node:path";
+import { worker, workerKickoff } from "../plugins/pstack/skills/poteto-mode/scripts/foreign-launch.mjs";
 import {
   askParent, briefText, close, closeFinished, detectMux, harnessArgs, launch, launchPrompt, list, main, nudgePrompt, panesRoot, peek, script, send, sh, waitFor,
 } from "../plugins/pstack/skills/poteto-mode/scripts/pane-agent.mjs";
@@ -102,15 +103,36 @@ test("a brief with a parent names the agent and tells it to ask the parent pane,
   expect(briefText("x", { run, access: "read", name: "arena-a", parent: null })).not.toContain("ask-parent");
 });
 
-test("the brief carries the pane protocol with this agent's paths", () => {
+test("the brief prepends the worker.md kickoff line and carries the pane protocol with this agent's paths", () => {
   const run = join(root, "a");
+  expect(worker.endsWith(join("skills", "poteto-mode", "worker.md"))).toBe(true);
+  expect(existsSync(worker)).toBe(true);
+  expect(workerKickoff).toBe(`Read ${worker} before anything else.`);
   const out = briefText("Do the thing.\n", { run, access: "read" });
-  expect(out.startsWith("Do the thing.\n")).toBe(true);
+  expect(out.startsWith(`${workerKickoff}\n\nDo the thing.\n\n## Pane protocol\n`)).toBe(true);
   expect(out).toContain(`${join("skills", "poteto-mode", "SKILL.md")} before working`);
   expect(out).toContain(`write only the question to ${join(run, "question.md")}`);
   expect(out).toContain(`write your complete final report to ${join(run, "result.md")}`);
   expect(out).toContain(`Do not modify any file except ${join(run, "result.md")} and ${join(run, "question.md")}.`);
   expect(briefText("x", { run, access: "write" })).toContain("Change only what the task assigns");
+});
+
+test("briefText deduplicates an existing worker.md kickoff line and still prepends when worker.md appears only in the body", () => {
+  const run = join(root, "a");
+  const already = briefText(`${workerKickoff}\n\nDo the thing.\n`, { run, access: "read" });
+  expect(already.startsWith(`${workerKickoff}\n\nDo the thing.\n\n## Pane protocol\n`)).toBe(true);
+  expect(already.split("worker.md").length - 1).toBe(1);
+
+  const windowsStyle = "\r\n  \r\n   read C:\\Users\\dev\\poteto-mode\\worker.md BEFORE ANYTHING ELSE  \r\n\r\nDo the thing.\r\n";
+  const deduped = briefText(windowsStyle, { run, access: "read" });
+  expect(deduped.startsWith(`${windowsStyle.trimEnd()}\n\n## Pane protocol\n`)).toBe(true);
+  expect(deduped.split("before anything else").length - 1).toBe(0);
+
+  const bodyMention = briefText("Edit plugins/pstack/skills/poteto-mode/worker.md to clarify PR rules.\n", { run, access: "write" });
+  expect(bodyMention.startsWith(`${workerKickoff}\n\nEdit plugins/pstack/skills/poteto-mode/worker.md`)).toBe(true);
+
+  const laterLine = briefText("Review the diff.\n\nRead /tmp/poteto-mode/worker.md before anything else.\n", { run, access: "read" });
+  expect(laterLine.startsWith(`${workerKickoff}\n\nReview the diff.\n`)).toBe(true);
 });
 
 test("herdr launch opens one labelled tab, starts the harness in it, prompts with --wait, and returns the result", () => {

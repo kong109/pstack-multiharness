@@ -42,7 +42,7 @@ Skills name Claude Code model aliases in their Models sections. On Antigravity (
 
 - The model sheet is `~/.gemini/config/pstack-models.md`. Before a skill that needs a role model (`architect`, `arena`, `how`, `interrogate`, `no-comments`, `poteto-mode`, `reflect`, `swarm`, `thermos`, `why`), read it. With no sheet, read `setup-pstack`'s `SKILL.md` and finish it first.
 - Resolve each role with `node /path/to/poteto-mode/scripts/resolve-models.mjs --session agy --active "<role>" "<the skill's default models>"`. It reads the project's `.pstack/models.md` when present, then the sheet above.
-- An entry with no `harness` runs here. Pass its model as `Model` on `invoke_subagent`, which takes no effort, so an `@level` on that entry is not applied. For `inherit-parent` or `auto`, omit `Model`.
+- An entry with no `harness` runs here, except as foreign-harness's first route says. Pass its model as `Model` on `invoke_subagent`, which takes no effort, so an `@level` on that entry is not applied. For `inherit-parent` or `auto`, omit `Model`.
 - An entry with a `harness` cannot run through `invoke_subagent`. That includes `harness: "agy"`, whose model the tool cannot select. Launch it through [foreign-harness](foreign-harness.md), which starts that harness with the entry's model and effort in its own pane. Never run it on another model.
 - Roles that default to the worker model (`feature, refactoring`): the worker model the user chose.
 - Roles that default to the strongest model (`strongest judgment`): the strongest model the user chose.

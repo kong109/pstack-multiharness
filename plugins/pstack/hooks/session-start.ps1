@@ -95,10 +95,11 @@ switch -CaseSensitive ($Runtime) {
         # Antigravity's hooks.json runs this script after session-start.sh, so
         # it runs only where sh could not: under cmd.exe. A Linux agy under WSL
         # whose sh hook failed reaches powershell.exe through interop, from a
-        # \\wsl path, and this user's sheet is not that session's.
+        # \\wsl path. That failure stays a failure, since this user's sheet is
+        # not that session's.
         if ($PSScriptRoot -like '\\wsl*') {
-            [Console]::Write("{}`n")
-            exit 0
+            [Console]::Error.WriteLine('session-start.ps1: the sh hook failed in a WSL session')
+            exit 1
         }
         $sheet = Join-Path (Join-Path (Join-Path $env:USERPROFILE '.gemini') 'config') 'pstack-models.md'
         $context = 'session-start-agy.md'

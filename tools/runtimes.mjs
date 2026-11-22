@@ -541,7 +541,7 @@ export function agyModelNamesSection(models) {
     "and finish it first.\n" +
     "- Resolve each role with `node /path/to/poteto-mode/scripts/resolve-models.mjs --session agy --active \"<role>\" " +
     "\"<the skill's default models>\"`. It reads the project's `.pstack/models.md` when present, then the sheet above.\n" +
-    "- An entry with no `harness` runs here. Pass its model as `Model` on `invoke_subagent`, which takes no effort, so " +
+    "- An entry with no `harness` runs here, except as foreign-harness's first route says. Pass its model as `Model` on `invoke_subagent`, which takes no effort, so " +
     "an `@level` on that entry is not applied. For `inherit-parent` or `auto`, omit `Model`.\n" +
     "- An entry with a `harness` cannot run through `invoke_subagent`. That includes `harness: \"agy\"`, whose model " +
     "the tool cannot select. Launch it through [foreign-harness](foreign-harness.md), which starts that harness with " +

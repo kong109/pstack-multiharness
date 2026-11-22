@@ -2,6 +2,14 @@
 
 This file is the release changelog, with one `## <version> - <title>` entry per release, newest first. The Cursor-to-Claude rewrite rules live in [`tools/substitutions.json`](tools/substitutions.json), and the [sync boundary](CONTRIBUTING.md#the-sync-boundary) in `CONTRIBUTING.md` defines how a change to upstream's skill content is declared.
 
+## 0.9.152 - Effort pills, compact layout, and per-slot Copy, Paste, and Apply all in pstack-effort
+
+The `/pstack-effort` HTML editor now renders effort levels as compact color-coded pills, compresses vertical spacing across roles and slots, and adds **Copy**, **Paste**, and **Apply all** actions to every entry alongside a toolbar **Undo** button.
+
+- **Effort pills.** Effort choices keep semantic `<fieldset>` and `<input type="checkbox">` markup with visually hidden inputs (`sr-only`), rounded pill styling, high-contrast active fills with a check indicator in both light and dark themes, and 44px touch targets on coarse pointers.
+- **Compact layout.** The page widens to 1260px, moves provider and routing details into a collapsed `<details>` disclosure, puts role metadata and notes on one row, and fits single and panel slots cleanly on one desktop line while wrapping down to 320px viewports.
+- **Per-slot Copy, Paste, and Apply all with Undo.** Every slot on single and panel roles has **Copy**, **Paste**, and **Apply all** buttons. **Copy** snapshots the slot independently and enables **Paste** across the sheet, **Apply all** updates every slot across every role while keeping panel slot counts, and **Undo** reverts the last **Paste**, **Apply all**, or preset load.
+
 ## 0.9.151 - Prepend worker.md kickoff line in foreign-harness launches
 
 Foreign-harness launches now put `Read <path>/worker.md before anything else.` on line 1 of every worker brief across T3 Code, herdr, tuios, tmux, and Rex.

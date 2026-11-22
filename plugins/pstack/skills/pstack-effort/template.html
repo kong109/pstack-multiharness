@@ -1,7 +1,7 @@
 <title>Pstack Effort Map</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600..800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600..800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <style>
 :root {
   --ground: #f1f2f6;
@@ -13,10 +13,12 @@
   --line: #d9dbe3;
   --accent: #5b3fd1;
   --accent-soft: #ebe6fb;
+  --on-accent: #ffffff;
   --changed: #b4560f;
   --changed-soft: #fcecde;
-  --e-low: #5f8a6b;
-  --e-medium: #3f7fb0;
+  --e-minimal: #4d6a78;
+  --e-low: #3d6e4c;
+  --e-medium: #2e6b9e;
   --e-high: #5b3fd1;
   --e-xhigh: #a63f9c;
   --e-max: #c2402f;
@@ -38,8 +40,10 @@
     --line: #2a2c3a;
     --accent: #9d86ff;
     --accent-soft: #231d3d;
+    --on-accent: #0f1015;
     --changed: #f09a52;
     --changed-soft: #35220f;
+    --e-minimal: #8faab8;
     --e-low: #7fb38e;
     --e-medium: #6cb0e4;
     --e-high: #9d86ff;
@@ -60,8 +64,10 @@
   --line: #2a2c3a;
   --accent: #9d86ff;
   --accent-soft: #231d3d;
+  --on-accent: #0f1015;
   --changed: #f09a52;
   --changed-soft: #35220f;
+  --e-minimal: #8faab8;
   --e-low: #7fb38e;
   --e-medium: #6cb0e4;
   --e-high: #9d86ff;
@@ -71,78 +77,210 @@
   --focus: #6aa8ff;
 }
 * { box-sizing: border-box; }
-body { background: var(--ground); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.5; }
-.wrap { max-width: 900px; margin: 0 auto; padding-inline: 16px; padding-block: 28px 64px; display: grid; gap: 24px; }
+body { margin: 0; background: var(--ground); color: var(--ink); font-family: var(--body); font-size: 14px; line-height: 1.45; overflow-wrap: break-word; }
+.wrap { max-width: 1260px; margin: 0 auto; padding-inline: 16px; padding-block: 16px 40px; display: grid; gap: 12px; }
 h1, h2 { font-family: var(--display); margin: 0; line-height: 1.1; text-wrap: balance; }
-h1 { font-size: clamp(28px, 5vw, 40px); font-weight: 800; letter-spacing: -0.02em; }
-h2 { font-size: 20px; font-weight: 700; }
-p { margin: 0; max-width: 70ch; }
-code { font-family: var(--mono); font-size: 0.88em; }
+h1 { font-size: clamp(22px, 3vw, 28px); font-weight: 800; letter-spacing: -0.02em; }
+h2 { font-size: 18px; font-weight: 700; }
+p { margin: 0; max-width: 88ch; text-wrap: pretty; }
+li { text-wrap: pretty; }
+code { font-family: var(--mono); font-size: 0.88em; overflow-wrap: anywhere; }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-.eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
-header { display: grid; gap: 10px; }
-header p { color: var(--ink-2); }
-.meta { display: flex; flex-wrap: wrap; gap: 6px 18px; font-family: var(--mono); font-size: 12.5px; color: var(--ink-2); }
+.sr-only {
+  position: absolute;
+  clip-path: inset(50%);
+  overflow: hidden;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  white-space: nowrap;
+}
+.eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
+header { display: grid; gap: 5px; }
+header p { font-size: 13px; color: var(--ink-2); }
+.meta { display: flex; flex-wrap: wrap; gap: 3px 14px; font-family: var(--mono); font-size: 11.5px; color: var(--ink-2); }
 .meta span { overflow-wrap: anywhere; }
-.legend { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 13px; color: var(--ink-2); }
-.dot { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+.legend-details { font-size: 12px; color: var(--ink-2); }
+.legend-details summary { cursor: pointer; font-family: var(--mono); font-size: 11.5px; color: var(--ink-3); width: fit-content; user-select: none; padding-block: 2px; }
+.legend-details summary:hover { color: var(--ink); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; color: var(--ink-2); margin-top: 4px; }
 
-.roles { display: grid; gap: 10px; }
-.role { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; display: grid; gap: 10px; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+.preset { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--ink-2); }
+.clip-badge {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line));
+  border-radius: 999px;
+  padding: 2px 9px;
+  line-height: 1.3;
+}
+.clip-badge[hidden] { display: none; }
+.slot-status { font-size: 12px; color: var(--ink-2); }
+.preset-note { flex-basis: 100%; font-size: 12px; color: var(--ink-3); }
+.slot-status:empty, .preset-note:empty { display: none; }
+
+.roles { display: grid; gap: 5px; }
+.role { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; display: grid; gap: 4px; }
 .role.changed { border-color: var(--changed); box-shadow: inset 3px 0 0 var(--changed); }
-.role-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; }
-.role-name { font-weight: 600; font-size: 15.5px; }
-.role-kind { font-family: var(--mono); font-size: 11px; color: var(--ink-3); letter-spacing: 0.04em; }
-.role-note { font-size: 13px; color: var(--ink-3); flex-basis: 100%; }
-.was { font-family: var(--mono); font-size: 12px; color: var(--changed); margin-left: auto; }
-.slots { display: grid; gap: 8px; }
-.slot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 8px 10px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 5px; }
-.slot-n { font-family: var(--mono); font-size: 12px; color: var(--ink-3); width: 18px; }
-select { font: inherit; font-size: 13.5px; font-family: var(--mono); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; max-width: 100%; }
-.efforts { display: flex; flex-wrap: wrap; gap: 6px; border: 0; margin: 0; padding: 0; }
-.efforts legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
-.eff { --c: var(--accent); position: relative; display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 12.5px; padding: 3px 9px 3px 7px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); cursor: pointer; user-select: none; }
-.eff input { margin: 0; width: 14px; height: 14px; accent-color: var(--c); }
-.eff:has(input:checked) { border-color: var(--c); background: color-mix(in srgb, var(--c) 14%, var(--surface)); color: var(--ink); font-weight: 500; }
+.role-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
+.role-name { font-weight: 600; font-size: 13.5px; }
+.role-kind { font-family: var(--mono); font-size: 10.5px; color: var(--ink-3); letter-spacing: 0.03em; }
+.role-note { font-size: 12px; color: var(--ink-3); }
+.was { font-family: var(--mono); font-size: 11px; color: var(--changed); margin-left: auto; }
+
+.slots { display: grid; gap: 3px; }
+.slot { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 7px; padding: 3px 7px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 5px; }
+.slot-n { font-family: var(--mono); font-size: 11px; color: var(--ink-3); width: 14px; text-align: right; }
+select {
+  font: inherit;
+  font-size: 12px;
+  font-family: var(--mono);
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 2px 5px;
+  min-block-size: 26px;
+  max-width: 100%;
+}
+.sel-provider { max-width: 164px; }
+.sel-model { max-width: 172px; }
+.sel-harness { max-width: 164px; }
+
+.efforts { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; border: 0; margin: 0; padding: 0; }
+.efforts legend {
+  position: absolute;
+  clip-path: inset(50%);
+  overflow: hidden;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  white-space: nowrap;
+}
+.eff {
+  --c: var(--accent);
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-block-size: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.2;
+  padding: 2px 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-2);
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.eff:hover { border-color: var(--c); color: var(--ink); }
+.eff:has(input:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
+.eff:has(input:checked) {
+  border-color: var(--c);
+  background: var(--c);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+.eff:has(input:checked)::before {
+  content: "\2713";
+  font-size: 0.9em;
+  line-height: 1;
+}
+.eff[data-e="minimal"] { --c: var(--e-minimal); }
 .eff[data-e="low"] { --c: var(--e-low); }
 .eff[data-e="medium"] { --c: var(--e-medium); }
 .eff[data-e="high"] { --c: var(--e-high); }
 .eff[data-e="xhigh"] { --c: var(--e-xhigh); }
 .eff[data-e="max"] { --c: var(--e-max); }
 .eff[data-e="ultra"] { --c: var(--e-ultra); }
-.session-note { font-size: 12px; color: var(--ink-3); font-style: italic; }
-.slot-actions { margin-left: auto; display: flex; gap: 6px; }
-button { font: inherit; cursor: pointer; }
-.ghost { font-size: 12.5px; color: var(--ink-2); background: transparent; border: 1px solid var(--line); border-radius: 4px; padding: 3px 9px; }
-.ghost:hover { color: var(--ink); border-color: var(--ink-3); }
-.toolbar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
-.preset { display: inline-flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--ink-2); }
-.preset-note { flex-basis: 100%; font-size: 13px; color: var(--ink-3); }
+.session-note { font-size: 11.5px; color: var(--ink-3); font-style: italic; }
 
-.response { background: var(--surface); border: 2px solid var(--accent); border-radius: 6px; padding: 18px; display: grid; gap: 12px; }
-.response p { color: var(--ink-2); font-size: 14px; }
-.changes { margin: 0; padding-left: 18px; font-size: 14px; color: var(--ink-2); display: grid; gap: 2px; }
+.slot-actions { margin-left: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.slot-sep { width: 1px; align-self: stretch; margin-block: 3px; background: var(--line); }
+button { font: inherit; cursor: pointer; }
+.ghost {
+  font-size: 12px;
+  color: var(--ink-2);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 3px 9px;
+  min-block-size: 26px;
+}
+.ghost:hover { color: var(--ink); border-color: var(--ink-3); }
+.ghost:disabled { opacity: 0.45; cursor: not-allowed; }
+.ghost:disabled:hover { color: var(--ink-2); border-color: var(--line); }
+.slot-btn {
+  font-size: 11px;
+  padding: 2px 6px;
+  min-block-size: 24px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.slot-btn[data-copied] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.response { background: var(--surface); border: 2px solid var(--accent); border-radius: 6px; padding: 14px 16px; display: grid; gap: 10px; }
+.response p { color: var(--ink-2); font-size: 13px; }
+.changes { margin: 0; padding-left: 18px; font-size: 13px; color: var(--ink-2); display: grid; gap: 2px; }
 .changes .none { list-style: none; margin-left: -18px; font-style: italic; color: var(--ink-3); }
-pre.out { margin: 0; font-family: var(--mono); font-size: 12.5px; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--surface-2); border: 1px solid var(--line); border-radius: 5px; padding: 12px; max-height: 360px; overflow: auto; }
-.actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
-.primary { font-weight: 600; color: #ffffff; background: var(--accent); border: 0; border-radius: 5px; padding: 10px 18px; }
+pre.out { margin: 0; font-family: var(--mono); font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--surface-2); border: 1px solid var(--line); border-radius: 5px; padding: 10px 12px; max-height: 320px; overflow: auto; }
+.actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.primary { font-weight: 600; color: var(--on-accent); background: var(--accent); border: 0; border-radius: 5px; padding: 8px 16px; min-block-size: 34px; }
 .primary:hover { filter: brightness(1.08); }
-.status { font-size: 13px; color: var(--ink-2); }
-@media (max-width: 520px) { .slot-actions { margin-left: 0; } .was { margin-left: 0; flex-basis: 100%; } }
+.status { font-size: 12.5px; color: var(--ink-2); }
+
+@media (prefers-reduced-motion: reduce) {
+  .eff { transition: none; }
+}
+@media (forced-colors: active) {
+  .eff:has(input:checked) { background: Highlight; color: HighlightText; border-color: Highlight; }
+}
+@media (pointer: coarse) {
+  .eff, select, .ghost, .slot-btn, .primary, .legend-details summary { min-block-size: 44px; }
+  .eff { padding: 6px 12px; }
+  .slot-btn { padding: 6px 10px; }
+}
+@media (max-width: 520px) {
+  .slot-actions { margin-left: 0; }
+  .was { margin-left: 0; flex-basis: 100%; }
+  .sel-provider, .sel-model, .sel-harness { max-width: 100%; }
+}
 </style>
 
 <div class="wrap">
   <header>
     <div class="eyebrow">pstack routing</div>
     <h1>Role to model map</h1>
-    <p>Each row is one pstack role. Pick the provider, model and harness for each slot, then tick an effort level. Ticking a level clears the others in that slot. Clear every box to run at the session's own effort. Panel roles run one worker per slot, so you can add, remove or repeat slots. Load a preset to fill every role it names. Changed rows are marked. The block at the bottom is a ready message to paste back into Claude Code.</p>
+    <p>Pick a provider, model, harness, and effort pill for each slot. Click an active pill to clear it and fall back to the default or session effort. Use Copy, Paste, and Apply all on any slot to reuse settings across roles, then copy the message at the bottom back into Claude Code.</p>
     <div class="meta" id="meta"></div>
-    <div class="legend" id="legend"></div>
+    <details class="legend-details">
+      <summary>Providers and routing details</summary>
+      <div class="legend" id="legend"></div>
+    </details>
   </header>
 
   <div class="toolbar">
-    <label class="preset" for="preset">Load a preset <select id="preset"></select></label>
+    <label class="preset" for="preset">Preset <select id="preset"></select></label>
+    <button class="ghost" type="button" id="undo" disabled>Undo</button>
     <button class="ghost" type="button" id="reset">Reset to the current sheet</button>
+    <span class="clip-badge" id="clip-badge" hidden></span>
+    <span class="slot-status" id="slot-status" role="status" aria-live="polite"></span>
     <span class="preset-note" id="preset-note" aria-live="polite"></span>
   </div>
 
@@ -229,6 +367,9 @@ const original = DATA.roles.map(r => ({
   slots: r.slots.map(s => ({ provider: s.provider, model: s.model, harness: s.harness, effort: s.effort }))
 }));
 let state = clone(original);
+let copiedSlot = null;
+let copiedSourceKey = null;
+let undoSnapshot = null;
 try {
   const saved = JSON.parse(localStorage.getItem(STORE) || "null");
   const fits = saved && saved.length === original.length &&
@@ -244,6 +385,33 @@ function el(tag, attrs, kids) {
   }
   (kids || []).forEach(c => c && n.append(c));
   return n;
+}
+function announceSlot(msg) {
+  const node = document.getElementById("slot-status");
+  if (!node) return;
+  node.textContent = node.textContent === msg ? msg + "\u00A0" : msg;
+}
+function renderToolbarState() {
+  const undoBtn = document.getElementById("undo");
+  if (undoBtn) {
+    if (undoSnapshot === null) {
+      undoBtn.setAttribute("disabled", "");
+      undoBtn.disabled = true;
+    } else {
+      undoBtn.removeAttribute("disabled");
+      undoBtn.disabled = false;
+    }
+  }
+  const badge = document.getElementById("clip-badge");
+  if (badge) {
+    if (copiedSlot) {
+      badge.textContent = "Copied: " + entry(copiedSlot);
+      badge.removeAttribute("hidden");
+    } else {
+      badge.textContent = "";
+      badge.setAttribute("hidden", "");
+    }
+  }
 }
 
 function renderMeta() {
@@ -267,7 +435,7 @@ function changeProvider(s, id) {
 }
 
 function providerSelect(r, s, si, ri) {
-  const sel = el("select", { id: `p-${ri}-${si}`, "aria-label": `${r.role} slot ${si + 1} provider` });
+  const sel = el("select", { id: `p-${ri}-${si}`, class: "sel-provider", "aria-label": `${r.role} slot ${si + 1} provider` });
   if (!byId(s.provider)) {
     const cur = el("option", { value: "", text: "Current: no listed provider" });
     cur.disabled = true; cur.selected = true; sel.append(cur);
@@ -282,7 +450,7 @@ function providerSelect(r, s, si, ri) {
 }
 
 function modelSelect(r, s, si, ri) {
-  const sel = el("select", { id: `m-${ri}-${si}`, "aria-label": `${r.role} slot ${si + 1} model` });
+  const sel = el("select", { id: `m-${ri}-${si}`, class: "sel-model", "aria-label": `${r.role} slot ${si + 1} model` });
   const provider = byId(s.provider);
   const models = provider ? provider.models : [];
   if (!modelOf(s)) {
@@ -310,7 +478,7 @@ function modelSelect(r, s, si, ri) {
 }
 
 function harnessSelect(r, s, si, ri) {
-  const sel = el("select", { id: `h-${ri}-${si}`, "aria-label": `${r.role} slot ${si + 1} harness` });
+  const sel = el("select", { id: `h-${ri}-${si}`, class: "sel-harness", "aria-label": `${r.role} slot ${si + 1} harness` });
   const provider = byId(s.provider);
   const own = el("option", { value: "", text: provider.harness + " (provider's own)" });
   if (!s.harness) own.selected = true;
@@ -333,14 +501,14 @@ function harnessSelect(r, s, si, ri) {
   return sel;
 }
 
-function effortBoxes(r, s, si, ri) {
+function effortPills(r, s, si, ri) {
   const fs = el("fieldset", { class: "efforts" }, [el("legend", { text: `${r.role} slot ${si + 1} effort` })]);
   effortsOf(s).forEach(e => {
     const id = `e-${ri}-${si}-${e}`;
-    const cb = el("input", { type: "checkbox", id, value: e });
+    const cb = el("input", { type: "checkbox", class: "sr-only", id, value: e });
     cb.checked = s.effort === e;
     cb.addEventListener("change", () => { if (cb.checked) s.effort = e; else clearEffort(s); commit(); });
-    fs.append(el("label", { class: "eff", "data-e": e, for: id }, [cb, document.createTextNode(e)]));
+    fs.append(el("label", { class: "eff", "data-e": e, for: id }, [cb, el("span", { text: e })]));
   });
   return fs;
 }
@@ -350,8 +518,91 @@ function effortNote(s) {
   if (s.effort) return "";
   if (!effortsOf(s).length) return "this harness takes no effort setting";
   const inherited = modelDefault(s);
-  if (inherited) return `no box ticked: the sheet's default effort line sets ${inherited}`;
-  return DATA.defaultEffort && DATA.defaultEffort !== "session" ? `no box ticked: this harness does not list the default effort ${DATA.defaultEffort}, so it runs at its own default` : "no box ticked: runs at the session's effort";
+  if (inherited) return `no pill selected: the sheet's default effort line sets ${inherited}`;
+  return DATA.defaultEffort && DATA.defaultEffort !== "session" ? `no pill selected: this harness does not list the default effort ${DATA.defaultEffort}, so it runs at its own default` : "no pill selected: runs at the session's effort";
+}
+
+function slotActions(r, s, si, ri, isPanel) {
+  const acts = el("div", { class: "slot-actions" });
+  const key = `${ri}-${si}`;
+  const copyAttrs = {
+    class: "ghost slot-btn",
+    type: "button",
+    text: "Copy",
+    "aria-label": `Copy ${r.role} slot ${si + 1}`,
+    title: "Copy this entry's config"
+  };
+  if (copiedSourceKey === key) copyAttrs["data-copied"] = "true";
+  const copyBtn = el("button", copyAttrs);
+  copyBtn.addEventListener("click", () => {
+    copiedSlot = clone(s);
+    copiedSourceKey = key;
+    const text = entry(copiedSlot);
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        Promise.resolve(navigator.clipboard.writeText(text)).catch(() => {});
+      }
+    } catch (e) {}
+    announceSlot(`Copied ${text}.`);
+    renderToolbarState();
+    renderRoles();
+  });
+  acts.append(copyBtn);
+
+  const pasteAttrs = {
+    class: "ghost slot-btn",
+    type: "button",
+    text: "Paste",
+    "aria-label": `Paste into ${r.role} slot ${si + 1}`,
+    title: copiedSlot ? `Paste ${entry(copiedSlot)}` : "Copy an entry first"
+  };
+  if (copiedSlot === null) pasteAttrs.disabled = "";
+  const pasteBtn = el("button", pasteAttrs);
+  if (copiedSlot === null) pasteBtn.disabled = true;
+  pasteBtn.addEventListener("click", () => {
+    if (!copiedSlot) return;
+    undoSnapshot = clone(state);
+    const pasted = clone(copiedSlot);
+    r.slots[si] = pasted;
+    announceSlot(`Pasted ${entry(pasted)} into ${r.role}${isPanel ? " #" + (si + 1) : ""}.`);
+    commit();
+  });
+  acts.append(pasteBtn);
+
+  const applyAllBtn = el("button", {
+    class: "ghost slot-btn",
+    type: "button",
+    text: "Apply all",
+    "aria-label": `Apply all from ${r.role} slot ${si + 1}`,
+    title: "Apply this config to every entry on the sheet"
+  });
+  applyAllBtn.addEventListener("click", () => {
+    undoSnapshot = clone(state);
+    const src = clone(s);
+    let totalSlots = 0;
+    state.forEach(role => {
+      role.slots = role.slots.map(() => {
+        totalSlots += 1;
+        return clone(src);
+      });
+    });
+    announceSlot(`Applied ${entry(src)} to all ${totalSlots} entries across ${state.length} roles.`);
+    commit();
+  });
+  acts.append(applyAllBtn);
+
+  if (isPanel) {
+    acts.append(el("span", { class: "slot-sep", "aria-hidden": "true" }));
+    const dup = el("button", { class: "ghost slot-btn", type: "button", text: "Repeat" });
+    dup.addEventListener("click", () => { r.slots.splice(si + 1, 0, clone(s)); commit(); });
+    acts.append(dup);
+    if (r.slots.length > 1) {
+      const rm = el("button", { class: "ghost slot-btn", type: "button", text: "Remove" });
+      rm.addEventListener("click", () => { r.slots.splice(si, 1); commit(); });
+      acts.append(rm);
+    }
+  }
+  return acts;
 }
 
 function renderRoles() {
@@ -365,8 +616,8 @@ function renderRoles() {
       el("span", { class: "role-name", text: r.role }),
       el("span", { class: "role-kind", text: isPanel ? `panel, ${r.slots.length} slot${r.slots.length === 1 ? "" : "s"}` : "single" })
     ]);
-    if (changed) head.append(el("span", { class: "was", text: "was " + original[ri].slots.map(entry).join(", ") }));
     if (NOTES[r.role]) head.append(el("span", { class: "role-note", text: NOTES[r.role] }));
+    if (changed) head.append(el("span", { class: "was", text: "was " + original[ri].slots.map(entry).join(", ") }));
     card.append(head);
     const slots = el("div", { class: "slots" });
     r.slots.forEach((s, si) => {
@@ -380,22 +631,11 @@ function renderRoles() {
       } else if (!modelOf(s)) {
         row.append(el("span", { class: "session-note", text: "Current entry is preserved. Select a model to edit its effort." }));
       } else {
-        if (effortsOf(s).length) row.append(effortBoxes(r, s, si, ri));
+        if (effortsOf(s).length) row.append(effortPills(r, s, si, ri));
         const note = effortNote(s);
         if (note) row.append(el("span", { class: "session-note", text: note }));
       }
-      if (isPanel) {
-        const acts = el("div", { class: "slot-actions" });
-        const dup = el("button", { class: "ghost", type: "button", text: "Repeat" });
-        dup.addEventListener("click", () => { r.slots.splice(si + 1, 0, { ...s }); commit(); });
-        acts.append(dup);
-        if (r.slots.length > 1) {
-          const rm = el("button", { class: "ghost", type: "button", text: "Remove" });
-          rm.addEventListener("click", () => { r.slots.splice(si, 1); commit(); });
-          acts.append(rm);
-        }
-        row.append(acts);
-      }
+      row.append(slotActions(r, s, si, ri, isPanel));
       slots.append(row);
     });
     card.append(slots);
@@ -437,7 +677,7 @@ function renderResponse() {
   return msg;
 }
 
-function commit() { save(); renderRoles(); renderResponse(); }
+function commit() { copiedSourceKey = null; save(); renderToolbarState(); renderRoles(); renderResponse(); }
 
 function presetLabel(p) { return p.scope + "/" + p.name; }
 function presetSlot(p, s) {
@@ -447,6 +687,7 @@ function presetSlot(p, s) {
   return slot;
 }
 function loadPreset(p) {
+  undoSnapshot = clone(state);
   const kept = [];
   state.forEach(r => {
     const hit = p.roles.find(x => x.role === r.role);
@@ -468,12 +709,23 @@ function renderPresets() {
   sel.addEventListener("change", () => { const p = presets[Number(sel.value)]; if (sel.value !== "" && p) loadPreset(p); });
 }
 
+document.getElementById("undo").addEventListener("click", () => {
+  if (!undoSnapshot) return;
+  state = clone(undoSnapshot);
+  undoSnapshot = null;
+  announceSlot("Undid last change.");
+  commit();
+});
+
 document.getElementById("reset").addEventListener("click", () => {
   state = clone(original);
+  undoSnapshot = null;
+  copiedSourceKey = null;
   try { localStorage.removeItem(STORE); } catch (e) {}
-  renderRoles(); renderResponse();
+  renderToolbarState(); renderRoles(); renderResponse();
   document.getElementById("preset").value = "";
   document.getElementById("preset-note").textContent = "";
+  document.getElementById("slot-status").textContent = "";
   document.getElementById("status").textContent = "Reset to the sheet as read.";
 });
 document.getElementById("copy").addEventListener("click", () => {
@@ -489,6 +741,7 @@ document.getElementById("copy").addEventListener("click", () => {
 
 renderMeta();
 renderPresets();
+renderToolbarState();
 renderRoles();
 renderResponse();
 </script>

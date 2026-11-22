@@ -38,7 +38,7 @@ T3 Code comes before the panes because a T3 Code server started from a herdr pan
 
 [t3-task.mjs](../scripts/t3-task.mjs) turns one resolved entry into the arguments of `delegate_task`. Never assemble them by hand.
 
-1. Write the worker brief to a file. Include what a native brief would carry, such as the task, file pointers, and any specialist prompt. The script appends the subagent protocol and the poteto-mode pointer.
+1. Write the worker brief to a file. Include what a native brief would carry, such as the task, file pointers, and any specialist prompt. Unless the brief already opens with a `worker.md` kickoff line, the script prepends one. The script appends the subagent protocol and the `poteto-mode` pointer.
 2. Pick `--access read` for reviewers, critics, and investigators. Pick `--access write` for workers that edit files or run commands.
 3. Run the script, one command per agent. Take `--harness`, `--model`, and `--effort` from the resolver output, and omit `--effort` when it is null.
 
@@ -85,7 +85,7 @@ The name is the agent's identity, for example `arena-a` or `review-codex`. It mu
 
 ### Launch
 
-1. Write the worker brief to a file. Include what a native brief would carry: the task, file pointers, and any specialist prompt. The helper appends the pane protocol and the poteto-mode pointer.
+1. Write the worker brief to a file. Include what a native brief would carry, such as the task, file pointers, and any specialist prompt. Unless the brief already opens with a `worker.md` kickoff line, the helper prepends one. The helper appends the pane protocol and the `poteto-mode` pointer.
 2. Pick `--access read` for reviewers, critics, and investigators. Pick `--access write` for workers that edit files or run commands. A `write` agent runs in its own [worktree](#worktrees).
 3. Run the launch with `run_in_background: true`, one command per agent, all in the same turn for a panel.
 

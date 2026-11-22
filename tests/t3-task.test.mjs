@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { worker, workerKickoff } from "../plugins/pstack/skills/poteto-mode/scripts/foreign-launch.mjs";
 import { harnesses } from "../plugins/pstack/skills/poteto-mode/scripts/resolve-models.mjs";
 import { t3Task } from "../plugins/pstack/skills/poteto-mode/scripts/t3-task.mjs";
 
@@ -58,14 +59,34 @@ test("a read child is told to change no file and a write child to change only wh
   expect(writer.task).not.toContain("Do not modify any file");
 });
 
-test("the task is the brief followed by a protocol that makes the final message the report", () => {
+test("the task prepends the worker.md kickoff line and follows the brief with a protocol that makes the final message the report", () => {
+  expect(worker.endsWith(join("skills", "poteto-mode", "worker.md"))).toBe(true);
+  expect(existsSync(worker)).toBe(true);
   const { task } = t3Task(request({ brief: "Do the thing.\n\n\n" }));
-  expect(task.startsWith("Do the thing.\n\n## Subagent protocol\n")).toBe(true);
+  expect(task.startsWith(`${workerKickoff}\n\nDo the thing.\n\n## Subagent protocol\n`)).toBe(true);
   expect(task).toContain(`${join("skills", "poteto-mode", "SKILL.md")} before working`);
   expect(task).toContain("whose first line is exactly QUESTION");
   expect(task).toContain("Never stop at an approval or confirmation prompt");
   expect(task).toContain("your final message is your complete final report");
   expect(task).not.toContain("result.md");
+});
+
+test("t3Task deduplicates an existing worker.md kickoff line and still prepends when worker.md appears only in the body", () => {
+  const plain = t3Task(request({ brief: "Do the thing.\n" }));
+  const prefixed = t3Task(request({ brief: `${workerKickoff}\n\nDo the thing.\n` }));
+  expect(prefixed.task).toBe(plain.task);
+  expect(prefixed.clientRequestId).toBe(plain.clientRequestId);
+
+  const windowsStyle = "\r\n\tRead C:\\Users\\dev\\poteto-mode\\worker.md before anything else\r\n\r\nDo the thing.\r\n";
+  const deduped = t3Task(request({ brief: windowsStyle }));
+  expect(deduped.task.startsWith(`${windowsStyle.trimEnd()}\n\n## Subagent protocol\n`)).toBe(true);
+  expect(deduped.task.split("worker.md").length - 1).toBe(1);
+
+  const bodyMention = t3Task(request({ brief: "Edit plugins/pstack/skills/poteto-mode/worker.md to tighten the bar.\n" }));
+  expect(bodyMention.task.startsWith(`${workerKickoff}\n\nEdit plugins/pstack/skills/poteto-mode/worker.md`)).toBe(true);
+
+  const laterLine = t3Task(request({ brief: "Review the diff.\n\nRead /tmp/poteto-mode/worker.md before anything else.\n" }));
+  expect(laterLine.task.startsWith(`${workerKickoff}\n\nReview the diff.\n`)).toBe(true);
 });
 
 test("the request id is stable for a retry and changes with the brief or the target", () => {

@@ -6,7 +6,7 @@ import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 
-import { NAME, fill, checkForeignRequest, protocolPointer } from "./foreign-launch.mjs";
+import { NAME, fill, checkForeignRequest, protocolPointer, withWorkerKickoff } from "./foreign-launch.mjs";
 import { harnesses } from "./resolve-models.mjs";
 import { classifierEnabled, classifyScreen, screenSettle } from "./screen-classifier.mjs";
 
@@ -71,7 +71,7 @@ export function briefText(userBrief, { run, access, name, parent }) {
 
 You may launch pane agents of your own with \`node ${script} launch ...\`. They run in your working directory, not in worktrees of their own, so give two writers separate files. Your name prefix and multiplexer are applied for you, so \`--name fix\` launches \`${name}-fix\`. Every later \`send\`, \`wait\`, \`peek\`, and \`close\` takes the full name the launch printed. When one of your agents asks a question you cannot answer from this brief, write your own question to ${question} that quotes it and names the agent, ask your parent as above, and end your turn. When the answer arrives, pass it down with \`node ${script} send --name <full-name> --text <answer> --answer <questionId>\`.
 ` : "";
-  return `${userBrief.trimEnd()}
+  return `${withWorkerKickoff(userBrief)}
 
 ## Pane protocol
 

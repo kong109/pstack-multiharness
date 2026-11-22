@@ -512,7 +512,9 @@ export function openCodeModelNamesSection(models) {
 }
 
 const agyScript = "hooks/session-start.sh";
-const agyCommand = `./${agyScript} agy`;
+// Antigravity runs the one command through sh, or through cmd.exe on Windows. cmd.exe cannot start the sh script, so the
+// PowerShell script runs after it there.
+const agyCommand = `./${agyScript} agy || powershell.exe -NoProfile -ExecutionPolicy Bypass -File hooks/session-start.ps1 agy`;
 export const AGY_HOOKS = {
   "pstack-routing": { SessionStart: [{ type: "command", command: agyCommand }] },
 };
@@ -537,7 +539,13 @@ export function agyModelNamesSection(models) {
     "- The model sheet is `~/.gemini/config/pstack-models.md`. Before a skill that needs a role model " +
     `(${roleSkills(models).map(code).join(", ")}), read it. With no sheet, read \`setup-pstack\`'s \`SKILL.md\` ` +
     "and finish it first.\n" +
-    "- Pass the role's model as `Model` on `invoke_subagent`. For `inherit-parent` or `auto`, omit `Model`.\n" +
+    "- Resolve each role with `node /path/to/poteto-mode/scripts/resolve-models.mjs --session agy --active \"<role>\" " +
+    "\"<the skill's default models>\"`. It reads the project's `.pstack/models.md` when present, then the sheet above.\n" +
+    "- An entry with no `harness` runs here. Pass its model as `Model` on `invoke_subagent`, which takes no effort, so " +
+    "an `@level` on that entry is not applied. For `inherit-parent` or `auto`, omit `Model`.\n" +
+    "- An entry with a `harness` cannot run through `invoke_subagent`. That includes `harness: \"agy\"`, whose model " +
+    "the tool cannot select. Launch it through [foreign-harness](foreign-harness.md), which starts that harness with " +
+    "the entry's model and effort in its own pane. Never run it on another model.\n" +
     `- Roles that default to the worker model (${tierRoles(models, "worker")}): the worker model the user chose.\n` +
     `- Roles that default to the strongest model (${tierRoles(models, "strongest")}): the strongest model the user chose.\n` +
     `- Diverse-model panels (${panelSkills(models)}): the adversarial ` +

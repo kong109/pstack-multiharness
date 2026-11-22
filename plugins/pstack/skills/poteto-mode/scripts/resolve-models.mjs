@@ -72,7 +72,7 @@ export const ownProvider = (model, catalog = providers) =>
 
 // A provider's harness name stands for its default model, and a model with a provider runs on that provider's harness unless the entry names one.
 // The registry maps only what a subscription allows. A `provider/model` id runs on any harness unchecked, for an operator with an API key or an open-weight model.
-// `harness` is left out when it is the session's own. A session outside the registry runs every entry without an arrow natively.
+// `harness` is left out when the session's own subagent tool can run the entry. A session outside the registry runs every entry without an arrow natively.
 export function resolveEntry({ model: written, harness: chosen, explicitEffort }, { defaultEffort = "session", ...given } = {}) {
   const { harnesses: list, providers: catalog, native: home } = { ...registry, ...given };
   const session = given.session ?? home;
@@ -108,8 +108,11 @@ export function resolveEntry({ model: written, harness: chosen, explicitEffort }
   const listed = effortsOn(harness, id, { harnesses: list, providers: catalog });
   const fallback = takesEffort(harness, list) && !levelled && (!listed || defaultEffort === "session" || listed.includes(defaultEffort));
   const effort = explicitEffort ?? (fallback ? defaultEffort : undefined);
+  // A harness whose subagent tool picks from a short list, as agy's does, keeps its name on any other model, so that entry opens a pane.
+  const selectable = list[harness].subagentModels;
+  const native = harness === session && (aliases.has(id) || !selectable || selectable.includes(id));
   return {
-    ...(harness !== session && { harness }),
+    ...(!native && { harness }),
     model: aliases.has(id) ? null : id,
     effort: effort === undefined || effort === "session" ? null : effort,
   };

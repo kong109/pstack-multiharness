@@ -91,6 +91,18 @@ function ModelSheet([string[]] $lines) {
 
 # Each runtime's hooks file passes its own name, as for session-start.sh.
 switch -CaseSensitive ($Runtime) {
+    'agy' {
+        # Antigravity's hooks.json runs this script after session-start.sh, so
+        # it runs only where sh could not: under cmd.exe. A Linux agy under WSL
+        # whose sh hook failed reaches powershell.exe through interop, from a
+        # \\wsl path, and this user's sheet is not that session's.
+        if ($PSScriptRoot -like '\\wsl*') {
+            [Console]::Write("{}`n")
+            exit 0
+        }
+        $sheet = Join-Path (Join-Path (Join-Path $env:USERPROFILE '.gemini') 'config') 'pstack-models.md'
+        $context = 'session-start-agy.md'
+    }
     'codex' {
         $sheetRoot = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $env:USERPROFILE '.codex' }
         $sheet = Join-Path $sheetRoot 'pstack-models.md'
@@ -116,7 +128,7 @@ switch -CaseSensitive ($Runtime) {
         $context = 'session-start-context.md'
     }
     default {
-        [Console]::Error.WriteLine("session-start.ps1: unknown runtime '$Runtime' (expected codex, copilot, or muse)")
+        [Console]::Error.WriteLine("session-start.ps1: unknown runtime '$Runtime' (expected agy, codex, copilot, or muse)")
         exit 2
     }
 }
@@ -135,6 +147,8 @@ if (Test-Path -LiteralPath $sheet -PathType Leaf) {
     } catch { }
 }
 if (HasOrdinal $sheetLines 'session hook: off') {
+    # Antigravity parses stdout as JSON, so an off hook prints an empty object.
+    if ($Runtime -ceq 'agy') { [Console]::Write("{}`n") }
     exit 0
 }
 
@@ -164,6 +178,11 @@ if ($Runtime -ceq 'copilot') {
     $close = $output.IndexOf('</EXTREMELY_IMPORTANT>', [System.StringComparison]::Ordinal)
     if ($close -ge 0) { $output = $output.Substring(0, $close) + "`n" + $notes + "`n" + $output.Substring($close) } else { $output += "`n" + $notes }
     $output = (ConvertTo-Json -InputObject @{ additionalContext = $output + "`n" } -Compress) + "`n"
+}
+# Antigravity reads one JSON object, as agy-context.awk prints it: the mandate
+# as an injected system message.
+if ($Runtime -ceq 'agy') {
+    $output = (ConvertTo-Json -InputObject @{ injectSteps = @(@{ systemMessage = @{ systemMessage = AsText $output } }) } -Depth 4 -Compress) + "`n"
 }
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 [Console]::Write($output)

@@ -2,6 +2,14 @@
 
 This file is the release changelog, with one `## <version> - <title>` entry per release, newest first. The Cursor-to-Claude rewrite rules live in [`tools/substitutions.json`](tools/substitutions.json), and the [sync boundary](CONTRIBUTING.md#the-sync-boundary) in `CONTRIBUTING.md` defines how a change to upstream's skill content is declared.
 
+## 0.9.149 - Antigravity routing on Windows, and sheet models an Antigravity session cannot pick
+
+Antigravity runs a plugin hook through `cmd.exe` on Windows, which cannot start `./hooks/session-start.sh`, so a Windows agy session never got the routing mandate. The hook command in [`hooks.json`](plugins/pstack/hooks.json) now runs `hooks/session-start.ps1 agy` when the sh script cannot start, and that script has an `agy` branch that prints the same `injectSteps` JSON, or `{}` when the sheet says `session hook: off`. Nothing changes where `sh` runs the hook.
+
+An Antigravity session's `invoke_subagent` selects only `inherit`, `flash_lite`, `flash`, and `pro`, and takes no effort. The resolver used to call any agy entry native in an agy session, so a sheet entry such as `gemini-4-neon@high` or `opus->agy@high` had no way to run on its model. The agy entry in [`harnesses.json`](plugins/pstack/skills/poteto-mode/scripts/harnesses.json) now lists those names as `subagentModels`. With `--session agy`, the resolver keeps `harness: "agy"` on every other model, and [foreign-harness](plugins/pstack/skills/poteto-mode/references/foreign-harness.md) sends that entry to a pane, where `agy --model <id> --effort <level>` runs it. The [Antigravity mapping](plugins/pstack/skills/poteto-mode/references/agy-tools.md) tells the session to resolve each role with the script.
+
+The README now says that `agy plugin install` copies the plugin, so run it again after each update.
+
 ## 0.9.148 - Gemini 4 Neon, Antigravity's Opus 5.5, and GPT-6.2 Sol as the OpenAI default
 
 Antigravity added Gemini 4 Neon, which takes `xhigh` where its other models stop at `high`. A model in [`providers.json`](plugins/pstack/skills/poteto-mode/scripts/providers.json) can now list its own effort levels, and they replace its harness's list in the resolver, the launch check, and the `/pstack-effort` page. `gemini-4-neon` is the first, so `gemini-4-neon@xhigh` and the id `gemini-4-neon-xhigh` resolve, and `gemini-4-argon@xhigh` is still refused.

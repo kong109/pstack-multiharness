@@ -113,10 +113,73 @@ describe.skipIf(process.platform !== "win32" && !required)("Windows Codex Sessio
       expect({ status: r.status, out: r.stdout, err: r.stderr.trimEnd() }).toEqual({
         status: 2,
         out: "",
-        err: `session-start.ps1: unknown runtime '${arg}' (expected codex, copilot, or muse)`,
+        err: `session-start.ps1: unknown runtime '${arg}' (expected agy, codex, copilot, or muse)`,
       });
     });
   }
+});
+
+// Antigravity runs its one hook command through cmd.exe from the plugin root.
+// This runner does the same, with only the PowerShell directory on PATH, so
+// the command's sh half fails as it does on a Windows install without sh.
+const agyCommand = JSON.parse(readFileSync(join(pluginRoot, "hooks.json"), "utf8"))["pstack-routing"].SessionStart[0].command;
+const agyMandate = readFileSync(join(pluginRoot, "hooks/session-start-agy.md"), "utf8");
+
+function runAgyHook({ sheet, context = agyMandate } = {}) {
+  const fixture = mkdtempSync(join(tmpdir(), "pstack windows agy hook "));
+  try {
+    const plugin = join(fixture, "plugin with spaces");
+    const profile = join(fixture, "user profile");
+    cpSync(join(pluginRoot, "hooks"), join(plugin, "hooks"), { recursive: true });
+    if (sheet !== undefined) {
+      const dir = join(profile, ".gemini", "config");
+      mkdirSync(dir, { recursive: true });
+      writeSheet(join(dir, "pstack-models.md"), sheet);
+    }
+    const contextPath = join(plugin, "hooks/session-start-agy.md");
+    if (context === null) rmSync(contextPath);
+    else writeFileSync(contextPath, context);
+    const result = spawnSync(process.env.ComSpec ?? "cmd.exe", ["/d", "/s", "/c", agyCommand], {
+      cwd: plugin,
+      env: windowsHookEnv(fixture, profile),
+      encoding: "utf8",
+      windowsVerbatimArguments: true,
+    });
+    if (result.error) throw result.error;
+    return { status: result.status, out: result.stdout };
+  } finally {
+    rmSync(fixture, { recursive: true, force: true });
+  }
+}
+
+const agyMessage = (text) => ({ injectSteps: [{ systemMessage: { systemMessage: text } }] });
+
+describe.skipIf(process.platform !== "win32" && !required)("Windows Antigravity SessionStart hook", () => {
+  test("injects the Antigravity mandate as one JSON object without a sheet or sh", () => {
+    const result = runAgyHook();
+    expect({ status: result.status, out: JSON.parse(result.out) }).toEqual({ status: 0, out: agyMessage(agyMandate.replace(/\n$/, "")) });
+  });
+
+  for (const { name, sheet, off } of sheetCases) {
+    test(`${off ? "injects nothing" : "injects the mandate"} when the sheet has ${name}`, () => {
+      const result = runAgyHook({ sheet });
+      expect({ status: result.status, out: JSON.parse(result.out) }).toEqual({
+        status: 0,
+        out: off ? {} : agyMessage(agyMandate.replace(/\n$/, "")),
+      });
+    });
+  }
+
+  test("writes UTF-8 context as JSON", () => {
+    const context = "Routing context: 中文 café 🚀 \"quoted\"\n";
+    expect(JSON.parse(runAgyHook({ context }).out)).toEqual(agyMessage(context.replace(/\n$/, "")));
+  });
+
+  test("fails when the mandate cannot be read", () => {
+    const result = runAgyHook({ context: null });
+    expect(result.status).not.toBe(0);
+    expect(result.out).toBe("");
+  });
 });
 
 // Muse spawns the hook's argv itself, with no shell between, from the plugin

@@ -109,8 +109,9 @@ test("renders the sheet into the page with escaped data and no placeholder left"
 });
 
 class Node {
-  constructor(tag) { Object.assign(this, { tag, attrs: {}, children: [], listeners: {}, text: "", value: "", checked: false, selected: false }); }
-  setAttribute(name, value) { this.attrs[name] = String(value); if (name === "value") this.value = String(value); }
+  constructor(tag) { Object.assign(this, { tag, attrs: {}, children: [], listeners: {}, text: "", value: "", checked: false, selected: false, disabled: false }); }
+  setAttribute(name, value) { this.attrs[name] = String(value); if (name === "value") this.value = String(value); if (name === "disabled") this.disabled = true; }
+  removeAttribute(name) { delete this.attrs[name]; if (name === "disabled") this.disabled = false; }
   append(...kids) { this.children.push(...kids); }
   addEventListener(type, fn) { (this.listeners[type] ??= []).push(fn); }
   fire(type) { (this.listeners[type] ?? []).forEach((fn) => fn({})); }
@@ -125,6 +126,10 @@ class Node {
     for (const child of this.children) { const hit = child.find(id); if (hit) return hit; }
     return null;
   }
+  findAll(predicate) {
+    const own = predicate(this) ? [this] : [];
+    return own.concat(...this.children.map((c) => c.findAll(predicate)));
+  }
 }
 
 function mount(text, store = new Map(), dir = scratch()) {
@@ -134,7 +139,7 @@ function mount(text, store = new Map(), dir = scratch()) {
 function mountHtml(html, text, store = new Map()) {
   const script = /<script>\r?\n([\s\S]*)\r?\n<\/script>/.exec(html)[1];
   const root = new Node("root");
-  for (const id of ["meta", "legend", "preset", "preset-note", "roles", "changes", "out", "reset", "copy", "status"]) { const n = new Node("div"); n.setAttribute("id", id); root.append(n); }
+  for (const id of ["meta", "legend", "preset", "preset-note", "undo", "clip-badge", "slot-status", "roles", "changes", "out", "reset", "copy", "status"]) { const n = new Node("div"); n.setAttribute("id", id); root.append(n); }
   const context = {
     document: { getElementById: (id) => root.find(id), createElement: (tag) => new Node(tag), createTextNode: (t) => Object.assign(new Node("#text"), { text: t }) },
     localStorage: { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, v), removeItem: (k) => store.delete(k) },
@@ -148,11 +153,12 @@ function mountHtml(html, text, store = new Map()) {
   const role = (name) => parseMessage(message()).next.split("\n").find((l) => l.startsWith(`${name}:`));
   const roleIndex = (name) => parseSheet(text).roles.findIndex((r) => r.role === name);
   const efforts = (ri, si) => ["low", "medium", "high", "xhigh", "max", "ultra"].filter((e) => root.find(`e-${ri}-${si}-${e}`));
+  const buttons = (label) => root.buttons(label);
   const press = (label, nth = 0) => root.buttons(label)[nth].fire("click");
   const rolesText = () => at("roles").textContent;
   const options = (id) => at(id).children.map((c) => c.text);
   const selected = (id) => at(id).children.find((c) => c.selected)?.text;
-  return { options, selected, at, choose, tick, message, role, roleIndex, efforts, press, rolesText, has: (id) => Boolean(root.find(id)), click: (id) => at(id).fire("click"), next: () => parseMessage(message()).next };
+  return { options, selected, at, choose, tick, message, role, roleIndex, efforts, buttons, press, rolesText, findAll: (pred) => root.findAll(pred), has: (id) => Boolean(root.find(id)), click: (id) => at(id).fire("click"), next: () => parseMessage(message()).next };
 }
 
 test("the page writes an unchanged sheet back byte for byte", () => {
@@ -634,4 +640,150 @@ test("retired role lines from an older sheet round-trip cleanly without breaking
     { role: "feature", from: "opus@high", to: "opus" },
   ]);
   expect(pasted.next).toContain("how explorer: opus@high\n");
+});
+
+test("effort pills render visually hidden checkbox inputs and toggle on and off cleanly", () => {
+  const page = mount(pageSheet);
+  const ri = page.roleIndex("feature");
+  const highInput = page.at(`e-${ri}-0-high`);
+  const lowInput = page.at(`e-${ri}-0-low`);
+  expect(highInput.tag).toBe("input");
+  expect(highInput.attrs.type).toBe("checkbox");
+  expect(highInput.className).toBe("sr-only");
+  expect(highInput.checked).toBe(true);
+  expect(lowInput.checked).toBe(false);
+
+  const pillLabels = page.findAll((n) => n.tag === "label" && n.className === "eff");
+  expect(pillLabels.length).toBeGreaterThan(0);
+  expect(pillLabels.every((label) => label.children[0]?.tag === "input" && label.children[1]?.tag === "span")).toBe(true);
+
+  page.tick(`e-${ri}-0-low`);
+  expect(page.at(`e-${ri}-0-low`).checked).toBe(true);
+  expect(page.at(`e-${ri}-0-high`).checked).toBe(false);
+  expect(page.role("feature")).toBe("feature: opus@low");
+
+  page.tick(`e-${ri}-0-low`);
+  expect(page.at(`e-${ri}-0-low`).checked).toBe(false);
+  expect(page.role("feature")).toBe("feature: opus");
+  expect(page.rolesText()).toContain("no pill selected: the sheet's default effort line sets max");
+});
+
+test("copy and paste clone slot configs independently across single and panel slots", () => {
+  const page = mount(pageSheet);
+  const totalSlots = parseSheet(pageSheet).roles.reduce((sum, r) => sum + r.slots.length, 0);
+  expect(page.buttons("Copy")).toHaveLength(totalSlots);
+  expect(page.buttons("Paste")).toHaveLength(totalSlots);
+  expect(page.buttons("Apply all")).toHaveLength(totalSlots);
+
+  expect(page.buttons("Paste").every((b) => b.disabled && b.attrs.disabled === "")).toBe(true);
+  expect(page.at("clip-badge").attrs.hidden).toBe("");
+
+  // Clicking disabled Paste before Copy does nothing.
+  page.press("Paste", 0);
+  expect(page.next()).toBe(pageSheet);
+
+  // Copy judgment and prose slot 2: gpt-6.1-sol->codex@high (last slot on pageSheet).
+  const srcIndex = totalSlots - 1;
+  page.press("Copy", srcIndex);
+  expect(page.buttons("Copy")[srcIndex].attrs["data-copied"]).toBe("true");
+  expect(page.at("clip-badge").textContent).toBe("Copied: gpt-6.1-sol->codex@high");
+  expect(page.at("clip-badge").attrs.hidden).toBeUndefined();
+  expect(page.at("slot-status").textContent).toBe("Copied gpt-6.1-sol->codex@high.");
+  expect(page.buttons("Paste").every((b) => !b.disabled && b.attrs.disabled === undefined)).toBe(true);
+
+  // Mutate the source slot after copying; the copied buffer must stay unchanged.
+  const jri = page.roleIndex("judgment and prose");
+  page.tick(`e-${jri}-1-low`);
+  expect(page.role("judgment and prose")).toBe("judgment and prose: muse@low, gpt-6.1-sol->codex@low");
+  expect(page.buttons("Copy")[srcIndex].attrs["data-copied"]).toBeUndefined();
+
+  // Paste into single-slot role (feature, slot 0) and panel slot (arena runners, slot 0 -> index 1).
+  page.press("Paste", 0);
+  expect(page.role("feature")).toBe("feature: gpt-6.1-sol->codex@high");
+  expect(page.at("slot-status").textContent).toBe("Pasted gpt-6.1-sol->codex@high into feature.");
+
+  page.press("Paste", 1);
+  expect(page.role("arena runners")).toBe("arena runners: gpt-6.1-sol->codex@high, gpt-6.1-sol@xhigh");
+  expect(page.at("slot-status").textContent).toBe("Pasted gpt-6.1-sol->codex@high into arena runners #1.");
+
+  // Mutating the pasted target must not affect other pasted targets or the copied buffer.
+  const fri = page.roleIndex("feature");
+  page.tick(`e-${fri}-0-low`);
+  expect(page.role("feature")).toBe("feature: gpt-6.1-sol->codex@low");
+  expect(page.role("arena runners")).toBe("arena runners: gpt-6.1-sol->codex@high, gpt-6.1-sol@xhigh");
+
+  // Copy again still pastes the original snapshot into another slot.
+  const sri = page.roleIndex("swarm workers");
+  page.press("Paste", 3);
+  expect(page.role("swarm workers")).toBe("swarm workers: gpt-6.1-sol->codex@high");
+  expect(page.has(`p-${sri}-0`)).toBe(true);
+});
+
+test("apply all propagates a slot config across every role while keeping panel slot counts", () => {
+  const page = mount(pageSheet);
+  const totalSlots = parseSheet(pageSheet).roles.reduce((sum, r) => sum + r.slots.length, 0);
+  const lastSlot = totalSlots - 1; // judgment and prose #2: gpt-6.1-sol->codex@high
+
+  page.press("Apply all", lastSlot);
+  expect(page.at("slot-status").textContent).toBe(`Applied gpt-6.1-sol->codex@high to all ${totalSlots} entries across 6 roles.`);
+  expect(page.role("feature")).toBe("feature: gpt-6.1-sol->codex@high");
+  expect(page.role("arena runners")).toBe("arena runners: gpt-6.1-sol->codex@high, gpt-6.1-sol->codex@high");
+  expect(page.role("swarm workers")).toBe("swarm workers: gpt-6.1-sol->codex@high");
+  expect(page.role("perf-issue")).toBe("perf-issue: gpt-6.1-sol->codex@high");
+  expect(page.role("hillclimb")).toBe("hillclimb: gpt-6.1-sol->codex@high");
+  expect(page.role("judgment and prose")).toBe("judgment and prose: gpt-6.1-sol->codex@high, gpt-6.1-sol->codex@high");
+
+  // Mutating one slot after Apply all must not mutate any other slot.
+  const fri = page.roleIndex("feature");
+  page.tick(`e-${fri}-0-low`);
+  expect(page.role("feature")).toBe("feature: gpt-6.1-sol->codex@low");
+  expect(page.role("perf-issue")).toBe("perf-issue: gpt-6.1-sol->codex@high");
+
+  // The resulting message must be accepted by planApply.
+  const pasted = parseMessage(page.message());
+  const plan = planApply(pageSheet, pasted.next, pasted.base);
+  expect(plan.changes).toHaveLength(6);
+
+  // Apply all from an alias slot (inherit-parent) also works across every role.
+  const aliasPage = mount(pageSheet);
+  const swarmSlotIndex = 3; // feature (0), arena runners (1, 2), swarm workers (3)
+  aliasPage.press("Apply all", swarmSlotIndex);
+  expect(aliasPage.role("feature")).toBe("feature: inherit-parent");
+  expect(aliasPage.role("arena runners")).toBe("arena runners: inherit-parent, inherit-parent");
+  expect(aliasPage.role("judgment and prose")).toBe("judgment and prose: inherit-parent, inherit-parent");
+  const aliasPasted = parseMessage(aliasPage.message());
+  expect(planApply(pageSheet, aliasPasted.next, aliasPasted.base).changes).toHaveLength(5);
+});
+
+test("undo reverts paste, apply all, and preset loads, and reset clears undo", () => {
+  const page = mount(sheet, new Map(), presetTree());
+  expect(page.at("undo").disabled).toBe(true);
+  expect(page.at("undo").attrs.disabled).toBe("");
+
+  // Undo after Paste.
+  page.press("Copy", 0); // feature: opus@high
+  page.press("Paste", 3); // swarm workers: inherit-parent -> opus@high
+  expect(page.role("swarm workers")).toBe("swarm workers: opus@high");
+  expect(page.at("undo").disabled).toBe(false);
+  page.click("undo");
+  expect(page.role("swarm workers")).toBe("swarm workers: inherit-parent");
+  expect(page.at("undo").disabled).toBe(true);
+
+  // Undo after Apply all.
+  page.press("Apply all", 0); // opus@high everywhere
+  expect(page.role("perf-issue")).toBe("perf-issue: opus@high");
+  expect(page.role("arena runners")).toBe("arena runners: opus@high, opus@high");
+  expect(page.at("undo").disabled).toBe(false);
+  page.click("undo");
+  expect(page.next()).toBe(sheet);
+  expect(page.at("undo").disabled).toBe(true);
+
+  // Undo after preset load, then Reset clears undo.
+  page.choose("preset", "0");
+  expect(page.role("feature")).toBe("feature: opus@medium");
+  expect(page.at("undo").disabled).toBe(false);
+  page.click("reset");
+  expect(page.next()).toBe(sheet);
+  expect(page.at("undo").disabled).toBe(true);
+  expect(page.at("slot-status").textContent).toBe("");
 });
